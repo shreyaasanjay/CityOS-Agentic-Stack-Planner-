@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tracefix"
+version = "0.1.0"
+description = "TraceFix: TLA+-verified coordination protocols for LLM multi-agent systems"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Shuren Xia"},
+    {name = "Qiwei Li"},
+    {name = "Taqiya Ehsan"},
+    {name = "Jorge Ortiz"},
+]
+dependencies = ["jsonschema", "tree-sitter", "tree-sitter-tlaplus"]
+
+[project.urls]
+Repository = "https://github.com/xsrxdc/TraceFix-Repairing-Agent-Coordination-Protocols"
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-asyncio"]
+
+[project.scripts]
+tla-verify-pluscal = "tracefix.cli.cli:main"
+tracefix-ui = "tracefix.ui.server:main"
+tracefix-runner = "tracefix.runner_ui.server:main"
+
+[tool.setuptools.packages.find]
+include = ["tracefix*", "benchmark*"]
+
+[tool.setuptools.package-data]
+tracefix = ["ui/static/*", "runner_ui/static/*", "pipeline/PLUSCAL_RULES.md"]
