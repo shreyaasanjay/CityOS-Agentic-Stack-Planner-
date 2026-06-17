@@ -1,7 +1,7 @@
 ---
 name: tla-prompt-gen
 description: >-
-  Generates per-agent Runtime A and Runtime B prompts from a TLA+-verified
+  Generates per-agent Runtime B prompts from a TLA+-verified
   workspace. Requires ir.json, states.json, Protocol.tla already present.
   Invoke via /tla-prompt-gen only. Use after /tla-verify-pluscal completes
   to produce runtime prompts without re-running TLC.
@@ -9,26 +9,35 @@ metadata:
   author: Shuren Xia
   version: "1.0"
 ---
-You are a per-agent prompt generator for multi-agent coordination systems. Your job is to generate Runtime A and Runtime B per-agent workflow prompts from a TLA+-verified workspace.
+You are a per-agent prompt generator for multi-agent coordination systems. Your job is to generate Runtime B per-agent workflow prompts from a TLA+-verified workspace.
 
 ## Inputs
 
-A workspace directory containing (ALL required):
-- `ir.json` — IR specification (agents, resources, channels)
-- `states.json` — Per-agent state machine extracted by `tla-verify-pluscal extract-states`
-- `Protocol.tla` — Verified PlusCal source
-- `summary.json` — Repair tracking (`total_repairs`, error types)
-- `tools.json` — Domain tool schemas (from `benchmark/descriptions/{id}/tools.json`)
-- `description.md` — Task description (from `benchmark/descriptions/{id}/description.md`)
+A workspace directory containing:
+- `ir.json` — IR specification (agents, resources, channels) — **required**
+- `states.json` — Per-agent state machine from `tla-verify-pluscal extract-states` — **required**
+- `Protocol.tla` — Verified PlusCal source — **required**
+- `summary.json` — Repair tracking (`total_repairs`, error types) — **required**
+- `description.md` — Task description — **required**
+- `tools.json` — Domain tool schemas (OpenAI function schema + `agent_ids`/`can_fail`) — **optional**
 
-If the user provides a workspace path, look there for the first four files. Look for `tools.json` and `description.md` in `benchmark/descriptions/{id}/` where `{id}` matches the workspace directory name. If any required file is missing, ask the user for its location before proceeding.
+**Layout:** the spec files (`ir.json`, `states.json`, `Protocol.tla`, `summary.json`) live in the
+workspace's `spec/` subdir; `description.md` and `tools.json` are at the workspace root; write the
+generated prompts to `prompts/runtime_b/`. (Older flat workspaces keep
+everything at the root — check there if `spec/` is absent.) For a **benchmark** task, `tools.json`
+and `description.md` also live in `benchmark/descriptions/{id}/` — use those if not in the
+workspace. If a *required* file is missing, ask the user for its location.
+
+**Custom task with no `tools.json`:** the domain layer is the runtime's **SDK builtins**
+(`Read`/`Write`/`Edit`/`Bash`). Generate domain steps that instruct the agent to use those
+builtins (read/write files, run commands) rather than named domain tools, and skip the per-tool
+fidelity checks. The coordination contract (from `states.json`) is unchanged either way.
 
 ## Outputs
 
 | File | Tool |
 |------|------|
 | `prompts/runtime_b/{agent_id}.md` | Write |
-| `prompts/runtime_a/{agent_id}.md` | Write |
 
 ## Workflow
 
@@ -40,7 +49,7 @@ Read ALL required inputs before generating any prompts:
 2. Read `states.json` — per-agent state machines with `tool_hint` annotations
 3. Read `Protocol.tla` — the verified PlusCal source (for context)
 4. Read `summary.json` — note `total_repairs` and error types. If repairs were needed, prioritize Critical Rules that prevent the encountered error types when generating Runtime B prompts.
-5. Read `tools.json` — domain tool schemas; filter by `agent_ids` to get each agent's tools. Required for correct domain tool calls and parameter values in Step 2c.
+5. Read `tools.json` if present — domain tool schemas; filter by `agent_ids` to get each agent's tools, for correct domain tool calls + parameter values in Step 2c. **If absent (custom task)**, the domain layer is the SDK builtins (Read/Write/Edit/Bash) — instruct accordingly and skip per-tool fidelity checks.
 6. Read `description.md` — task description; required for semantic mapping of domain tool parameters in Step 2c.
 
 ### Step 2 — Generate Runtime B Prompts (do this FIRST)
@@ -53,6 +62,10 @@ Read `states.json` and for each agent list:
 - All state IDs belonging to this agent + initial state
 - Per-state: action count, coordination ops (`acquire`/`release`/`send`/`receive` + resource/channel IDs), `next_state`
 - `tool_hint` value for multi-action states (if present)
+- `tool` value, if present: this state needs a TYPED tool — emit an explicit
+  `Call <tool>(<params>)` step (look up the signature in `tools.json`, map
+  parameter values from the task description). A state with no `tool` is plain
+  domain work → instruct the SDK builtins (read/write files, run commands).
 - Terminal states (empty `actions` array or `next_state: "__done__"`)
 
 **Step 2b — Label-to-Step Mapping Table (MANDATORY before writing any prose)**
@@ -147,30 +160,9 @@ After each agent's prompt, run through this checklist:
 
 Generate ALL Runtime B prompts and complete Step 2d for each before proceeding to Step 3.
 
-### Step 3 — Generate Runtime A Prompts
+### Step 3 — Report
 
-After all Runtime B prompts are complete, generate Runtime A prompts by simplifying them:
-- Strip all coordination tool calls (`acquire_lock`, `release_lock`, `send_message`, `receive_message`, `receive_any`, `poll_channels`)
-- Replace `signal_done()` with "Your work is complete."
-- Convert coordination decision points into `respond_decision()` calls
-- Remove the protocol topology diagram and channel/lock sections from Layer 2
-- PlusCal `skip` work-state labels between acquire and release do NOT become separate prompt steps — consolidate them into one step that lists ALL tool calls from all skip label comments (e.g., three `skip` labels with `pull_artifacts`, `scan_frontend`, `scan_backend` → one step with three tool calls under the same acquire/release)
-
-See [references/prompt-gen-runtime-a.md](references/prompt-gen-runtime-a.md) for the complete template, 3-layer structure, translation rules, and example.
-
-**After generating each Runtime A prompt, verify:**
-
-| Check | How | Fail → |
-|---|---|---|
-| No coord calls | No `acquire_lock`/`release_lock`/`send_message`/`receive_message`/`receive_any`/`poll_channels` in prompt | Remove them |
-| Ends with "Your work is complete." | Last step uses this exact phrase | Fix |
-| Decision points match Runtime B | Same decisions listed in Layer 2, same options and `respond_decision()` calls | Sync with Runtime B |
-| Step order faithful | Prompt step order matches PlusCal process body control flow (same order as Runtime B) | Reorder steps |
-| Domain tools present | All domain tool calls from Runtime B retained (minus coordination wrappers) | Add missing calls |
-
-### Step 4 — Report
-
-List all generated files for both `prompts/runtime_b/` and `prompts/runtime_a/`, and confirm each agent's prompts cover all PlusCal labels and decision points.
+List all generated files in `prompts/runtime_b/`, and confirm each agent's prompts cover all PlusCal labels and decision points.
 
 ## Rules
 
@@ -178,7 +170,6 @@ List all generated files for both `prompts/runtime_b/` and `prompts/runtime_a/`,
 - Build the Label-to-Step Mapping Table **before** writing any prose (MANDATORY)
 - Do NOT include a `## Tools` section in any prompt — the runtime injects tool schemas automatically
 - Every Runtime B prompt must end with `Call signal_done()`
-- Every Runtime A prompt must end with "Your work is complete."
 - Prompt step execution order (sequence, branch targets, loop structure) MUST strictly reflect the PlusCal process body's control flow. Consolidation merges adjacent labels into one step — it does NOT reorder steps.
 - If `summary.json` shows `total_repairs > 0`, boost Critical Rules for the corresponding error types
 
@@ -197,12 +188,7 @@ Step 2 → generate Runtime B prompts
        → prompts/runtime_b/agent_b.md  (6 steps, 1 receive, 1 release)
        → prompts/runtime_b/agent_c.md  (4 steps, terminal)
 
-Step 3 → generate Runtime A prompts
-       → prompts/runtime_a/agent_a.md
-       → prompts/runtime_a/agent_b.md
-       → prompts/runtime_a/agent_c.md
-
-Output: 6 prompt files written, summary reported
+Output: 3 prompt files written, summary reported
 ```
 
 ### Run after repair (summary.json shows repairs)

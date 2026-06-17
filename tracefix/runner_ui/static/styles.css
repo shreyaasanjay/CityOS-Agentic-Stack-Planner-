@@ -95,6 +95,14 @@ button {
   gap: 13px;
 }
 
+.task-source-fields,
+.runtime-fields,
+.tracefix-run-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
 label {
   display: flex;
   flex-direction: column;
@@ -548,4 +556,3 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 }
-

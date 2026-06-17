@@ -109,6 +109,7 @@ def _build_config(args: argparse.Namespace) -> LLMConfig:
         thinking_budget=args.thinking_budget if provider == "anthropic" else 0,
         max_tokens=args.max_tokens,
         base_url=base_url,
+        temperature=args.temperature,
     )
 
 
@@ -412,6 +413,17 @@ def main():
     parser.add_argument("--reasoning-effort", default=None)
     parser.add_argument("--thinking-budget", type=int, default=0)
     parser.add_argument("--max-tokens", type=int, default=32768)
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.3,
+        help=(
+            "Sampling temperature for the main agent loop (default: 0.3). "
+            "Lower values reduce variance/hallucination in PlusCal syntax "
+            "at the cost of less creative exploration. Pass 1.0 for the "
+            "previous default behavior."
+        ),
+    )
     parser.add_argument(
         "--ollama-url",
         default="http://localhost:11434/v1",

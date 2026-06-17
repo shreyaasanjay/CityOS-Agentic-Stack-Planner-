@@ -30,7 +30,6 @@ class AgentConfig:
     tool_schemas: list[dict]
     model: str = "gpt-5-mini"
     api_key: str = ""
-    base_url: str = ""
     verbose: bool = False
 
 
@@ -82,10 +81,7 @@ class AgentRunner:
         # Reuse a single OpenAI client across all LLM calls
         from openai import OpenAI
         api_key = config.api_key or os.environ.get("OPENAI_API_KEY", "")
-        client_kwargs: dict = {"api_key": api_key}
-        if config.base_url:
-            client_kwargs["base_url"] = config.base_url
-        self._llm_client = OpenAI(**client_kwargs)
+        self._llm_client = OpenAI(api_key=api_key)
 
     async def run(self, max_rounds: int = 50) -> AgentResult:
         """Run agent until completion. Returns AgentResult."""
@@ -338,15 +334,20 @@ class AgentRunner:
         args = json.loads(tool_call.function.arguments)
         agent_id = self.config.agent_id
 
-        if name == "signal_done":
-            tracker = self.coord.tracker if self.coord else None
-            if tracker and not tracker.can_terminate(agent_id):
-                r = {"status": "error",
-                     "message": "Cannot terminate yet: protocol loop has remaining iterations. "
-                                "Continue executing your protocol steps."}
-            else:
+        if name == "report_progress":
+            r = await self.coord.report_progress(args.get("label", ""), agent_id)
+        elif name == "post_content":
+            r = await self.coord.post_content(
+                args.get("content", ""), agent_id,
+                content_type=args.get("content_type", "text"))
+        elif name == "get_content":
+            r = await self.coord.get_content(args.get("ref", ""), agent_id)
+        elif name == "signal_done":
+            # Same authoritative H3 gate as the SDK/opencode dispatchers
+            # (one implementation in CoordinationContext.signal_done).
+            r = await self.coord.signal_done(agent_id)
+            if r.get("status") == "done":
                 self.done = True
-                r = {"status": "done", "agent": agent_id}
         elif name in ("acquire_lock", "release_lock", "send_message",
                        "receive_message", "poll_channels", "receive_any"):
             try:
@@ -355,8 +356,10 @@ class AgentRunner:
                 elif name == "release_lock":
                     r = await self.coord.release_lock(args["lock_id"], agent_id)
                 elif name == "send_message":
-                    r = await self.coord.send(args["channel_id"], args["label"], agent_id,
-                                              body=args.get("body", ""))
+                    # Channels are flag-only: forward the opaque content `ref` (gated
+                    # by the label in coord.send), never a free-form body.
+                    r = await self.coord.send(args["channel_id"], args["label"],
+                                              agent_id, ref=args.get("ref"))
                 elif name == "receive_message":
                     r = await self.coord.receive(args["channel_id"], agent_id)
                 elif name == "poll_channels":

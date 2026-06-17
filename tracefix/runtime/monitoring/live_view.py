@@ -119,6 +119,7 @@ def render_live_html(ir: dict, title: str = "", model: str = "") -> str:
         "resources": resources_data,
         "resource_users": {k: sorted(v) for k, v in resource_users.items()},
         "cost_config": cost_config,
+        "model": model or "",
     })
 
     return _HTML_TEMPLATE.replace("__PAGE_TITLE__", page_title).replace("__GRAPH_DATA__", graph_data)
@@ -154,12 +155,14 @@ body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,
 /* Header */
 .header { height:40px; background:var(--bg3); border-bottom:1px solid var(--border);
           display:flex; align-items:center; padding:0 14px; font-size:13px; font-weight:600; gap:8px; }
-.header .title { color:var(--text); }
-.header .badge { font-size:11px; padding:2px 8px; border-radius:10px; }
+.header .title { color:var(--text); flex:0 1 auto; min-width:0;
+                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.header .badge { font-size:11px; padding:2px 8px; border-radius:10px; flex-shrink:0; }
 .badge-running { background:var(--accent); color:var(--bg); }
 .badge-success { background:var(--green); color:var(--bg); }
 .badge-fail { background:var(--red); color:#fff; }
-.header .meta { margin-left:auto; font-size:11px; color:var(--text2); font-weight:400; }
+.badge-disconnected { background:var(--orange); color:var(--bg); }
+.header .meta { margin-left:auto; font-size:11px; color:var(--text2); font-weight:400; flex-shrink:0; }
 
 /* Left panel */
 .panel-header { padding:10px 14px 6px; font-size:11px; text-transform:uppercase;
@@ -167,18 +170,29 @@ body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,
 .agent-list { overflow-y:auto; padding:0 8px 4px; }
 .agent-item { padding:7px 10px; margin-bottom:3px; border-radius:6px;
               background:var(--bg3); border:1px solid var(--border); cursor:pointer;
-              display:flex; align-items:center; gap:8px;
               transition:border-color 0.15s; font-size:12px; }
 .agent-item:hover { border-color:var(--accent); }
 .agent-item.selected { border-color:var(--accent); background:rgba(88,166,255,0.08); }
-.agent-status { width:8px; height:8px; border-radius:50%; flex-shrink:0; transition: background 0.3s; }
+.agent-row1 { display:flex; align-items:center; gap:8px; }
+.agent-status { width:9px; height:9px; border-radius:50%; flex-shrink:0; transition: background 0.3s; }
 .status-idle { background:var(--text2); }
 .status-busy { background:var(--accent); animation: pulse-busy 1s ease-in-out infinite; }
 .status-completed { background:var(--green); }
 .status-error { background:var(--red); }
 .status-timeout { background:var(--orange); }
 .agent-name { font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.agent-statusword { font-size:9px; text-transform:uppercase; letter-spacing:0.4px;
+                    padding:1px 6px; border-radius:8px; flex-shrink:0; font-weight:600; }
+.status-word-idle { color:var(--text2); background:var(--bg); }
+.status-word-busy { color:var(--bg); background:var(--accent); }
+.status-word-completed { color:var(--bg); background:var(--green); }
+.status-word-error, .status-word-timeout { color:#fff; background:var(--red); }
+.agent-dur { color:var(--green); font-size:10px; flex-shrink:0; }
 .agent-steps { color:var(--text2); font-size:11px; flex-shrink:0; }
+.agent-state { margin-top:4px; font-size:10px; color:var(--accent);
+               overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.agent-state:empty { display:none; }
+.agent-state-at { color:var(--text2); }
 
 .channel-list { overflow-y:auto; padding:0 8px 4px; }
 .channel-item { padding:6px 10px; margin-bottom:3px; border-radius:6px;
@@ -233,10 +247,16 @@ body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,
               transition:all 0.15s; }
 .filter-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(88,166,255,0.1); }
 .trace-scroll { flex:1; overflow-y:auto; padding:4px 0; }
-.trace-item { display:flex; align-items:flex-start; padding:5px 8px; margin-bottom:2px;
+.trace-item { padding:5px 8px; margin-bottom:2px;
               border-radius:4px; background:var(--bg); font-size:11px;
-              font-family:"SF Mono",Menlo,monospace; gap:6px; line-height:1.4;
+              font-family:"SF Mono",Menlo,monospace; line-height:1.4;
               animation: trace-appear 0.3s ease-out; }
+.trace-head { display:flex; align-items:flex-start; gap:6px; cursor:pointer; }
+.trace-head:hover { background:var(--bg3); border-radius:3px; }
+.trace-detail { margin-top:5px; padding:6px 8px; background:var(--bg3);
+                border:1px solid var(--border); border-radius:4px; color:var(--text2);
+                font-size:10px; white-space:pre-wrap; word-break:break-word;
+                max-height:280px; overflow:auto; }
 .trace-agent { color:var(--purple); flex-shrink:0; width:80px; overflow:hidden;
                text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
 .trace-round { color:var(--text2); flex-shrink:0; width:28px; }
@@ -321,7 +341,7 @@ svg { width:100%; height:100%; }
     <!-- Left Panel -->
     <div class="left-panel">
       <div class="header" id="headerBar">
-        <span class="title">__PAGE_TITLE__</span>
+        <span class="title" title="__PAGE_TITLE__">__PAGE_TITLE__</span>
         <span class="badge badge-running" id="statusBadge">RUNNING</span>
         <span class="meta" id="headerMeta">0.0s</span>
       </div>
@@ -362,9 +382,27 @@ svg { width:100%; height:100%; }
 // ========== INITIAL TOPOLOGY DATA ==========
 const TOPO = __GRAPH_DATA__;
 let runStartTime = null;
+let elapsedTimer = null;    // setInterval id while the run is live
+let finalElapsed = null;    // frozen elapsed once run.done arrives
+let runDone = false;        // true once run.done arrives (so a dropped SSE ≠ a crash)
+// Start the elapsed clock from the first event carrying a _ts (so the timer works
+// even if the browser connects after run.start). Idempotent.
+function ensureTimer(ts) {
+  if (runStartTime === null && ts) { runStartTime = ts; updateSummary(); }
+  if (elapsedTimer === null && runStartTime !== null) {
+    elapsedTimer = setInterval(updateSummary, 1000);
+  }
+}
+function stopTimer(duration) {
+  if (elapsedTimer !== null) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  finalElapsed = (typeof duration === "number") ? duration
+    : (runStartTime !== null ? Date.now() / 1000 - runStartTime : 0);
+  updateSummary();
+}
 let traceItems = [];
 let activeFilter = "all";
 let activeChannelFilter = null;  // channel id or null
+let activeResourceFilter = null; // resource (lock/counter) id or null
 
 // Agent state tracking
 const agentState = {};
@@ -377,6 +415,8 @@ const tokenState = { totalIn: 0, totalOut: 0 };
 const agentTokens = {};
 TOPO.agents.forEach(a => { agentTokens[a.id] = { in: 0, out: 0 }; });
 const COST_CFG = TOPO.cost_config || null;  // {model, input, output} per 1M tokens or null
+const RUN_MODEL = TOPO.model || "";          // the model the agents run on (if known)
+const costState = { total: 0 };              // accumulated API cost ($), from llm_end events
 
 function calcCost(inTok, outTok) {
   if (!COST_CFG) return null;
@@ -397,13 +437,20 @@ const agentElements = {};
     div.className = "agent-item";
     div.dataset.agentId = a.id;
     div.innerHTML = `
-      <span class="agent-status status-idle" data-status-dot="${a.id}"></span>
-      <span class="agent-name">${a.id}<span class="agent-state" data-agent-state="${a.id}"></span></span>
-      <span class="agent-steps" data-steps="${a.id}">0</span>`;
+      <div class="agent-row1">
+        <span class="agent-status status-idle" data-status-dot="${a.id}"></span>
+        <span class="agent-name">${a.id}</span>
+        <span class="agent-statusword status-word-idle" data-status-word="${a.id}">idle</span>
+        <span class="agent-dur" data-agent-dur="${a.id}"></span>
+        <span class="agent-steps" data-steps="${a.id}">0</span>
+      </div>
+      <div class="agent-state" data-agent-state="${a.id}"></div>`;
     div.addEventListener("click", () => {
       activeFilter = a.id;
       activeChannelFilter = null;
+      activeResourceFilter = null;
       Object.values(channelElements).forEach(el => el.classList.remove("selected"));
+      Object.values(resourceElements).forEach(el => el.classList.remove("selected"));
       updateFilterButtons();
       filterTraceItems();
     });
@@ -426,10 +473,26 @@ const resourceElements = {};
     div.innerHTML = `
       <div class="channel-name">${typeIcon} ${r.id}</div>
       <div class="channel-route">${r.type}${initStr} | <span data-lock-holder="${r.id}" style="color:var(--text2)">free</span></div>`;
+    div.addEventListener("click", () => selectResource(r.id));
     resourceElements[r.id] = div;
     list.appendChild(div);
   });
 })();
+
+// Click a resource to filter the trace to its acquire/release operations.
+function selectResource(resId) {
+  activeResourceFilter = (activeResourceFilter === resId) ? null : resId;
+  if (activeResourceFilter) {
+    activeChannelFilter = null;
+    activeFilter = "all";
+    updateFilterButtons();
+    Object.values(channelElements).forEach(el => el.classList.remove("selected"));
+    Object.values(agentElements).forEach(el => el.classList.remove("selected"));
+  }
+  Object.entries(resourceElements).forEach(([id, el]) =>
+    el.classList.toggle("selected", activeResourceFilter === id));
+  filterTraceItems();
+}
 
 // Track lock holders for display
 const lockHolders = {};
@@ -476,6 +539,8 @@ function selectChannel(chId) {
   } else {
     activeChannelFilter = chId;
     activeFilter = "all";  // clear agent filter
+    activeResourceFilter = null;  // clear resource filter
+    Object.values(resourceElements).forEach(el => el.classList.remove("selected"));
     updateFilterButtons();
   }
   // Update channel item highlights
@@ -497,14 +562,25 @@ function updateChannelCount(chId) {
 // ========== LEFT PANEL: SUMMARY ==========
 function updateSummary() {
   const box = document.getElementById("summaryBox");
-  const elapsed = runStartTime ? ((Date.now() / 1000 - runStartTime).toFixed(1)) : "0.0";
-  const cost = calcCost(tokenState.totalIn, tokenState.totalOut);
+  const elapsed = finalElapsed !== null ? finalElapsed.toFixed(1)
+    : (runStartTime !== null ? (Date.now() / 1000 - runStartTime).toFixed(1) : "0.0");
+  // Keep the header clock in sync with the left-panel Elapsed (ticks live, not
+  // just at run.done).
+  const hm = document.getElementById("headerMeta");
+  if (hm) hm.textContent = elapsed + "s";
+  // Cost: prefer the runtime's own per-step figure (costState, from opencode);
+  // fall back to estimating from tokens × the pricing table (monitoring runtime).
+  const cost = costState.total > 0 ? costState.total
+    : calcCost(tokenState.totalIn, tokenState.totalOut);
+  const modelName = RUN_MODEL || "opencode default";
+  const modelRow = `<div class="summary-row"><span>Model</span><span class="val" title="${modelName}">${modelName}</span></div>`;
   const tokenRow = (tokenState.totalIn || tokenState.totalOut)
     ? `<div class="summary-row"><span>Tokens in/out</span><span class="val">${tokenState.totalIn.toLocaleString()} / ${tokenState.totalOut.toLocaleString()}</span></div>
-       <div class="summary-row"><span>Est. cost</span><span class="val">${cost !== null ? "~$" + cost.toFixed(4) : "N/A"}</span></div>`
+       <div class="summary-row"><span>API cost</span><span class="val">${cost !== null ? "~$" + cost.toFixed(4) : "N/A"}</span></div>`
     : "";
   box.innerHTML = `
     <div class="summary-row"><span>Elapsed</span><span class="val">${elapsed}s</span></div>
+    ${modelRow}
     <div class="summary-row"><span>Agents</span><span class="val">${TOPO.agents.length}</span></div>
     <div class="summary-row"><span>Channels</span><span class="val">${TOPO.channels.length}</span></div>
     <div class="summary-row"><span>Resources</span><span class="val">${TOPO.resources.length}</span></div>
@@ -560,19 +636,23 @@ function renderSimPanel(progress) {
 
 // ========== PROTOCOL STATE TRACKING ==========
 const protocolState = {};   // agent_id → current state name
+const currentPhase = {};    // agent_id → {id, task}: business phase (observability)
 const protocolViolations = [];
 
 function updateAgentStateLabel(agentId) {
+  const p = currentPhase[agentId];
+  const phaseLabel = p ? " \u00b7 \u2699 " + (p.task || p.id) : "";   // \u2699 working: <task>
   const el = document.querySelector(`[data-agent-state="${agentId}"]`);
   if (el && protocolState[agentId]) {
-    el.textContent = " @ " + protocolState[agentId];
+    el.innerHTML = `<span class="agent-state-at">→</span> ${protocolState[agentId]}${phaseLabel}`;
   }
-  // Update graph node sub-label to include state
+  // Update graph node sub-label to include state (+ business phase, if any)
   const node = graphNodeMap[agentId];
   if (node) {
     const steps = agentState[agentId] ? agentState[agentId].steps : 0;
     const stateStr = protocolState[agentId] ? " \u00b7 " + protocolState[agentId] : "";
-    node.select(".node-sub").text(steps + " calls" + stateStr);
+    const phaseStr = p ? " \u00b7 \u2699" + (p.id || "").replace(agentId + "_", "") : "";
+    node.select(".node-sub").text(steps + " calls" + stateStr + phaseStr);
   }
 }
 
@@ -587,12 +667,38 @@ function appendStateTransitionTrace(agentId, fromState, toState, trigger) {
     div.style.display = "none";
   }
   div.innerHTML = `
-    <span class="trace-agent">${agentId}</span>
-    <span class="trace-round" style="color:var(--text2)">\u2192</span>
-    <span style="flex-shrink:0;color:var(--purple)">\u25C6</span>
-    <div class="trace-body">
-      <span style="color:var(--text2)">${fromState || "?"} \u2192 ${toState}</span>
-      <div class="trace-args">${trigger}</div>
+    <div class="trace-head" style="cursor:default">
+      <span class="trace-agent">${agentId}</span>
+      <span class="trace-round" style="color:var(--text2)">\u2192</span>
+      <span style="flex-shrink:0;color:var(--purple)">\u25C6</span>
+      <div class="trace-body">
+        <span style="color:var(--text2)">${fromState || "?"} \u2192 ${toState}</span>
+        <div class="trace-args">${trigger}</div>
+      </div>
+    </div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function appendProgressTrace(agentId, label) {
+  // A report_progress beacon (observability plane) \u2014 distinct from a coord op.
+  const container = document.getElementById("traceScroll");
+  const div = document.createElement("div");
+  div.className = "trace-item trace-state";
+  div.dataset.agent = agentId;
+  if (activeChannelFilter) {
+    div.style.display = "none";
+  } else if (activeFilter !== "all" && activeFilter !== agentId) {
+    div.style.display = "none";
+  }
+  div.innerHTML = `
+    <div class="trace-head" style="cursor:default">
+      <span class="trace-agent">${agentId}</span>
+      <span class="trace-round" style="color:var(--text2)">\u2699</span>
+      <div class="trace-body">
+        <span style="color:var(--cyan,#22d3ee)">progress</span>
+        <div class="trace-args">${label}</div>
+      </div>
     </div>`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
@@ -672,7 +778,9 @@ function filterTraceItems() {
   const items = container.querySelectorAll(".trace-item");
   items.forEach(el => {
     let show = true;
-    if (activeChannelFilter) {
+    if (activeResourceFilter) {
+      show = el.dataset.resource === activeResourceFilter;
+    } else if (activeChannelFilter) {
       show = el.dataset.channel === activeChannelFilter;
     } else if (activeFilter !== "all") {
       show = el.dataset.agent === activeFilter;
@@ -747,26 +855,52 @@ function appendTraceItem(agentId, round, toolName, args, result, elapsed) {
   const div = document.createElement("div");
   div.className = "trace-item";
   div.dataset.agent = agentId;
-  // Tag channel for send/receive operations
+  // Tag channel for send/receive, and resource for acquire/release, so the trace
+  // can be filtered by clicking a channel or a resource.
   if ((toolName === "send_message" || toolName === "receive_message") && args.channel_id) {
     div.dataset.channel = args.channel_id;
   }
-  // Visibility
-  if (activeChannelFilter) {
+  const resId = args.lock_id || args.counter_id;
+  if (resId && /lock|counter/.test(toolName)) {
+    div.dataset.resource = resId;
+  }
+  // Visibility under the active filter (resource > channel > agent)
+  if (activeResourceFilter) {
+    if (div.dataset.resource !== activeResourceFilter) div.style.display = "none";
+  } else if (activeChannelFilter) {
     if (div.dataset.channel !== activeChannelFilter) div.style.display = "none";
   } else if (activeFilter !== "all" && activeFilter !== agentId) {
     div.style.display = "none";
   }
   div.innerHTML = `
-    <span class="trace-agent">${agentId}</span>
-    <span class="trace-round">R${String(round).padStart(2, '0')}</span>
-    <span class="${cls}" style="flex-shrink:0">${icon}</span>
-    <div class="trace-body">
-      <span class="trace-tool ${cls}">${toolName}</span>
-      ${argsStr ? `<div class="trace-args">${argsStr}</div>` : ""}
-      <div class="trace-result ${cls}">&rarr; ${resultStr}</div>
+    <div class="trace-head">
+      <span class="trace-agent">${agentId}</span>
+      <span class="trace-round">R${String(round).padStart(2, '0')}</span>
+      <span class="${cls}" style="flex-shrink:0">${icon}</span>
+      <div class="trace-body">
+        <span class="trace-tool ${cls}">${toolName}</span>
+        ${argsStr ? `<div class="trace-args">${argsStr}</div>` : ""}
+        <div class="trace-result ${cls}">&rarr; ${resultStr}</div>
+      </div>
+      <span class="trace-elapsed">${elapsed.toFixed(1)}s</span>
     </div>
-    <span class="trace-elapsed">${elapsed.toFixed(1)}s</span>`;
+    <div class="trace-detail" style="display:none"></div>`;
+
+  // Click to expand the full arguments + result for this log line.
+  const detail = div.querySelector(".trace-detail");
+  div.querySelector(".trace-head").addEventListener("click", () => {
+    if (detail.style.display === "none") {
+      if (!detail.dataset.filled) {
+        detail.textContent =
+          "args: " + JSON.stringify(args, null, 2) +
+          "\n\nresult: " + JSON.stringify(result, null, 2);
+        detail.dataset.filled = "1";
+      }
+      detail.style.display = "block";
+    } else {
+      detail.style.display = "none";
+    }
+  });
   container.appendChild(div);
 
   // Auto-scroll
@@ -781,10 +915,17 @@ function updateAgentStatus(agentId, status) {
   if (!agentState[agentId]) return;
   agentState[agentId].status = status;
 
-  // Update left panel dot
+  // Update left panel dot + the prominent status word
   const dot = document.querySelector(`[data-status-dot="${agentId}"]`);
   if (dot) {
     dot.className = `agent-status status-${status}`;
+  }
+  const word = document.querySelector(`[data-status-word="${agentId}"]`);
+  if (word) {
+    const label = { busy: "working", completed: "done", error: "error",
+                    timeout: "timeout", idle: "idle" }[status] || status;
+    word.textContent = label;
+    word.className = `agent-statusword status-word-${status}`;
   }
 
   // Update graph node
@@ -1035,11 +1176,33 @@ function findChannelRoute(channelId) {
 // ========== SSE EVENT HANDLING ==========
 const evtSource = new EventSource("/api/events");
 
+// Bulletproof timer start: tick from the moment the stream connects, regardless of
+// whether run.start is received in time. Also resume + clear a DISCONNECTED badge if
+// this is a reconnect after a transient drop.
+evtSource.onopen = () => {
+  ensureTimer(Date.now() / 1000);
+  if (runDone) return;
+  finalElapsed = null;  // resume ticking if we'd frozen on a drop
+  if (elapsedTimer === null && runStartTime !== null) elapsedTimer = setInterval(updateSummary, 1000);
+  const badge = document.getElementById("statusBadge");
+  if (badge && badge.textContent === "DISCONNECTED") {
+    badge.textContent = "RUNNING"; badge.className = "badge badge-running";
+  }
+};
+
+// The SSE connection dropped before run.done — the backend run was killed or crashed.
+// Show it as DISCONNECTED (orange) and freeze the clock, instead of a forever-"RUNNING"
+// page that looks like a stuck run.
+evtSource.onerror = () => {
+  if (runDone) return;
+  const badge = document.getElementById("statusBadge");
+  if (badge) { badge.textContent = "DISCONNECTED"; badge.className = "badge badge-disconnected"; }
+  stopTimer();
+};
+
 evtSource.addEventListener("run.start", (e) => {
   const data = JSON.parse(e.data);
-  runStartTime = data._ts;
-  // Start elapsed timer
-  setInterval(updateSummary, 1000);
+  ensureTimer(data._ts);
 });
 
 evtSource.addEventListener("agent.llm_start", (e) => {
@@ -1048,18 +1211,20 @@ evtSource.addEventListener("agent.llm_start", (e) => {
 });
 
 evtSource.addEventListener("agent.llm_end", (e) => {
-  const { agent_id, input_tokens, output_tokens } = JSON.parse(e.data);
+  const { agent_id, input_tokens, output_tokens, cost } = JSON.parse(e.data);
   if (agentTokens[agent_id]) {
     agentTokens[agent_id].in += input_tokens || 0;
     agentTokens[agent_id].out += output_tokens || 0;
   }
   tokenState.totalIn += input_tokens || 0;
   tokenState.totalOut += output_tokens || 0;
+  costState.total += cost || 0;
   updateSummary();
 });
 
 evtSource.addEventListener("agent.tool_call", (e) => {
   const data = JSON.parse(e.data);
+  ensureTimer(data._ts);   // fallback start if run.start was missed
   const { agent_id, round, tool_name, arguments: args, result, elapsed } = data;
 
   // Update step count
@@ -1118,7 +1283,7 @@ evtSource.addEventListener("agent.tool_call", (e) => {
   }
 });
 
-// chat.send: agent broadcasts to group chat (tracefix.runtime.baselines.shared_chat)
+// chat.send: agent broadcasts to group chat
 evtSource.addEventListener("chat.send", (e) => {
   const { agent_id, channel_id } = JSON.parse(e.data);
   if (channelMsgCounts[channel_id] !== undefined) {
@@ -1129,7 +1294,7 @@ evtSource.addEventListener("chat.send", (e) => {
   playBeam(agent_id, "group_chat", "var(--green)");
 });
 
-// chat.receive: agent reads message(s) from group chat (tracefix.runtime.baselines.shared_chat)
+// chat.receive: agent reads message(s) from group chat
 evtSource.addEventListener("chat.receive", (e) => {
   const { agent_id, from_agent, channel_id } = JSON.parse(e.data);
   // Beam from "group_chat" hub to receiving agent
@@ -1151,9 +1316,25 @@ evtSource.addEventListener("sim.update", (e) => {
 
 evtSource.addEventListener("state.transition", (e) => {
   const data = JSON.parse(e.data);
+  ensureTimer(data._ts);   // fallback start if run.start was missed
   protocolState[data.agent_id] = data.to_state;
   updateAgentStateLabel(data.agent_id);
   appendStateTransitionTrace(data.agent_id, data.from_state, data.to_state, data.trigger);
+});
+
+evtSource.addEventListener("agent.phase", (e) => {
+  const data = JSON.parse(e.data);
+  if (data.to_phase) {
+    currentPhase[data.agent_id] = {id: data.to_phase, task: data.task};
+  } else {
+    delete currentPhase[data.agent_id];
+  }
+  updateAgentStateLabel(data.agent_id);
+});
+
+evtSource.addEventListener("agent.progress", (e) => {
+  const data = JSON.parse(e.data);
+  appendProgressTrace(data.agent_id, data.label);
 });
 
 evtSource.addEventListener("state.violation", (e) => {
@@ -1172,11 +1353,16 @@ evtSource.addEventListener("agent.done", (e) => {
     agentState[data.agent_id].duration = data.duration || 0;
     agentState[data.agent_id].error = data.error || null;
   }
+  // Show this agent's own wall-clock duration once it finishes.
+  const durEl = document.querySelector(`[data-agent-dur="${data.agent_id}"]`);
+  if (durEl && data.duration) durEl.textContent = data.duration.toFixed(1) + "s";
 });
 
 evtSource.addEventListener("run.done", (e) => {
   const data = JSON.parse(e.data);
+  runDone = true;             // a normal finish — onerror must not flag DISCONNECTED
   evtSource.close();
+  stopTimer(data.duration);   // freeze elapsed; stop the live ticker
 
   // Update header
   const badge = document.getElementById("statusBadge");
@@ -1215,6 +1401,14 @@ evtSource.addEventListener("run.done", (e) => {
     if (data.protocol.final_states) {
       Object.entries(data.protocol.final_states).forEach(([aid, st]) => {
         protocolState[aid] = st;
+        updateAgentStateLabel(aid);
+      });
+    }
+    // Final business phases (authoritative; mostly cleared since agents finished).
+    if (data.protocol.phases) {
+      Object.keys(protocolState).forEach(aid => { delete currentPhase[aid]; });
+      Object.entries(data.protocol.phases).forEach(([aid, ph]) => {
+        if (ph) currentPhase[aid] = {id: ph, task: null};
         updateAgentStateLabel(aid);
       });
     }

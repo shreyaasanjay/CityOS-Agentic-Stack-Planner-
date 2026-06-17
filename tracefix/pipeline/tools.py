@@ -616,35 +616,67 @@ def _scan_skip_with_true_antipattern(lines: list[str]) -> list[tuple[int, str]]:
 
 
 def _scan_brace_balance(lines: list[str]) -> list[tuple[int, str]]:
-    """Flag PlusCal processes whose `{`/`}` counts don't balance."""
+    """Flag PlusCal processes whose `{`/`}` counts don't balance.
+
+    Tracks each process body independently and stops counting as soon as
+    that process's own opening `{` is matched by a `}` back to net-zero —
+    NOT at the next `process` declaration or end of file. Continuing to
+    accumulate past the process's real closing brace would misattribute
+    unrelated trailing content (the algorithm's own closing `} *)`, and set
+    literals like `{ResearcherA, ResearcherB}` in TLA+ operator definitions
+    after the algorithm block) to the last process in the file, producing
+    false positives on perfectly valid, balanced PlusCal.
+    """
     issues: list[tuple[int, str]] = []
     current: tuple[int, str] | None = None  # (start_line, process_name)
     depth = 0
-
-    def _close(end_line: int) -> None:
-        nonlocal current, depth
-        if current is not None and depth != 0:
-            start_line, name = current
-            issues.append((
-                start_line,
-                f"Unbalanced braces in process `{name}` (starting line {start_line}): "
-                f"net brace count is {depth:+d} by line {end_line}. "
-                "Check for a missing or extra `{`/`}` in this process body.",
-            ))
-        current = None
-        depth = 0
+    seen_open_brace = False
 
     for line_num, line in enumerate(lines, start=1):
         if _is_pluscal_comment_or_blank(line):
             continue
-        proc_match = _PROCESS_RE.match(line)
-        if proc_match:
-            _close(line_num - 1)
-            current = (line_num, proc_match.group(1))
-        if current is not None:
-            depth += line.count("{") - line.count("}")
 
-    _close(len(lines))
+        if current is None:
+            proc_match = _PROCESS_RE.match(line)
+            if proc_match:
+                current = (line_num, proc_match.group(1))
+                depth = 0
+                seen_open_brace = False
+            continue
+
+        opens = line.count("{")
+        closes = line.count("}")
+        depth += opens - closes
+        if opens:
+            seen_open_brace = True
+
+        # Once the process's own braces have opened and returned to zero,
+        # this process body is complete — stop counting and look for the
+        # next process declaration.
+        if seen_open_brace and depth <= 0:
+            if depth != 0:
+                start_line, name = current
+                issues.append((
+                    start_line,
+                    f"Unbalanced braces in process `{name}` (starting line "
+                    f"{start_line}): net brace count is {depth:+d} by line "
+                    f"{line_num}. Check for a missing or extra `{{`/`}}` in "
+                    "this process body.",
+                ))
+            current = None
+            depth = 0
+            seen_open_brace = False
+
+    # A process that opened braces but never returned to zero by EOF.
+    if current is not None and seen_open_brace and depth != 0:
+        start_line, name = current
+        issues.append((
+            start_line,
+            f"Unbalanced braces in process `{name}` (starting line "
+            f"{start_line}): net brace count is {depth:+d} by end of file. "
+            "Check for a missing or extra `{`/`}` in this process body.",
+        ))
+
     return issues
 
 
@@ -664,6 +696,43 @@ def _scan_goto_missing_semicolon(lines: list[str]) -> list[tuple[int, str]]:
     return issues
 
 
+def _scan_label_after_unterminated_brace(lines: list[str]) -> list[tuple[int, str]]:
+    """Flag a label immediately following a bare `}` with no `;` terminator.
+
+    PlusCal requires every compound statement (while/if/either) to be
+    terminated with `;` before the next label can begin. A bare closing
+    brace `}` directly followed by a label line (e.g. `}\\nrA_done:`) is a
+    common mistake that produces a cryptic pcal.trans error like
+    'Expected ";" but found "rA_done"' — this check catches it directly so
+    the model doesn't have to reverse-engineer the parser error.
+    """
+    issues: list[tuple[int, str]] = []
+    for i in range(len(lines) - 1):
+        cur = lines[i].rstrip()
+        if cur != "}" and not cur.strip().endswith("}"):
+            continue
+        if cur.strip() != "}":
+            continue
+        # Find the next non-comment, non-blank line.
+        j = i + 1
+        while j < len(lines) and _is_pluscal_comment_or_blank(lines[j]):
+            j += 1
+        if j >= len(lines):
+            continue
+        nxt = lines[j]
+        if _LABEL_ONLY_RE.match(nxt) or _LABEL_START_RE.match(nxt):
+            issues.append((
+                i + 1,
+                f"Missing semicolon: line {i + 1} is a bare `" + "}" + "` "
+                f"immediately followed by a label on line {j + 1} "
+                f"(`{nxt.strip()}`). PlusCal requires `;` after the closing "
+                "brace of a compound statement (while/if/either) before the "
+                "next label can begin. Change the line to `};` (or move the "
+                "label so it directly follows a terminated statement).",
+            ))
+    return issues
+
+
 def _lint_pluscal_all(tla_content: str) -> str | None:
     """Run all batch lint checks and return a single combined report.
 
@@ -679,6 +748,7 @@ def _lint_pluscal_all(tla_content: str) -> str | None:
     all_issues += _scan_skip_with_true_antipattern(lines)
     all_issues += _scan_brace_balance(lines)
     all_issues += _scan_goto_missing_semicolon(lines)
+    all_issues += _scan_label_after_unterminated_brace(lines)
 
     if not all_issues:
         return None
@@ -715,12 +785,39 @@ def verify_spec(ws: Workspace, *, timeout: int = 120) -> str:
         if len(ws.result.repairs) >= 3:
             recent = [r.new_violation_type for r in ws.result.repairs[-3:]]
             if recent[0] and recent[0] == recent[1] == recent[2]:
-                return (
+                # Re-run the lint against the CURRENT file content rather
+                # than returning a stale generic message. Without this, every
+                # retry after the breaker first trips gets the exact same
+                # canned text with no information about what is still
+                # actually wrong, forcing the model to guess from
+                # increasingly stale memory instead of the real file state.
+                current_tla = ws.read_tla() or ""
+                current_findings = _lint_pluscal_all(current_tla)
+                msg = (
                     f"CIRCUIT BREAKER: Same violation type ({recent[0]}) "
-                    f"persisted across 3 consecutive repair attempts. "
-                    f"The underlying issue is likely beyond automated repair. "
-                    f"Consider redesigning the protocol or simplifying the IR."
+                    f"persisted across 3 consecutive repair attempts.\n\n"
                 )
+                if current_findings:
+                    msg += (
+                        "Current unresolved issues in Protocol.tla right now "
+                        "(re-read this — it reflects the file as it actually "
+                        "is, not what you may remember fixing):\n\n"
+                        f"{current_findings}\n\n"
+                        "Your last few edits did not resolve these. Before "
+                        "editing again, call read_file('Protocol.tla') and "
+                        "locate these EXACT line numbers — do not rely on "
+                        "memory of earlier turns."
+                    )
+                else:
+                    msg += (
+                        "The local lint found no issues, so the remaining "
+                        "error is likely a structural problem pcal.trans "
+                        "detects that this lint does not cover (e.g. an "
+                        "operator/scope issue). Consider redesigning this "
+                        "part of the protocol rather than making further "
+                        "small text edits, or simplifying the IR."
+                    )
+                return msg
 
         ws.repair_count += 1
         ws.result.repairs.append(RepairAttempt(

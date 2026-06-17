@@ -114,14 +114,20 @@ def _event_kind(line: str) -> str:
 
 
 def _parse_workspace_from_line(root: Path, line: str) -> Path | None:
-    match = re.search(r"Workspace:\s*(.+)$", line)
+    match = re.search(r"\bworkspace:\s*(.+)$", line, re.IGNORECASE)
+    if not match:
+        match = re.search(r"Workspace:\s*(.+)$", line)
     if not match:
         match = re.search(r"Session saved to:\s*(.+session\.json)$", line)
         if match:
             candidate = Path(match.group(1).strip()).parent
             return (root / candidate).resolve() if not candidate.is_absolute() else candidate
-        return None
-    candidate = Path(match.group(1).strip())
+        match = re.search(r"run snapshot:\s*(.+?)(?:\s{2,}|\s+\(|$)", line, re.IGNORECASE)
+        if not match:
+            match = re.search(r"run snapshot\s*(?:->|â†’|→)\s*(.+)$", line, re.IGNORECASE)
+        if not match:
+            return None
+    candidate = Path(match.group(1).strip().strip("`"))
     return (root / candidate).resolve() if not candidate.is_absolute() else candidate
 
 
@@ -146,9 +152,35 @@ def _find_workspace(experiment_dir: Path | None) -> Path | None:
     return candidates[0]
 
 
+def _spec_file(workspace: Path, name: str) -> Path:
+    spec = workspace / "spec"
+    return (spec / name) if spec.is_dir() else (workspace / name)
+
+
+def _prompt_files(workspace: Path) -> list[str]:
+    prompt_root = workspace / "prompts"
+    if not prompt_root.exists():
+        return []
+    return [
+        str(path.relative_to(prompt_root)).replace("\\", "/")
+        for path in sorted(prompt_root.rglob("*.md"))
+    ]
+
+
 def _artifact_snapshot(workspace: Path | None) -> dict[str, Any]:
     if workspace is None or not workspace.exists():
-        return {"workspace": "", "files": [], "ir": None, "protocol": "", "states": None, "session": None, "tlcError": ""}
+        return {
+            "workspace": "",
+            "files": [],
+            "ir": None,
+            "protocol": "",
+            "states": None,
+            "summary": None,
+            "session": None,
+            "tlcError": "",
+            "prompts": [],
+            "runResult": None,
+        }
 
     files = []
     for path in sorted(workspace.rglob("*")):
@@ -158,11 +190,14 @@ def _artifact_snapshot(workspace: Path | None) -> dict[str, Any]:
     return {
         "workspace": str(workspace),
         "files": files[:200],
-        "ir": _read_json(workspace / "ir.json"),
-        "protocol": _read_text(workspace / "Protocol.tla"),
-        "states": _read_json(workspace / "states.json"),
+        "ir": _read_json(_spec_file(workspace, "ir.json")),
+        "protocol": _read_text(_spec_file(workspace, "Protocol.tla")),
+        "states": _read_json(_spec_file(workspace, "states.json")),
+        "summary": _read_json(_spec_file(workspace, "summary.json")),
         "session": _read_json(workspace / "session.json"),
-        "tlcError": _read_text(workspace / "tlc_error.md"),
+        "tlcError": _read_text(_spec_file(workspace, "tlc_error.md")),
+        "prompts": _prompt_files(workspace),
+        "runResult": _read_json(workspace / "run_result.json"),
     }
 
 
@@ -228,6 +263,59 @@ class RunState:
         }
 
 
+def _env_updates_for_provider(payload: dict[str, Any], *, require_key: bool) -> dict[str, str]:
+    provider = str(payload.get("provider", "openai"))
+    env_updates: dict[str, str] = {}
+    key_map = {
+        "openai": ("OPENAI_API_KEY", "openaiKey"),
+        "anthropic": ("ANTHROPIC_API_KEY", "anthropicKey"),
+        "openrouter": ("OPENROUTER_API_KEY", "openrouterKey"),
+    }
+    if provider not in key_map:
+        return env_updates
+    env_name, payload_name = key_map[provider]
+    api_key = str(payload.get(payload_name, "")).strip()
+    if api_key:
+        env_updates[env_name] = api_key
+    elif require_key:
+        raise ValueError(f"{env_name} is required for provider {provider}")
+    return env_updates
+
+
+def _model_for_tracefix(payload: dict[str, Any]) -> str:
+    provider = str(payload.get("provider", "openai"))
+    model = str(payload.get("model", "")).strip()
+    if not model:
+        return ""
+    if "/" in model or provider == "ollama":
+        return model
+    return f"{provider}/{model}"
+
+
+def _benchmark_task_text(root: Path, task_id: str) -> str:
+    task_dir = root / "benchmark" / "descriptions" / task_id
+    desc = _read_text(task_dir / "description.md")
+    tools = _read_text(task_dir / "tools.json")
+    metadata = _read_text(task_dir / "metadata.json")
+    parts = [f"Benchmark task {task_id}", desc]
+    if metadata:
+        parts.append(f"metadata.json:\n{metadata}")
+    if tools:
+        parts.append(f"tools.json:\n{tools}")
+    return "\n\n".join(part for part in parts if part.strip())
+
+
+def _task_text_from_payload(root: Path, payload: dict[str, Any]) -> str:
+    task_mode = str(payload.get("taskMode", "benchmark"))
+    if task_mode == "custom":
+        custom_task = str(payload.get("customTask", "")).strip()
+        if not custom_task:
+            raise ValueError("Custom task text is required")
+        return custom_task
+    task_id = str(payload.get("taskId", "3E")).strip() or "3E"
+    return _benchmark_task_text(root, task_id)
+
+
 def _build_pipeline_command(payload: dict[str, Any]) -> tuple[list[str], dict[str, str], dict[str, bool]]:
     provider = str(payload.get("provider", "openai"))
     model = str(payload.get("model", "gpt-5-mini")).strip() or "gpt-5-mini"
@@ -236,6 +324,7 @@ def _build_pipeline_command(payload: dict[str, Any]) -> tuple[list[str], dict[st
     custom_task = str(payload.get("customTask", "")).strip()
     max_turns = int(payload.get("maxTurns") or 20)
     max_tokens = int(payload.get("maxTokens") or 32768)
+    temperature = float(payload.get("temperature") if payload.get("temperature") is not None else 0.3)
     ollama_url = str(payload.get("ollamaUrl", "http://localhost:11434/v1")).strip()
 
     command = [
@@ -252,6 +341,8 @@ def _build_pipeline_command(payload: dict[str, Any]) -> tuple[list[str], dict[st
         str(max_turns),
         "--max-tokens",
         str(max_tokens),
+        "--temperature",
+        str(temperature),
         "--verbose",
     ]
     if payload.get("noSummarize", True):
@@ -269,19 +360,75 @@ def _build_pipeline_command(payload: dict[str, Any]) -> tuple[list[str], dict[st
     else:
         command.extend(["--benchmark", task_id])
 
-    env_updates: dict[str, str] = {}
-    key_map = {
-        "openai": ("OPENAI_API_KEY", "openaiKey"),
-        "anthropic": ("ANTHROPIC_API_KEY", "anthropicKey"),
-        "openrouter": ("OPENROUTER_API_KEY", "openrouterKey"),
-    }
-    if provider in key_map:
-        env_name, payload_name = key_map[provider]
-        api_key = str(payload.get(payload_name, "")).strip()
-        if not api_key:
-            raise ValueError(f"{env_name} is required for provider {provider}")
-        env_updates[env_name] = api_key
+    env_updates = _env_updates_for_provider(payload, require_key=True)
+    env_flags = {name: bool(value) for name, value in env_updates.items()}
+    return command, env_updates, env_flags
 
+
+def _build_design_command(root: Path, payload: dict[str, Any]) -> tuple[list[str], dict[str, str], dict[str, bool]]:
+    task_text = _task_text_from_payload(root, payload)
+    timeout = float(payload.get("timeout") or 1800)
+    opencode_bin = str(payload.get("opencodeBin", "opencode")).strip() or "opencode"
+    command = [
+        sys.executable,
+        "-u",
+        "-B",
+        "-m",
+        "tracefix.runtime.cli",
+        "design",
+        task_text,
+        "--timeout",
+        str(timeout),
+        "--opencode-bin",
+        opencode_bin,
+    ]
+    model = _model_for_tracefix(payload)
+    if model:
+        command.extend(["--model", model])
+    if payload.get("live", False):
+        command.append("--live")
+    if payload.get("verbose", True):
+        command.append("--verbose")
+    env_updates = _env_updates_for_provider(payload, require_key=False)
+    env_flags = {name: bool(value) for name, value in env_updates.items()}
+    return command, env_updates, env_flags
+
+
+def _build_runtime_command(payload: dict[str, Any]) -> tuple[list[str], dict[str, str], dict[str, bool]]:
+    workspace = str(payload.get("workspacePath", "")).strip()
+    if not workspace:
+        raise ValueError("Workspace path is required")
+    harness = str(payload.get("harness", "opencode")).strip() or "opencode"
+    command = [
+        sys.executable,
+        "-u",
+        "-B",
+        "-m",
+        "tracefix.runtime.cli",
+        "run",
+        "--workspace",
+        workspace,
+        "--harness",
+        harness,
+    ]
+    raw_model = str(payload.get("model", "")).strip()
+    model = _model_for_tracefix(payload) if harness == "opencode" else raw_model
+    if model:
+        command.extend(["--model", model])
+    task = str(payload.get("runtimeTask", "")).strip()
+    if task:
+        command.extend(["--task", task])
+    if payload.get("live", False):
+        command.append("--live")
+    if payload.get("verbose", True):
+        command.append("--verbose")
+    timeout = payload.get("timeout")
+    if timeout:
+        command.extend(["--timeout", str(timeout)])
+    if harness == "opencode":
+        opencode_bin = str(payload.get("opencodeBin", "opencode")).strip() or "opencode"
+        command.extend(["--opencode-bin", opencode_bin])
+    env_updates = _env_updates_for_provider(payload, require_key=False)
     env_flags = {name: bool(value) for name, value in env_updates.items()}
     return command, env_updates, env_flags
 
@@ -300,19 +447,24 @@ def _missing_provider_packages(provider: str) -> list[str]:
 
 def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
     mode = str(payload.get("mode", "pipeline"))
-    if mode != "pipeline":
-        raise ValueError("Only pipeline mode is enabled in this UI")
-
     provider = str(payload.get("provider", "openai"))
-    missing = _missing_provider_packages(provider)
-    if missing:
-        packages = " ".join(missing)
-        raise ValueError(
-            f"Missing Python package(s): {packages}. "
-            f"Install with: python -m pip install {packages}"
-        )
 
-    command, env_updates, env_flags = _build_pipeline_command(payload)
+    if mode == "pipeline":
+        missing = _missing_provider_packages(provider)
+        if missing:
+            packages = " ".join(missing)
+            raise ValueError(
+                f"Missing Python package(s): {packages}. "
+                f"Install with: python -m pip install {packages}"
+            )
+        command, env_updates, env_flags = _build_pipeline_command(payload)
+    elif mode == "design":
+        command, env_updates, env_flags = _build_design_command(root, payload)
+    elif mode == "runtime":
+        command, env_updates, env_flags = _build_runtime_command(payload)
+    else:
+        raise ValueError(f"Unknown mode: {mode}")
+
     run_id = uuid.uuid4().hex[:10]
     run = RunState(
         id=run_id,
@@ -323,6 +475,9 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
         provider=provider,
         model=str(payload.get("model", "")),
     )
+    if mode == "runtime":
+        workspace = Path(str(payload.get("workspacePath", "")).strip())
+        run.workspace = (root / workspace).resolve() if not workspace.is_absolute() else workspace
 
     env = os.environ.copy()
     env.update(env_updates)

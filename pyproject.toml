@@ -15,16 +15,26 @@ authors = [
     {name = "Taqiya Ehsan"},
     {name = "Jorge Ortiz"},
 ]
-dependencies = ["jsonschema", "tree-sitter", "tree-sitter-tlaplus"]
+dependencies = [
+    "jsonschema",
+    "tree-sitter>=0.23,<0.26",
+    "tree-sitter-tlaplus==1.5.0",
+    "python-dotenv",
+]
 
 [project.urls]
 Repository = "https://github.com/xsrxdc/TraceFix-Repairing-Agent-Coordination-Protocols"
 
 [project.optional-dependencies]
+agentic = ["openai", "anthropic"]
 test = ["pytest", "pytest-asyncio"]
+opencode = ["mcp"]
 
 [project.scripts]
+tracefix = "tracefix.runtime.cli:main"
 tla-verify-pluscal = "tracefix.cli.cli:main"
+tracefix-coord = "tracefix.runtime.coord_mcp.server:main"
+tracefix-domain = "tracefix.runtime.domain_mcp.server:main"
 tracefix-ui = "tracefix.ui.server:main"
 tracefix-runner = "tracefix.runner_ui.server:main"
 

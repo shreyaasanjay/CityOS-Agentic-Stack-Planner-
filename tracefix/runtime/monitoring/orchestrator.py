@@ -15,6 +15,7 @@ from pathlib import Path
 
 from tracefix.runtime.monitoring.monitor import ProtocolMonitor
 from tracefix.runtime.monitoring.coord import CoordinationContext, COORD_TOOL_SCHEMAS
+from tracefix.runtime.workspace_layout import spec_path
 from tracefix.runtime.monitoring.agent_runner import AgentRunner, AgentConfig, AgentResult
 from tracefix.runtime.monitoring.state_tracker import StateTracker
 
@@ -45,12 +46,12 @@ Waits internally for up to 30 seconds until the lock is available. Returns:
 ### release_lock(lock_id)
 Always succeeds immediately.
 
-### send_message(channel_id, label, body?)
-Always succeeds immediately. Use the optional `body` parameter to pass data content (e.g. results, instructions, artifacts) along with the signal label.
+### send_message(channel_id, label)
+Always succeeds immediately. Channels carry a finite **label only** — never free-form data. To share data with another agent, write it to a file (the data plane) and send the label as the "it's ready" signal.
 
 ### receive_message(channel_id)
 Waits up to 30 seconds for a message. Returns:
-- `{"status": "received", "label": "...", "body": "..."}` — message arrived (body included if sender provided one)
+- `{"status": "received", "label": "..."}` — message arrived; the label is the signal (read any shared file it refers to)
 - `{"status": "timeout"}` — no message within 30s, retry
 
 ### signal_done()
@@ -73,7 +74,6 @@ class RuntimeB:
         workspace: Path | str,
         model: str = "gpt-5-mini",
         api_key: str = "",
-        base_url: str = "",
         verbose: bool = False,
         live: bool = False,
         live_port: int = 8765,
@@ -87,7 +87,6 @@ class RuntimeB:
         self.workspace = Path(workspace)
         self.model = model
         self.api_key = api_key
-        self.base_url = base_url
         self.verbose = verbose
         self.live = live
         self.live_port = live_port
@@ -101,12 +100,12 @@ class RuntimeB:
         t0 = time.monotonic()
 
         # 1. Load IR (topology only)
-        ir = _load_json(self.workspace / "ir.json")
+        ir = _load_json(spec_path(self.workspace, "ir.json"))
 
         # 2. Create Monitor + StateTracker
         monitor = ProtocolMonitor(ir)
         tracker = None
-        states_path = self.workspace / "states.json"
+        states_path = spec_path(self.workspace, "states.json")
         if states_path.exists():
             states_data = json.loads(states_path.read_text())
             tracker = StateTracker(states_data)
@@ -217,7 +216,6 @@ class RuntimeB:
                 tool_schemas=all_schemas,
                 model=self.model,
                 api_key=self.api_key,
-                base_url=self.base_url,
                 verbose=self.verbose,
             )
             runner = AgentRunner(config, coord, tool_registry, event_bus=event_bus)

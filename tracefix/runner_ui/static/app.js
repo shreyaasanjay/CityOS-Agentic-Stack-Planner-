@@ -1,5 +1,6 @@
 const state = {
   tasks: [],
+  runMode: "pipeline",
   taskMode: "benchmark",
   runId: null,
   eventSource: null,
@@ -19,11 +20,21 @@ const els = {
   openrouterKey: document.querySelector("#openrouterKey"),
   ollamaUrl: document.querySelector("#ollamaUrl"),
   taskId: document.querySelector("#taskId"),
+  taskSourceFields: document.querySelector("#taskSourceFields"),
   benchmarkField: document.querySelector("#benchmarkField"),
   customTaskField: document.querySelector("#customTaskField"),
   customTask: document.querySelector("#customTask"),
+  runtimeFields: document.querySelector("#runtimeFields"),
+  workspacePathInput: document.querySelector("#workspacePath"),
+  harness: document.querySelector("#harness"),
+  runtimeTask: document.querySelector("#runtimeTask"),
   maxTurns: document.querySelector("#maxTurns"),
   maxTokens: document.querySelector("#maxTokens"),
+  temperature: document.querySelector("#temperature"),
+  tracefixRunFields: document.querySelector("#tracefixRunFields"),
+  opencodeBin: document.querySelector("#opencodeBin"),
+  timeout: document.querySelector("#timeout"),
+  live: document.querySelector("#live"),
   noSummarize: document.querySelector("#noSummarize"),
   batchLint: document.querySelector("#batchLint"),
   startRun: document.querySelector("#startRun"),
@@ -91,6 +102,16 @@ function bindEvents() {
     });
   });
 
+  document.querySelectorAll("[data-run-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.runMode = button.dataset.runMode;
+      document.querySelectorAll("[data-run-mode]").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
+      updateModeFields();
+    });
+  });
+
   els.form.addEventListener("submit", async (event) => {
     event.preventDefault();
     await startRun();
@@ -125,6 +146,19 @@ function updateKeyFields() {
   });
 }
 
+function updateModeFields() {
+  const isPipeline = state.runMode === "pipeline";
+  const isRuntime = state.runMode === "runtime";
+  els.taskSourceFields.classList.toggle("hidden", isRuntime);
+  els.runtimeFields.classList.toggle("hidden", !isRuntime);
+  els.tracefixRunFields.classList.toggle("hidden", isPipeline);
+  document.querySelectorAll(".pipeline-only").forEach((item) => {
+    item.classList.toggle("hidden", !isPipeline);
+  });
+  els.startRun.textContent =
+    state.runMode === "design" ? "Design" : state.runMode === "runtime" ? "Run Workspace" : "Run LLM";
+}
+
 async function loadTasks() {
   const data = await getJson("/api/tasks");
   state.tasks = data.tasks || [];
@@ -137,7 +171,7 @@ async function loadTasks() {
 async function startRun() {
   resetRunUi();
   const payload = {
-    mode: "pipeline",
+    mode: state.runMode,
     provider: els.provider.value,
     model: els.model.value,
     openaiKey: els.openaiKey.value,
@@ -149,18 +183,39 @@ async function startRun() {
     customTask: els.customTask.value,
     maxTurns: Number(els.maxTurns.value || 20),
     maxTokens: Number(els.maxTokens.value || 32768),
+    temperature: Number(els.temperature.value !== "" ? els.temperature.value : 0.3),
     noSummarize: els.noSummarize.checked,
     batchLint: els.batchLint.checked,
+    workspacePath: els.workspacePathInput.value,
+    harness: els.harness.value,
+    runtimeTask: els.runtimeTask.value,
+    opencodeBin: els.opencodeBin.value,
+    timeout: Number(els.timeout.value || (state.runMode === "design" ? 1800 : 600)),
+    live: els.live.checked,
   };
 
   try {
     const run = await postJson("/api/runs", payload);
     state.runId = run.id;
+    if (run.artifacts?.workspace) {
+      els.workspacePath.textContent = run.artifacts.workspace;
+      state.artifacts = run.artifacts;
+      renderArtifacts();
+    }
     els.startRun.disabled = true;
     els.stopRun.disabled = false;
-    els.runTitle.textContent =
-      state.taskMode === "benchmark" ? `Running ${payload.taskId}` : "Running custom task";
-    els.runMeta.textContent = `${payload.provider} / ${payload.model}`;
+    if (state.runMode === "runtime") {
+      els.runTitle.textContent = `Running ${payload.workspacePath || "workspace"}`;
+      els.runMeta.textContent = `${payload.harness} / ${payload.model}`;
+    } else if (state.runMode === "design") {
+      els.runTitle.textContent =
+        state.taskMode === "benchmark" ? `Designing ${payload.taskId}` : "Designing custom task";
+      els.runMeta.textContent = `${payload.provider} / ${payload.model}`;
+    } else {
+      els.runTitle.textContent =
+        state.taskMode === "benchmark" ? `Running ${payload.taskId}` : "Running custom task";
+      els.runMeta.textContent = `${payload.provider} / ${payload.model}`;
+    }
     setStatus("running");
     connectEvents(run.id);
   } catch (error) {
@@ -454,6 +509,7 @@ function escapeHtml(text) {
 async function init() {
   bindEvents();
   updateKeyFields();
+  updateModeFields();
   await loadTasks();
   renderOutput();
 }
@@ -461,4 +517,3 @@ async function init() {
 init().catch((error) => {
   appendTimeline("error", error.message);
 });
-

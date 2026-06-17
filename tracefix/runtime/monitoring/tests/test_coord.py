@@ -38,6 +38,24 @@ class TestLockOps:
         assert result["status"] == "released"
 
     @pytest.mark.asyncio
+    async def test_release_by_non_holder_rejected(self, coord):
+        """H2: a Lock may only be released by its current holder.
+
+        validate_release only checks existence and release historically freed the
+        lock unconditionally, so a non-holder's release silently freed another
+        agent's lock (breaking mutual exclusion). It must raise instead and leave
+        the real holder's ownership intact.
+        """
+        await coord.acquire_lock("doc_lock", "researcherA")
+        with pytest.raises(ProtocolViolation):
+            await coord.release_lock("doc_lock", "researcherB")  # B does not hold it
+        # The lock was NOT freed — A still holds it.
+        assert coord.locks._locks["doc_lock"] == "researcherA"
+        # And it is genuinely still locked: B cannot acquire within the timeout.
+        result = await coord.acquire_lock("doc_lock", "researcherB", timeout=0.1)
+        assert result["status"] == "timeout"
+
+    @pytest.mark.asyncio
     async def test_lock_contention_returns_timeout(self, coord):
         """Second agent gets 'timeout' when lock is held by another."""
         await coord.acquire_lock("doc_lock", "researcherA")
@@ -257,6 +275,87 @@ class TestConditionSignaling:
         assert result["status"] == "acquired"
         assert elapsed < 1.0  # should not wait for full timeout
 
+
+# ---------------------------------------------------------------------------
+# Observability plane: report_progress beacons + agent.phase emission
+# ---------------------------------------------------------------------------
+
+class _FakeBus:
+    def __init__(self):
+        self.events = []
+
+    async def emit(self, event_type, data=None):
+        self.events.append((event_type, data or {}))
+
+
+def _phase_states():
+    """researcherA: acquire doc_lock -> [write] (skip, business) -> release -> done."""
+    return {
+        "initial_states": {"researcherA": "rA_acquire"},
+        "states": [
+            {"id": "rA_acquire", "agent": "researcherA",
+             "actions": [{"next_state": "rA_write", "acquire": "doc_lock"}]},
+            {"id": "rA_write", "agent": "researcherA", "task": "write the section",
+             "actions": [{"next_state": "rA_release"}]},
+            {"id": "rA_release", "agent": "researcherA",
+             "actions": [{"next_state": "rA_done", "release": "doc_lock"}]},
+            {"id": "rA_done", "agent": "researcherA", "actions": []},
+        ],
+    }
+
+
+class TestReportProgress:
+    @pytest.mark.asyncio
+    async def test_records_beacon_and_returns_ok(self, coord):
+        res = await coord.report_progress("generating_figure", "researcherA")
+        assert res == {"status": "ok", "label": "generating_figure"}
+        assert len(coord.beacons) == 1
+        b = coord.beacons[0]
+        assert b["agent"] == "researcherA" and b["label"] == "generating_figure"
+        assert isinstance(b["ts"], float)
+
+    @pytest.mark.asyncio
+    async def test_no_bus_does_not_raise(self, coord):
+        res = await coord.report_progress("x", "researcherA")  # coord has event_bus=None
+        assert res["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_emits_agent_progress(self, ir_3m):
+        bus = _FakeBus()
+        coord = CoordinationContext(ir_3m, ProtocolMonitor(ir_3m), event_bus=bus)
+        await coord.report_progress("phase-x", "researcherA")
+        assert ("agent.progress",
+                {"agent_id": "researcherA", "label": "phase-x"}) in bus.events
+
+    @pytest.mark.asyncio
+    async def test_non_enforced_no_violation_no_state_change(self, ir_3m):
+        from tracefix.runtime.monitoring.state_tracker import StateTracker
+        tracker = StateTracker(_phase_states())
+        coord = CoordinationContext(ir_3m, ProtocolMonitor(ir_3m),
+                                    tracker=tracker, correction=True)
+        before = dict(tracker.current_states)
+        res = await coord.report_progress("anything", "researcherA")
+        assert res["status"] == "ok"
+        assert tracker.violation_count == 0
+        assert dict(tracker.current_states) == before  # coordination untouched
+
+
+class TestAgentPhaseEmission:
+    @pytest.mark.asyncio
+    async def test_phase_emitted_on_skip_then_cleared(self, ir_3m):
+        from tracefix.runtime.monitoring.state_tracker import StateTracker
+        bus = _FakeBus()
+        tracker = StateTracker(_phase_states())
+        coord = CoordinationContext(ir_3m, ProtocolMonitor(ir_3m),
+                                    tracker=tracker, event_bus=bus)
+        await coord.acquire_lock("doc_lock", "researcherA")
+        phases = [d for (t, d) in bus.events if t == "agent.phase"]
+        assert any(d["to_phase"] == "rA_write" and d["task"] == "write the section"
+                   for d in phases)
+        await coord.release_lock("doc_lock", "researcherA")
+        phases = [d for (t, d) in bus.events if t == "agent.phase"]
+        assert phases[-1]["to_phase"] is None  # cleared after release
+
     @pytest.mark.asyncio
     async def test_no_signal_loss_on_send(self, coord):
         """Send during receive wait wakes the receiver immediately (Condition)."""
@@ -431,11 +530,19 @@ class TestPollChannels:
         assert r2["status"] == "none"
 
     @pytest.mark.asyncio
-    async def test_poll_with_body(self, coord_multi):
-        """poll_channels returns body when present."""
-        await coord_multi.send("chA", "msg", "senderA", body="data payload")
-        result = await coord_multi.poll_channels(["chA"], "receiver")
-        assert result["body"] == "data payload"
+    async def test_poll_surfaces_content_ref(self):
+        """poll_channels surfaces the opaque content ref (claim-check), not a body —
+        channels are flag-only; the payload lives in the data plane."""
+        ir = {"agents": [{"id": "s"}, {"id": "r"}], "resources": [],
+              "channels": [{"id": "ch", "from": "s", "to": "r",
+                            "labels": ["rev"], "content_labels": ["rev"]}]}
+        coord = CoordinationContext(ir, ProtocolMonitor(ir))
+        posted = await coord.post_content("data payload", "s")
+        await coord.send("ch", "rev", "s", ref=posted["ref"])
+        result = await coord.poll_channels(["ch"], "r")
+        assert result["status"] == "received" and result["ref"] == posted["ref"]
+        assert "body" not in result
+        assert (await coord.get_content(result["ref"], "r"))["content"] == "data payload"
 
     @pytest.mark.asyncio
     async def test_poll_invalid_channel(self, coord_multi):
@@ -488,11 +595,17 @@ class TestReceiveAny:
         assert elapsed >= 0.15  # waited close to timeout
 
     @pytest.mark.asyncio
-    async def test_receive_any_with_body(self, coord_multi):
-        """receive_any returns body when present."""
-        await coord_multi.send("chA", "msg", "senderA", body="hello")
-        result = await coord_multi.receive_any(["chA", "chB"], "receiver")
-        assert result["body"] == "hello"
+    async def test_receive_any_surfaces_content_ref(self):
+        """receive_any surfaces the opaque content ref (claim-check), not a body."""
+        ir = {"agents": [{"id": "s"}, {"id": "r"}], "resources": [],
+              "channels": [{"id": "ch", "from": "s", "to": "r",
+                            "labels": ["rev"], "content_labels": ["rev"]}]}
+        coord = CoordinationContext(ir, ProtocolMonitor(ir))
+        posted = await coord.post_content("hello", "s")
+        await coord.send("ch", "rev", "s", ref=posted["ref"])
+        result = await coord.receive_any(["ch"], "r")
+        assert result["status"] == "received" and result["ref"] == posted["ref"]
+        assert "body" not in result
 
     @pytest.mark.asyncio
     async def test_receive_any_consumes_message(self, coord_multi):

@@ -42,6 +42,34 @@ ra_loop: while (TRUE) {
 };
 ```
 
+## Closing Braces Need a Semicolon Before the Next Label
+
+A bare `}` closing a `while`, `if`, or `either` block must be followed by `;`
+before the next label can begin. A label directly after a bare `}` (no `;`)
+produces a cryptic pcal.trans error like `Expected ";" but found "next_label"`.
+
+Wrong:
+
+```tla
+ra_loop: while (TRUE) {
+  ra_research:
+    skip;
+}
+ra_done:
+  skip;
+```
+
+Correct:
+
+```tla
+ra_loop: while (TRUE) {
+  ra_research:
+    skip;
+};
+ra_done:
+  skip;
+```
+
 ## Skip
 
 `skip;` is valid PlusCal. It is the right no-op statement for domain work that
@@ -175,8 +203,18 @@ ra_research:
 When pcal.trans reports a syntax error:
 
 1. Read the reported line and at least 5 surrounding lines in Protocol.tla.
-2. Look above the reported token for an empty label or two consecutive labels.
+2. Look above the reported token for an empty label or two consecutive labels,
+   or a bare `}` immediately followed by a label (missing `;`).
 3. Do not change `skip;` into an assignment.
 4. Make every label immediately own a statement or convert the label into a
    `while (TRUE)` loop label.
 5. Re-run verify_spec().
+
+## Editing Multiple Processes in One Turn
+
+If you are about to call edit_file on a different process than the one you
+just edited, call read_file('Protocol.tla') again first. An edit_file call
+on Process A changes the line numbers and exact text of everything after it
+in the file — the old_string you remember for Process B may no longer match
+the current file even if Process B's own content didn't change. Do not chain
+edit_file calls across multiple processes from a single earlier read_file.

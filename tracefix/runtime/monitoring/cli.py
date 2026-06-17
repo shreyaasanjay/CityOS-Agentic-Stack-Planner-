@@ -6,10 +6,14 @@ import argparse
 import asyncio
 import io
 import json
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
+
+from tracefix.runtime.env_setup import load_repo_env
+
+# Load repo-root .env so the in-process OpenAI-loop agents inherit OPENAI_API_KEY.
+load_repo_env()
 
 
 def _print_cost_summary(result, model: str) -> None:
@@ -64,8 +68,6 @@ def _cmd_run(args):
     rt = RuntimeB(
         task_id=args.task,
         model=args.model,
-        api_key=args.api_key or os.environ.get("OPENAI_API_KEY", ""),
-        base_url=args.base_url,
         verbose=args.verbose,
         workspace=Path(args.workspace),
         live=args.live,
@@ -211,7 +213,7 @@ def _save_visualization(rt, result, output_dir: Path, *, open_browser: bool = Fa
         webbrowser.open(output_path.as_uri())
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="tracefix.runtime.monitoring",
         description="Architecture B: Monitoring runtime — agents follow pre-generated prompts",
@@ -224,10 +226,6 @@ def main():
                          help="Workspace path (e.g., agent_workspace/10M)")
     run_cmd.add_argument("--model", default="gpt-5-mini",
                          help="LLM model (default: gpt-5-mini)")
-    run_cmd.add_argument("--api-key", default="",
-                         help="LLM API key (leave empty to use OPENAI_API_KEY env var; pass 'ollama' for local Ollama)")
-    run_cmd.add_argument("--base-url", default="",
-                         help="Custom LLM base URL (e.g. http://localhost:11434/v1 for Ollama)")
     run_cmd.add_argument("--timeout", type=float, default=180.0,
                          help="Timeout in seconds (default: 180)")
     run_cmd.add_argument("--max-rounds", type=int, default=50,
@@ -254,7 +252,7 @@ def main():
     run_cmd.add_argument("--output", type=str, default=None,
                          help="Output root directory for results (default: {workspace}/results/)")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.command == "run":
         _cmd_run(args)

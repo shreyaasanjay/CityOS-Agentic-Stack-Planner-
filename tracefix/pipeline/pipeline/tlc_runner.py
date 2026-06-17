@@ -4,25 +4,21 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_BREW_JAVA = "/opt/homebrew/opt/openjdk@17/bin/java"
-# Resolve a Java 17 binary portably: explicit env override, else the documented
-# Homebrew openjdk@17 if present (macOS), else any `java` on PATH (Linux/Windows),
-# else fall back to the Homebrew path string.
-JAVA_PATH = (
-    os.environ.get("TLA_VERIFY_JAVA")
-    or (_BREW_JAVA if os.path.exists(_BREW_JAVA) else None)
-    or shutil.which("java")
-    or _BREW_JAVA
+from .toolchain import (
+    JAR_MISSING_HINT,
+    JAVA_MISSING_HINT,
+    resolve_java,
+    resolve_jar,
 )
-_REPO_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "pyproject.toml").exists())
-TLA2TOOLS_JAR = str(_REPO_ROOT / "lib" / "tla2tools.jar")
+
+JAVA_PATH = resolve_java()
+TLA2TOOLS_JAR = resolve_jar()
 
 
 @dataclass
@@ -53,6 +49,14 @@ def run_tlc(
     Returns:
         TLCResult with success/failure info and parsed output
     """
+    if not Path(tla2tools_jar).exists():
+        return TLCResult(
+            success=False,
+            violation_type="error",
+            error_trace=f"tla2tools.jar not found at {tla2tools_jar}. {JAR_MISSING_HINT}",
+            raw_output="",
+        )
+
     with tempfile.TemporaryDirectory(prefix="tlc_v3_") as tmpdir:
         spec_path = os.path.join(tmpdir, "Protocol.tla")
         cfg_path = os.path.join(tmpdir, "Protocol.cfg")
@@ -95,9 +99,21 @@ def run_tlc(
             return TLCResult(
                 success=False,
                 violation_type="error",
-                error_trace="TLC timed out",
+                error_trace=(
+                    "TLC timed out. Remedies: (1) raise --timeout if the protocol is "
+                    "correct but complex; (2) lower the channel bound in Protocol.cfg to "
+                    "shrink the state space; (3) reduce agent count or message complexity; "
+                    "(4) check for an unintended unbounded loop in the PlusCal bodies."
+                ),
                 raw_output=partial_out,
                 stats={"timeout": True, "elapsed_seconds": round(elapsed, 2)},
+            )
+        except (FileNotFoundError, OSError) as e:
+            return TLCResult(
+                success=False,
+                violation_type="error",
+                error_trace=f"Could not run Java at '{java_path}' ({e}). {JAVA_MISSING_HINT}",
+                raw_output="",
             )
 
     return _parse_tlc_output(raw_output, elapsed)
@@ -174,39 +190,23 @@ def _parse_tlc_output(raw_output: str, elapsed: float) -> TLCResult:
             stats=stats,
         )
 
-    # Check for successful completion
-    if "Model checking completed" in raw_output or "finished" in raw_output.lower():
-        # Also check there were no errors
-        if "Error" not in raw_output or "0 errors" in raw_output:
-            return TLCResult(
-                success=True,
-                raw_output=raw_output,
-                stats=stats,
-            )
+    # Positive success confirmation. A verifier must *prove* a pass, never infer
+    # one from the absence of error markers — a false "success" silently ships an
+    # unverified protocol. TLC prints this exact pair only on a clean run, so we
+    # require it before declaring success.
+    if "Model checking completed" in raw_output and (
+        "No error has been found" in raw_output or "0 errors" in raw_output
+    ):
+        return TLCResult(success=True, raw_output=raw_output, stats=stats)
 
-    # If we got states but no error, likely success
-    # But only if there's no "Error" in the output
-    if stats.get("states_generated", 0) > 0 and "Error" not in raw_output:
-        return TLCResult(
-            success=True,
-            raw_output=raw_output,
-            stats=stats,
-        )
-
-    # Fallback: check for explicit errors
-    if "Error" in raw_output:
-        return TLCResult(
-            success=False,
-            violation_type="error",
-            error_trace=_extract_error(raw_output),
-            raw_output=raw_output,
-            stats=stats,
-        )
-
+    # No recognized verdict and no positive completion signal. Fail closed:
+    # report an error rather than guessing success (the old heuristic — "states
+    # generated and no 'Error' substring" — could pass a truncated or unfamiliar
+    # TLC failure off as verified).
     return TLCResult(
         success=False,
         violation_type="error",
-        error_trace="Could not determine TLC result",
+        error_trace=_extract_error(raw_output) or "Could not determine TLC verdict from output.",
         raw_output=raw_output,
         stats=stats,
     )
@@ -222,9 +222,6 @@ def _extract_trace(raw_output: str) -> str:
             in_trace = True
         if in_trace:
             trace_lines.append(line)
-        if in_trace and line.strip() == "" and len(trace_lines) > 3:
-            # Check if we're past the trace
-            pass
     if trace_lines:
         return "\n".join(trace_lines)
     return raw_output

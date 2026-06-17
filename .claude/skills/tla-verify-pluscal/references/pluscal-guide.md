@@ -95,7 +95,7 @@ d_done:
 
 ## Work State Labels
 
-Every `acquire_lock`→`release_lock` pair must have at least one intermediate PlusCal label between them. Without it, TLC treats the acquire and release as adjacent atomic steps with no work in between — and in Runtime A, the domain work (Phase 2) executes *before* the lock is acquired (Phase 3), meaning the critical section is empty.
+Every `acquire_lock`→`release_lock` pair must have at least one intermediate PlusCal label between them. Without it, TLC treats the acquire and release as adjacent atomic steps with no work in between — the agent's domain work executes *before* the lock is held, meaning the critical section is empty.
 
 **When NOT needed:** If a `receive`, `send`, `if`, or `either` statement already appears between acquire and release (each requiring its own label), no extra `skip` is needed — those labels already serve as intermediate work states.
 
@@ -132,6 +132,35 @@ Every `acquire_lock`→`release_lock` pair must have at least one intermediate P
   rel:
     release_lock(res);
 ```
+
+## Domain work annotations (`\* domain:` and the typed-tool tag)
+
+Every domain `skip` carries a `\* domain: <description>` line comment. `extract-states`
+lifts the description into the state's runtime `task`, so write clear, self-contained prose.
+
+By default the runtime executes domain work with **builtins** (read/write/edit/bash) — right
+for collaborative file/shell work ("write your section into the document"). When a step needs
+a **structured typed tool** instead — a real external API, or custom typed logic beyond file
+I/O — append a tool tag:
+
+```
+  charge:
+    skip; \* domain: charge the customer [tool: charge_payment(amount: number) -> {ok, txn_id}; impl: external]
+```
+
+Tag grammar: `[tool: <name>(<p>: <type>, ...) -> <returns>; impl: <kind>]`
+- `<type>` ∈ string | number | integer | boolean | object | array (omit → string).
+- `-> <returns>` is optional documentation of the result shape.
+- `impl:` is `external` (a real MCP service you bind), `local` (custom typed logic — you fill a
+  generated Python stub, auto-wrapped as an MCP server), or `builtin` (no tool — same as no tag;
+  use only to record that you considered it).
+
+`extract-states` lifts every tag into a workspace `tools.json` (schema + `agent_ids` set to the
+process body the tag lives in, so the tool is exposed ONLY to that agent), plus a `tools_impl.py`
+stub (local) or `mcp.json` stub (external). The description before the tag stays the prose task.
+Tag ONLY the steps that genuinely need a typed tool; leave ordinary collaborative work as a plain
+`\* domain:` comment (builtins handle it). If a `tools.json` was provided as task input (e.g. a
+benchmark), name its existing tools in your comments instead of inventing tags.
 
 ## PlusCal Rules
 

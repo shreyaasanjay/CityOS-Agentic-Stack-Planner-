@@ -3,10 +3,12 @@ name: tla-verify-pluscal
 description: >-
   Designs and verifies coordination protocols for multi-agent systems using
   TLA+ model checking via PlusCal. Provides hazard analysis, IR design,
-  PlusCal code generation, TLC model checking with automated repair loop
-  (up to 5 attempts), and state extraction. Invoke via /tla-verify-pluscal
-  only. Use /tla-prompt-gen after this to generate per-agent Runtime A and
-  B prompts.
+  PlusCal code generation, TLC model checking (safety-only: deadlock freedom,
+  mutual exclusion, invariants — not liveness) with automated repair loop
+  (up to 5 attempts), state extraction, and — automatically as a final step —
+  per-agent Runtime B prompt generation (it chains into /tla-prompt-gen), so one
+  invocation takes a natural-language requirement all the way to a runnable
+  workspace. Invoke via /tla-verify-pluscal.
 metadata:
   author: Shuren Xia
   version: "1.0"
@@ -37,9 +39,29 @@ Use `-o dir` with scaffold to write output to a specific directory. By default, 
 
 - For PlusCal syntax, patterns, and error fixes, see [references/pluscal-guide.md](references/pluscal-guide.md)
 - For IR schema and the 2PC example, see [references/schema-and-examples.md](references/schema-and-examples.md)
-- For per-agent prompt generation (Runtime A + B), use the `/tla-prompt-gen` skill after Phase 4
+- For per-agent prompt generation (Runtime B), use the `/tla-prompt-gen` skill after Phase 4
+
+## Workspace layout
+
+A task workspace is organized into subfolders — put artifacts in the right one:
+- **`spec/`** — ALL verification artifacts: `ir.json`, `Protocol.tla`, `Protocol_translated.tla`,
+  `Protocol.cfg`, `states.json`, `summary.json`, `tlc_output.log`, `tlc_error.md`, `history/`.
+  Write `ir.json` to `spec/ir.json`, and run the CLI on the `spec/` dir:
+  `scaffold spec/ir.json`, `verify spec/`, `extract-states spec/`.
+- **`prompts/`** — per-agent prompts (written later by `/tla-prompt-gen`).
+- **`output/`** — runtime artifacts the agents produce (written at run time).
+- `description.md`, `tools.json` — task inputs, at the workspace root.
+
+`tla-verify-pluscal init <name>` creates this layout. A bare name gets a timestamp suffix
+(`workspace/<name>_<stamp>/` — every init is a fresh workspace, never a reused one): use the
+path init prints in all later commands. (The CLI also accepts a flat workspace — everything
+at the root — for older workspaces.)
 
 ## Recommended Workflow
+
+### Phase 0: Toolchain Check
+
+Before any design work, run `Bash: tla-verify-pluscal doctor`. If it fails, stop and help the user fix the toolchain first (Java 17 / tla2tools.jar / tree-sitter — the output names the failing component and the fix, e.g. `bash scripts/download_tla2tools.sh`). This avoids discovering a broken toolchain mid-Phase-3, after the design work is already done.
 
 ### Phase 1: Structured Analysis
 
@@ -72,9 +94,11 @@ This hazard table directly feeds into Steps 2–3 below.
 - What concurrent processes exist? What does each one do autonomously?
 - Which resources need exclusive access (from hazard analysis race conditions)? → **Lock**
 - Which resources have limited capacity shared across agents (API rate limits, connection pools)? → **Counter**
+- **Write rule (disambiguates Lock vs Counter)**: if ANY agent modifies a resource it is a **Lock** — even when other agents only read it (the writer must be exclusive; readers block the writer). **Counter** is ONLY for read-only / fungible capacity pools (rate limits, connection slots, dock slots, GPU slots). "Multiple agents touch it" does NOT imply Counter — a shared file one agent writes and another reads is a Lock, and modeling it as a Counter erases the write-after-read hazard TLC is meant to explore.
 - Apply the **lock acquisition order** from hazard analysis Step 5 consistently across all agents
 - **Every agent that reads or writes a shared resource MUST acquire its Lock** — including coordinators, editors, reviewers, and any agent that finalizes/combines output from that resource
-- **Naming rule**: Agent IDs and resource IDs in the IR MUST use the exact names from the task description (typically UPPER_CASE like `DEVELOPER_A`, `AUTH_MODULE`, `OVEN`). Copy them verbatim — do NOT rename to snake_case, camelCase, or abstract names like `agent1` or `lock_A`.
+- **Decomposition (when the task names no agents)**: if the requirement is a goal in prose with no explicit cast (e.g. "take each order from placement to shipment"), deriving the agent SET is your job. Split the work into the smallest set of agents that each own ONE cohesive responsibility and make the required ordering/failure paths explicit — do not invent extra supervisory layers, and do not fuse unrelated duties into one agent. Record each invented agent and *why it exists* in `plan.md` under `## Assumptions`. A pipeline (intake→QC→pack→ship) wires direct peer-to-peer channels — do NOT invent a coordinator/router agent that only relays messages; a supervisor is justified only by genuine multi-party orchestration (voting, consensus, comparing inputs from several sources) or by the requirement naming one. Test each candidate agent: does it own autonomous work, or does it exist only to pass messages between others? If the latter, delete it and connect the peers directly — TLC will happily verify a spurious coordinator, so nothing else catches this.
+- **Naming rule**: when the task (or its `metadata.json`) names agents/resources, the IR MUST use those exact names verbatim — typically UPPER_CASE like `DEVELOPER_A`, `AUTH_MODULE`, `OVEN`; do NOT rename to snake_case, camelCase, or abstract names like `agent1`. When you invented the roles yourself, name them by responsibility in the same UPPER_CASE style (`ORDER_DESK`, `PICKER`).
 
 **Step 3 — Design Communication Topology**: Map out message channels between agents.
 - **One channel per directed pair**: if A sends to B, create exactly ONE channel A→B. List ALL message types in its `labels` array
@@ -89,10 +113,47 @@ This hazard table directly feeds into Steps 2–3 below.
 1. Assemble the IR (agents, resources, channels) and write `ir.json` via Write tool
 2. Run `tla-verify-pluscal scaffold ir.json` to generate Protocol.tla with process stubs + macros and Protocol.cfg
 
+### Phase 1.5: Coordination Plan (review gate — do NOT skip)
+
+Before writing any PlusCal, produce a **coordination plan**: a per-agent, human-readable
+step outline anyone can review WITHOUT knowing TLA+. This catches semantic errors (wrong
+topology, missing failure path, wrong order) while they are still cheap to fix — before the
+PlusCal + TLC round, which is the most common source of wasted effort.
+
+Write `plan.md` (Write tool), one block per agent. Each step is one line tagged with its type:
+- `[receive]` / `[send <label>]` — a coordination message
+- `[lock]` / `[unlock]` — acquire / release a resource
+- `[domain: tool_name(...)]` — real work (becomes a `skip` label); add `, can_fail` if it can fail
+- `[branch ...]` / `[retry loop → step N]` — a decision or recovery loop
+- `[done]` — terminal
+
+Example (one agent):
+```
+Agent: DBA   shares: PROD_DB(lock)   listens: oncall_to_dba(migrate)   notifies: dba_to_oncall(migrated)
+  1. [receive] migrate ← ONCALL
+  2. [lock] acquire PROD_DB
+  3. [domain: apply_migration()]
+  4. [domain: verify_schema(), can_fail]
+       ├─ clean  → 5
+       └─ failed → [domain: rollback_migration()] → [retry loop → 4]
+  5. [unlock] release PROD_DB ; [send migrated] → ONCALL
+  6. [done]
+```
+
+See [references/coordination-plan.md](references/coordination-plan.md) for the full format
+and the step-type → PlusCal mapping.
+
+**Review gate**: present `plan.md` to the user and get confirmation (or corrections) BEFORE
+Phase 2. Only proceed once approved. (Running head-less with no user? Critique the plan against
+`description.md` yourself — verify every hazard, channel, ordering constraint, and failure path
+is represented — then proceed.)
+
 ### Phase 2: Write PlusCal Process Bodies
 
 1. Read the generated Protocol.tla to see the scaffold
-2. For each agent process, replace the `skip` placeholder with PlusCal code that models the agent's coordination protocol — the sequence of acquire/release/send/receive and decision branches. Domain work (tool calls, business logic) is NOT modeled as TLA+ state — use `skip` labels as placeholders where domain work occurs. **Each `skip` label MUST include the exact tool call from `tools.json` in its comment** (see anti-patterns #12 and #13). Multiple domain actions in one lock section = multiple separate `skip` labels.
+2. For each agent process, replace the `skip` placeholder with PlusCal code that models the agent's coordination protocol — the sequence of acquire/release/send/receive and decision branches. Domain work (tool calls, business logic) is NOT modeled as TLA+ state — use `skip` labels as placeholders where domain work occurs. **Each `skip` label MUST include the exact tool call from `tools.json` in its comment, written as `\* domain: <work>`** (see anti-patterns #12 and #13). Multiple domain actions in one lock section = multiple separate `skip` labels. Note: `extract-states` LIFTS each `\* domain:` comment into the state's runtime `task` (the per-agent business phase shown by the runtime monitor), so write the comment as a clear, self-contained description of the work — it is observability-only and never affects TLC. The IR's optional top-level `state_tasks` map (state id → prose) can override a specific comment when you want richer runtime text.
+
+   **Typed domain tools (when no `tools.json` was provided as input).** Plain `\* domain:` work runs on the runtime builtins (read/write/edit/bash) — correct for collaborative file/shell work. When a step needs a *structured typed tool* instead (a real external API, or custom typed logic beyond file I/O), append a tag: `\* domain: <desc> [tool: <name>(<p>: <type>, ...) -> <returns>; impl: external|local]`. `extract-states` lifts each tag into a workspace `tools.json` (schema + `agent_ids` = the process body the tag lives in, so it is exposed only to that agent) plus an impl stub (`tools_impl.py` for local, `mcp.json` for external). Tag ONLY steps that truly need a typed tool; leave ordinary work as plain `\* domain:`. See [references/pluscal-guide.md](references/pluscal-guide.md) for the full grammar. (If a `tools.json` WAS provided as input, name its existing tools in comments instead — do not invent tags.)
 3. Use **Edit** tool to fill in each process body
 4. After reading Protocol.tla, plan ALL your edits before making them. Minimize redundant reads — if you need to check the result, read ONCE after all edits are done.
 
@@ -119,6 +180,11 @@ See [references/pluscal-guide.md](references/pluscal-guide.md) for syntax and pa
 
 11. **Revision loop fidelity check**: if the task description specifies an open-ended revision process ("until accepted", "as many times as needed", "can resubmit"), verify the PlusCal uses `goto` to loop back to the submission label — NOT a fixed `either/or` with one revision branch that then `goto done`. TLC does NOT require explicit loop bounds: cycle detection via state identity handles loops, and `ChannelBound` (default 3) caps channel depth to keep the state space finite. Artificially bounding an open loop to one revision changes the protocol semantics and will conflict with runtime scenarios that exercise multiple revision rounds (see anti-pattern #17).
 
+12. **Terminal-state check**: every process ends by reaching its `*_done:` label (the scaffold
+    now generates one per agent) — via fall-through or `goto`. A process that ends on an action
+    (a release/send) instead leaves its agent with NO terminal state in `states.json`, which the
+    runtime needs; keep the `*_done:` label and make sure it is reachable.
+
 Fix any gaps found BEFORE running verification.
 
 ### Phase 3: Verify & Repair
@@ -130,9 +196,13 @@ Fix any gaps found BEFORE running verification.
   "task": "task description or ID",
   "total_repairs": 0,
   "tlc_passed": false,
+  "safety_only": true,
+  "channel_bound": 3,
   "repairs": []
 }
 ```
+
+(`safety_only` and `channel_bound` record the conditions of the verdict — see "What a PASS means" below. If you scaffolded with a non-default `--channel-bound`, record that value.)
 
 **Step 1 — Verify**: Run `tla-verify-pluscal verify .` — translates PlusCal (pcal.trans) and runs TLC in one step. On failure, the current `Protocol.tla`, `tlc_error.md`, and `tlc_output.log` are automatically archived to `history/attempt_{N}/` (use `--no-history` to skip).
 
@@ -166,6 +236,10 @@ Do NOT proceed to Phase 4. Stop here.
 
 **Reading TLC error traces**: The trace shows `pc` values like `"c_wait"`, `"a_vote"` — these are your PlusCal labels. The action name `c_send("coordinator")` means the `c_send:` label in the coordinator process was executed. Use these label names to locate the relevant code in Protocol.tla. Ignore any TLA+ line numbers in the trace — they refer to the auto-generated translation, not your source.
 
+**What a PASS means (scope + the channel bound)**: TLC checks **safety only** — deadlock freedom, mutual exclusion, no orphan locks, channel drainage, type safety. It does NOT check liveness or fairness: "termination" here means *no reachable deadlock*, not a proof that every execution eventually finishes. The check also runs under the `ChannelBound` CONSTRAINT (default 3) — a **state-space pruning parameter, not a protocol property**; runtime queues are unbounded. Two practical consequences:
+1. **If TLC reports a deadlock, first rule out a bound artifact**: raise the bound by editing the `ChannelBound ==` definition in Protocol.tla (e.g. `<= 3` → `<= 5`) and re-verify. If the deadlock disappears, it was queue-fill at the bound, not a real bug — keep the higher bound and update `channel_bound` in `summary.json`. If it persists, it is real: diagnose the trace.
+2. **A PASS is conditional on the bound** — that's why `summary.json` records `channel_bound` and `safety_only`, and the final summary to the user must state them.
+
 ### Phase 4: Extract States
 
 After TLC verification passes, extract the state machine representation from the verified protocol:
@@ -176,9 +250,21 @@ tla-verify-pluscal extract-states .
 
 This parses the PlusCal source in `Protocol_translated.tla` using tree-sitter and produces `states.json` with the per-agent state machine (states, actions, initial_states, and `tool_hint` annotations for multi-action states). This file is consumed by the runtime for protocol monitoring **and** is required as ground truth for prompt generation via `/tla-prompt-gen`.
 
+**Check the exit code.** Parse errors are FATAL (exit ≠ 0): `states.json` may be missing states or whole agents — a broken FSM that prompt-gen would silently propagate into broken runtime prompts. On any `FATAL`/parse error (including "No states extracted for agent ..."), fix `Protocol.tla` and re-run extract-states. Do NOT proceed to Phase 5 until it exits 0. (Cosmetic warnings — orphan `state_tasks` keys, lint — are OK to proceed past.)
+
 Phase 4 is mandatory — do not skip it unless the user explicitly says so.
 
-After Phase 4 completes, use `/tla-prompt-gen` to generate per-agent Runtime A and Runtime B prompts from the verified workspace.
+### Phase 5: Generate Prompts (automatic — do NOT stop and ask)
+
+As soon as **extract-states succeeds (exit code 0 — not merely "states.json exists"; a failed extraction still writes the file)**, **immediately invoke the `/tla-prompt-gen` skill on this same workspace** to generate the per-agent Runtime B prompts — without pausing to ask the user. Design → verify → prompts is one continuous flow: a single `/tla-verify-pluscal` invocation must end with a fully runnable workspace (`spec/` + `prompts/runtime_b/`). The user asked for a working MAS, not a half-built one.
+
+When prompt generation finishes, tell the user the workspace is ready and give them the single command to run it:
+
+```bash
+tracefix run --workspace <workspace>
+```
+
+(That starts the whole MAS on the verified coordination layer via the opencode harness.)
 
 ## Rules
 
@@ -186,9 +272,11 @@ After Phase 4 completes, use `/tla-prompt-gen` to generate per-agent Runtime A a
 - Always run scaffold before editing Protocol.tla process bodies
 - When errors occur, read the error message carefully before making changes
 - Maximum 5 verify calls total in Phase 3 — if still failing, stop and report
+- **Never edit `Protocol.cfg`, and never weaken the invariant definitions** (`TypeInvariant` / `NoOrphanLocks` / `ChannelsDrained`) below the algorithm block in `Protocol.tla` — dropping or loosening them makes a PASS meaningless. The one legitimate knob outside the process bodies is the `ChannelBound ==` definition (raising it to rule out bound artifacts, per Phase 3).
+- In the final summary, state the verification scope honestly: safety-only (no liveness/fairness) and the `channel_bound` the PASS was obtained under
 - When Phase 4 completes, summarize: protocol description, agent/resource/channel counts, TLC stats (from Phase 3), states extracted count
-- **Semantic fidelity is as important as TLC passing.** A PASS on a simplified protocol that omits task constraints is NOT a success. The protocol must faithfully model the coordination semantics described in the task.
-- After Phase 4 completes, prompt the user to run `/tla-prompt-gen` to generate per-agent prompts
+- **Semantic fidelity is as important as TLC passing.** A PASS on a simplified protocol that omits task constraints is NOT a success. The protocol must faithfully model the coordination semantics described in the task. If a repair removes or weakens anything the task asked for (an agent, a channel, a failure branch, an ordering constraint), say so explicitly to the user — never silently simplify your way to a PASS. This applies equally to structure YOU invented from an underspecified requirement and recorded in `plan.md` `## Assumptions`: on a high-level task most of the design is inferred, so if a repair merges, drops, or re-scopes an invented agent/resource/channel (e.g. fusing PICKER and PACKER to clear a deadlock), state which one, which TLC error forced it, and why — do not treat invented structure as free to discard just because the user never named it.
+- After Phase 4 succeeds, continue directly into Phase 5 (auto prompt-gen) — do not stop and ask
 
 ## Common Anti-Patterns to Avoid
 
@@ -212,7 +300,7 @@ After Phase 4 completes, use `/tla-prompt-gen` to generate per-agent Runtime A a
 
 10. **Independent processing instead of collect-then-compare**: If the task says an agent "resolves conflicts between X and Y" or "compares alternatives from multiple sources", that agent must first collect ALL inputs before making decisions. Do NOT process each input independently — this eliminates the comparison/conflict-resolution semantics the task requires. Use `either/or` for collection order so TLC explores all arrival orderings (consistent with anti-pattern #2). See [references/pluscal-guide.md](references/pluscal-guide.md) "Collect-then-compare" for code examples.
 
-11. **Missing work state between acquire and release** — Every acquire→release pair must have at least one intermediate PlusCal label (receive, send, skip, or branch). Adjacent acquire→release without work means Runtime A's Phase 2 domain work executes before the lock is held. Exception: if `receive`/`send`/`if`/`either` labels already exist between acquire and release, no extra `skip` needed. See [references/pluscal-guide.md](references/pluscal-guide.md) "Work State Labels" for patterns.
+11. **Missing work state between acquire and release** — Every acquire→release pair must have at least one intermediate PlusCal label (receive, send, skip, or branch). Adjacent acquire→release without work means the agent's domain work executes before the lock is held. Exception: if `receive`/`send`/`if`/`either` labels already exist between acquire and release, no extra `skip` needed. See [references/pluscal-guide.md](references/pluscal-guide.md) "Work State Labels" for patterns.
 
 12. **Single work label for multiple domain actions** — If the task description says an agent performs multiple distinct domain operations within one lock-protected section (e.g., "pull **and** scan"), do NOT collapse them into a single `skip` label. Give each operation its own labeled `skip` state with an exact tool call in the comment.
 
@@ -356,6 +444,7 @@ User: /tla-verify-pluscal  (workspace: agent_workspace/3E)
 
 Phase 1  → analyze description.md → write ir.json (3 agents, 2 locks, 3 channels)
          → tla-verify-pluscal scaffold ir.json → Protocol.tla + Protocol.cfg
+Phase 1.5→ write plan.md (per-agent step outline) → user reviews / approves
 
 Phase 2  → fill PlusCal process bodies for each agent
 Phase 2.5→ semantic fidelity check — all 11 items pass
@@ -367,8 +456,8 @@ Phase 3  → tla-verify-pluscal verify .
 
 Phase 4  → tla-verify-pluscal extract-states .
            → states.json (9 states, 14 actions, 3 terminal)
-
-→ Run /tla-prompt-gen to generate per-agent prompts
+Phase 5  → (auto) chain into /tla-prompt-gen → prompts/runtime_b/<agent>.md
+→ ready to run:  tracefix run --workspace <workspace>
 ```
 
 ### Typical run — custom task (no benchmark)
@@ -378,9 +467,12 @@ User: /tla-verify-pluscal  (workspace: workspace/my_task, description provided i
 
 Phase 1  → identify 2 agents, 1 lock, 2 channels → write ir.json
          → scaffold → Protocol.tla
+Phase 1.5→ plan.md → review
 
 Phase 2  → fill process bodies
 Phase 3  → tla-verify-pluscal verify . → PASS on first attempt
 
 Phase 4  → extract-states → states.json
+Phase 5  → (auto) /tla-prompt-gen → prompts/runtime_b/
+→ ready to run:  tracefix run --workspace workspace/my_task
 ```
