@@ -15,6 +15,7 @@ const els = {
   form: document.querySelector("#runForm"),
   provider: document.querySelector("#provider"),
   model: document.querySelector("#model"),
+  modelSuggestions: document.querySelector("#modelSuggestions"),
   openaiKey: document.querySelector("#openaiKey"),
   anthropicKey: document.querySelector("#anthropicKey"),
   openrouterKey: document.querySelector("#openrouterKey"),
@@ -58,8 +59,39 @@ const els = {
 const modelDefaults = {
   openai: "gpt-5-mini",
   anthropic: "claude-sonnet-4-5-20250929",
-  openrouter: "openai/gpt-5-mini",
+  openrouter: "openai/gpt-4.1-mini",
   ollama: "llama3.2:3b",
+};
+
+const modelOptions = {
+  openai: [
+    "gpt-5-mini",
+    "gpt-5",
+    "gpt-4.1-mini",
+    "gpt-4.1",
+  ],
+  anthropic: [
+    "claude-sonnet-4-5-20250929",
+    "claude-opus-4-1-20250805",
+    "claude-3-5-haiku-20241022",
+  ],
+  openrouter: [
+    "openai/gpt-4.1-mini",
+    "openai/gpt-4.1",
+    "openai/gpt-5-mini",
+    "anthropic/claude-sonnet-4",
+    "anthropic/claude-3.5-sonnet",
+    "google/gemini-2.5-pro",
+    "google/gemini-2.5-flash",
+    "meta-llama/llama-3.1-405b-instruct",
+    "deepseek/deepseek-chat-v3-0324",
+  ],
+  ollama: [
+    "llama3.2:3b",
+    "llama3.1:8b",
+    "qwen2.5-coder:7b",
+    "mistral:7b",
+  ],
 };
 
 function showToast(text) {
@@ -89,6 +121,7 @@ async function postJson(url, payload) {
 function bindEvents() {
   els.provider.addEventListener("change", () => {
     els.model.value = modelDefaults[els.provider.value] || els.model.value;
+    updateModelSuggestions();
     updateKeyFields();
   });
 
@@ -145,6 +178,13 @@ function updateKeyFields() {
   document.querySelectorAll("[data-key-field]").forEach((field) => {
     field.classList.toggle("hidden", field.dataset.keyField !== provider);
   });
+}
+
+function updateModelSuggestions() {
+  const options = modelOptions[els.provider.value] || [];
+  els.modelSuggestions.innerHTML = options
+    .map((model) => `<option value="${escapeHtml(model)}"></option>`)
+    .join("");
 }
 
 function updateModeFields() {
@@ -521,8 +561,9 @@ function escapeHtml(text) {
 
 async function init() {
   bindEvents();
-  updateKeyFields();
-  updateModeFields();
+updateKeyFields();
+updateModelSuggestions();
+updateModeFields();
   await loadTasks();
   renderOutput();
 }

@@ -287,6 +287,8 @@ def _model_for_tracefix(payload: dict[str, Any]) -> str:
     model = str(payload.get("model", "")).strip()
     if not model:
         return ""
+    if provider == "openrouter":
+        return model if model.startswith("openrouter/") else f"openrouter/{model}"
     if "/" in model or provider == "ollama":
         return model
     return f"{provider}/{model}"
