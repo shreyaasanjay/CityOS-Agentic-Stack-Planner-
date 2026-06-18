@@ -433,6 +433,10 @@ def _build_runtime_command(payload: dict[str, Any]) -> tuple[list[str], dict[str
     return command, env_updates, env_flags
 
 
+def _build_design_run_command(root: Path, payload: dict[str, Any]) -> tuple[list[str], dict[str, str], dict[str, bool]]:
+    return _build_design_command(root, payload)
+
+
 def _missing_provider_packages(provider: str) -> list[str]:
     import importlib.util
 
@@ -462,6 +466,8 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
         command, env_updates, env_flags = _build_design_command(root, payload)
     elif mode == "runtime":
         command, env_updates, env_flags = _build_runtime_command(payload)
+    elif mode == "design_run":
+        command, env_updates, env_flags = _build_design_run_command(root, payload)
     else:
         raise ValueError(f"Unknown mode: {mode}")
 
@@ -486,7 +492,9 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
     with RUNS_LOCK:
         RUNS[run_id] = run
 
-    thread = threading.Thread(target=_run_process, args=(run, env), daemon=True)
+    target = _run_design_then_runtime if mode == "design_run" else _run_process
+    args = (run, env, payload) if mode == "design_run" else (run, env)
+    thread = threading.Thread(target=target, args=args, daemon=True)
     thread.start()
     return run
 
@@ -494,11 +502,53 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
 def _run_process(run: RunState, env: dict[str, str]) -> None:
     run.status = "running"
     run.publish({"type": "status", "status": "running"})
-    run.publish({"type": "command", "command": _redact_command(run.command)})
+    exit_code = _stream_command(run, env, run.command)
+    _finish_run(run, exit_code)
 
+
+def _run_design_then_runtime(run: RunState, env: dict[str, str], payload: dict[str, Any]) -> None:
+    run.status = "running"
+    run.publish({"type": "status", "status": "running"})
+    run.publish({"type": "phase", "line": "Design phase started"})
+    design_exit = _stream_command(run, env, run.command)
+    if design_exit != 0:
+        _finish_run(run, design_exit)
+        return
+
+    if run.workspace is None:
+        run.workspace = _find_workspace(run.experiment_dir)
+    run.publish({"type": "artifacts", "artifacts": _artifact_snapshot(run.workspace)})
+
+    if run.workspace is None:
+        run.error = "Design completed but no workspace path was reported"
+        run.publish({"type": "error", "line": run.error})
+        _finish_run(run, 1)
+        return
+
+    runtime_payload = dict(payload)
+    runtime_payload["mode"] = "runtime"
+    runtime_payload["workspacePath"] = str(run.workspace)
+    try:
+        runtime_command, runtime_env_updates, runtime_env_flags = _build_runtime_command(runtime_payload)
+    except ValueError as exc:
+        run.error = str(exc)
+        run.publish({"type": "error", "line": str(exc)})
+        _finish_run(run, 1)
+        return
+
+    env.update(runtime_env_updates)
+    run.env_keys.update(runtime_env_flags)
+    run.publish({"type": "phase", "line": f"Run phase started: {run.workspace}"})
+    run_exit = _stream_command(run, env, runtime_command)
+    _finish_run(run, run_exit)
+
+
+def _stream_command(run: RunState, env: dict[str, str], command: list[str]) -> int:
+    run.command = command
+    run.publish({"type": "command", "command": _redact_command(command)})
     try:
         process = subprocess.Popen(
-            run.command,
+            command,
             cwd=run.root,
             env=env,
             stdout=subprocess.PIPE,
@@ -507,12 +557,9 @@ def _run_process(run: RunState, env: dict[str, str]) -> None:
             bufsize=1,
         )
     except Exception as exc:
-        run.status = "failed"
         run.error = str(exc)
-        run.ended_at = datetime.now().isoformat(timespec="seconds")
         run.publish({"type": "error", "line": str(exc)})
-        run.publish({"type": "status", "status": run.status})
-        return
+        return 1
 
     run.process = process
     assert process.stdout is not None
@@ -540,13 +587,19 @@ def _run_process(run: RunState, env: dict[str, str]) -> None:
             "experimentDir": str(run.experiment_dir or ""),
         })
 
-    run.exit_code = process.wait()
+    exit_code = process.wait()
+    run.process = None
+    return exit_code
+
+
+def _finish_run(run: RunState, exit_code: int) -> None:
+    run.exit_code = exit_code
     run.ended_at = datetime.now().isoformat(timespec="seconds")
-    run.status = "completed" if run.exit_code == 0 else "failed"
+    run.status = "completed" if exit_code == 0 else "failed"
     if run.workspace is None:
         run.workspace = _find_workspace(run.experiment_dir)
     run.publish({"type": "artifacts", "artifacts": _artifact_snapshot(run.workspace)})
-    run.publish({"type": "status", "status": run.status, "exitCode": run.exit_code})
+    run.publish({"type": "status", "status": run.status, "exitCode": exit_code})
 
 
 class RunnerHandler(BaseHTTPRequestHandler):

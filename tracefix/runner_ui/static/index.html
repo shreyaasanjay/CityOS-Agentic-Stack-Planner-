@@ -21,6 +21,7 @@
           <div class="task-mode" role="group" aria-label="Run mode">
             <button class="mode-button active" type="button" data-run-mode="pipeline">Pipeline</button>
             <button class="mode-button" type="button" data-run-mode="design">Design</button>
+            <button class="mode-button" type="button" data-run-mode="design_run">Design + Run</button>
             <button class="mode-button" type="button" data-run-mode="runtime">Run</button>
           </div>
 
@@ -77,9 +78,9 @@
           </div>
 
           <div id="runtimeFields" class="runtime-fields hidden">
-            <label>
+            <label id="runtimeWorkspaceField">
               Workspace
-              <input id="workspacePath" autocomplete="off" placeholder="workspace/my_task_20260617_142000" />
+              <input id="workspacePathInput" autocomplete="off" placeholder="workspace/my_task_20260617_142000" />
             </label>
             <div class="field-row">
               <label>
@@ -168,7 +169,7 @@
           </div>
           <div class="wide">
             <span>Workspace</span>
-            <p id="workspacePath">Waiting for run</p>
+            <p id="workspacePathDisplay">Waiting for run</p>
           </div>
         </section>
 

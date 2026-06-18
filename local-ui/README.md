@@ -9,7 +9,7 @@ Keep this folder at the root of the TraceFix repo.
 - TraceFix Runner: `http://127.0.0.1:8788`
 
 The viewer reads existing benchmark and artifact files.
-The runner can launch the classic TraceFix LLM pipeline, run the new headless `tracefix design` flow, or execute a verified workspace with `tracefix run`.
+The runner can launch the classic TraceFix LLM pipeline, run the new headless `tracefix design` flow, chain `Design + Run`, or execute an existing verified workspace with `tracefix run`.
 
 ## First-Time Setup
 

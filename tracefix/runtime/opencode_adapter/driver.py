@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Callable
 
@@ -32,6 +33,35 @@ KICKOFF = ("Begin your task now. Follow your protocol steps in the exact order "
 #: makes readline() raise LimitOverrunError and crash the whole run. 64 MiB is a
 #: ceiling, not an allocation — only the actual line size is held in memory.
 _STREAM_LIMIT = 64 * 1024 * 1024
+
+
+def _spawnable_command(command: list[str]) -> list[str]:
+    """Return a command form that ``create_subprocess_exec`` can launch.
+
+    On Windows, npm places both an extensionless shim and a ``.cmd`` shim on
+    PATH. ``where opencode`` finds both, but ``CreateProcess`` cannot execute the
+    extensionless script directly. Prefer the Windows command shim when the user
+    passes a bare command such as ``opencode``.
+    """
+    if not command or os.name != "nt":
+        return command
+
+    exe = command[0]
+    exe_path = Path(exe)
+    if exe_path.suffix.lower() in {".exe", ".cmd", ".bat", ".com"}:
+        return command
+
+    if exe_path.parent != Path("."):
+        for suffix in (".cmd", ".exe", ".bat", ".com"):
+            candidate = exe_path.with_suffix(suffix)
+            if candidate.exists():
+                return [str(candidate), *command[1:]]
+
+    for name in (f"{exe}.cmd", f"{exe}.exe", f"{exe}.bat", f"{exe}.com", exe):
+        resolved = shutil.which(name)
+        if resolved:
+            return [resolved, *command[1:]]
+    return command
 
 
 def _try_json(value) -> dict | None:
@@ -167,7 +197,7 @@ async def run_opencode_agent(
     """
     key = agent_key(agent_id)
     env = {**os.environ, **to_env(config), **(env_overrides or {})}
-    cmd = [*opencode_cmd, "run", kickoff, "--agent", key,
+    cmd = [*_spawnable_command(opencode_cmd), "run", kickoff, "--agent", key,
            "--format", "json", "--dir", str(output_dir)]
 
     proc = await asyncio.create_subprocess_exec(

@@ -87,7 +87,7 @@ below with these adjustments:
 
 def build_designer_prompt(root: Path) -> str:
     """The designer agent's system prompt: headless preamble + the skill itself."""
-    skill_text = (root / _SKILL).read_text()
+    skill_text = (root / _SKILL).read_text(encoding="utf-8")
     # Strip the YAML frontmatter (invocation metadata, meaningless to opencode).
     if skill_text.startswith("---"):
         end = skill_text.find("\n---", 3)
@@ -130,13 +130,13 @@ def inspect_workspace(ws: Path) -> dict:
     ir_path = spec / "ir.json"
     if ir_path.exists():
         try:
-            out["ir"] = json.loads(ir_path.read_text())
+            out["ir"] = json.loads(ir_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             pass
     summary = spec / "summary.json"
     if summary.exists():
         try:
-            s = json.loads(summary.read_text())
+            s = json.loads(summary.read_text(encoding="utf-8"))
             out["tlc_passed"] = s.get("tlc_passed")
             out["repairs"] = s.get("total_repairs")
         except (json.JSONDecodeError, OSError):
@@ -206,7 +206,7 @@ class DesignWatcher:
         ir_path = spec / "ir.json"
         if ir_path.exists():
             try:
-                raw = ir_path.read_text()
+                raw = ir_path.read_text(encoding="utf-8")
             except OSError:
                 raw = None
             if raw and raw != self._ir_snapshot:
@@ -227,7 +227,7 @@ class DesignWatcher:
         summary = spec / "summary.json"
         if summary.exists():
             try:
-                raw = summary.read_text()
+                raw = summary.read_text(encoding="utf-8")
             except OSError:
                 raw = None
             if raw and raw != self._summary_snapshot:

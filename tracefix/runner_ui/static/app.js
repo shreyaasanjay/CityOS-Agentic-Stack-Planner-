@@ -25,7 +25,8 @@ const els = {
   customTaskField: document.querySelector("#customTaskField"),
   customTask: document.querySelector("#customTask"),
   runtimeFields: document.querySelector("#runtimeFields"),
-  workspacePathInput: document.querySelector("#workspacePath"),
+  runtimeWorkspaceField: document.querySelector("#runtimeWorkspaceField"),
+  workspacePathInput: document.querySelector("#workspacePathInput"),
   harness: document.querySelector("#harness"),
   runtimeTask: document.querySelector("#runtimeTask"),
   maxTurns: document.querySelector("#maxTurns"),
@@ -45,7 +46,7 @@ const els = {
   turnCount: document.querySelector("#turnCount"),
   toolCount: document.querySelector("#toolCount"),
   artifactCount: document.querySelector("#artifactCount"),
-  workspacePath: document.querySelector("#workspacePath"),
+  workspacePath: document.querySelector("#workspacePathDisplay"),
   timeline: document.querySelector("#timeline"),
   graph: document.querySelector("#topologyGraph"),
   graphStatus: document.querySelector("#graphStatus"),
@@ -148,15 +149,23 @@ function updateKeyFields() {
 
 function updateModeFields() {
   const isPipeline = state.runMode === "pipeline";
+  const isDesignRun = state.runMode === "design_run";
   const isRuntime = state.runMode === "runtime";
   els.taskSourceFields.classList.toggle("hidden", isRuntime);
-  els.runtimeFields.classList.toggle("hidden", !isRuntime);
+  els.runtimeFields.classList.toggle("hidden", !(isRuntime || isDesignRun));
+  els.runtimeWorkspaceField.classList.toggle("hidden", !isRuntime);
   els.tracefixRunFields.classList.toggle("hidden", isPipeline);
   document.querySelectorAll(".pipeline-only").forEach((item) => {
     item.classList.toggle("hidden", !isPipeline);
   });
   els.startRun.textContent =
-    state.runMode === "design" ? "Design" : state.runMode === "runtime" ? "Run Workspace" : "Run LLM";
+    state.runMode === "design"
+      ? "Design"
+      : state.runMode === "design_run"
+        ? "Design + Run"
+        : state.runMode === "runtime"
+          ? "Run Workspace"
+          : "Run LLM";
 }
 
 async function loadTasks() {
@@ -190,7 +199,7 @@ async function startRun() {
     harness: els.harness.value,
     runtimeTask: els.runtimeTask.value,
     opencodeBin: els.opencodeBin.value,
-    timeout: Number(els.timeout.value || (state.runMode === "design" ? 1800 : 600)),
+    timeout: Number(els.timeout.value || (state.runMode === "runtime" ? 600 : 1800)),
     live: els.live.checked,
   };
 
@@ -207,10 +216,14 @@ async function startRun() {
     if (state.runMode === "runtime") {
       els.runTitle.textContent = `Running ${payload.workspacePath || "workspace"}`;
       els.runMeta.textContent = `${payload.harness} / ${payload.model}`;
-    } else if (state.runMode === "design") {
+    } else if (state.runMode === "design" || state.runMode === "design_run") {
+      const action = state.runMode === "design_run" ? "Designing then running" : "Designing";
       els.runTitle.textContent =
-        state.taskMode === "benchmark" ? `Designing ${payload.taskId}` : "Designing custom task";
-      els.runMeta.textContent = `${payload.provider} / ${payload.model}`;
+        state.taskMode === "benchmark" ? `${action} ${payload.taskId}` : `${action} custom task`;
+      els.runMeta.textContent =
+        state.runMode === "design_run"
+          ? `${payload.provider} / ${payload.model} -> ${payload.harness}`
+          : `${payload.provider} / ${payload.model}`;
     } else {
       els.runTitle.textContent =
         state.taskMode === "benchmark" ? `Running ${payload.taskId}` : "Running custom task";
