@@ -1,8 +1,8 @@
-"""``tracefix`` — one command to run a TLA+-verified workspace as a live MAS.
+"""``tracefix`` — plan and verify TraceFix workspaces.
 
-This is the front door for the runtime half. Point it at a workspace the
-``/tla-verify-pluscal`` skill produced and it starts the whole multi-agent system
-on the verified coordination layer:
+TraceFix's production output is a verified intermediate CityOS module plan.
+CityOS Synthesizer consumes that blueprint later and produces deployable
+CityOS modules. The legacy ``run`` command remains for local debugging only:
 
     tracefix run --workspace workspace/my_task
 
@@ -155,6 +155,25 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> int:
     return rc if isinstance(rc, int) else 1
 
 
+def cmd_export_cityos_plan(args: argparse.Namespace) -> int:
+    """Export a verified TraceFix workspace as a CityOS module plan."""
+    from tracefix.runtime.cityos_plan import export_cityos_module_plan
+
+    try:
+        result = export_cityos_module_plan(
+            Path(args.workspace),
+            Path(args.out) if args.out else None,
+        )
+    except Exception as e:  # noqa: BLE001 - CLI should fail cleanly
+        print(f"Cannot export CityOS module plan: {e}", file=sys.stderr)
+        return 2
+
+    print(f"CityOS module plan written to: {result.plan_path}")
+    print(f"Agents: {', '.join(result.agents) if result.agents else '(none detected)'}")
+    print("Next stage: CityOS Synthesizer consumes this plan and builds one CityOS app per agent plus one monitor app.")
+    return 0
+
+
 def cmd_design(args: argparse.Namespace) -> int:
     import asyncio
     import shlex
@@ -188,7 +207,11 @@ def cmd_design(args: argparse.Namespace) -> int:
     if result.prompts:
         print(f"prompts:   {', '.join(result.prompts)}")
     if result.success:
-        print(f"\nReady to run:\n  tracefix run --workspace {result.workspace}")
+        print(f"cityos plan: {Path(result.workspace) / 'spec' / 'cityos_module_plan.json'}")
+        print("\nReady for CityOS synthesis:")
+        print(f"  tracefix export-cityos-plan --workspace {result.workspace}")
+        print("\nLegacy local debug runner:")
+        print(f"  tracefix run --local-dev --workspace {result.workspace}")
     else:
         print("\nNot runnable yet — inspect the workspace (spec/tlc_error.md, "
               "spec/history/) and re-run `tracefix design`, or finish manually "
@@ -203,8 +226,8 @@ def cmd_design(args: argparse.Namespace) -> int:
 def main(argv=None) -> None:
     parser = argparse.ArgumentParser(
         prog="tracefix",
-        description="Design and run TLA+-verified multi-agent workspaces on the "
-                    "verified coordination layer.",
+        description="Design and verify TraceFix workspaces, then emit a CityOS "
+                    "module plan for the CityOS Synthesizer.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -212,9 +235,11 @@ def main(argv=None) -> None:
         "design",
         help="Design + verify a protocol from a natural-language requirement "
              "(headless opencode + the tla-verify-pluscal skill)",
-        description="Turn a requirement into a verified, runnable workspace: "
+        description="Turn a requirement into a verified workspace and CityOS "
+                    "module plan: "
                     "IR design → PlusCal → TLC (with repair) → states.json → "
-                    "per-agent prompts. No protocol is hand-written.",
+                    "per-agent prompts → spec/cityos_module_plan.json. No "
+                    "protocol is hand-written.",
     )
     design.add_argument("task", help="The MAS requirement, in natural language")
     design.add_argument("--name", default=None,
@@ -235,9 +260,11 @@ def main(argv=None) -> None:
 
     run = sub.add_parser(
         "run",
-        help="Run a verified workspace (default harness: opencode)",
-        description="Run a verified workspace through an agent harness. Unknown "
-                    "flags are passed through to the selected harness.",
+        help="Legacy/local-dev only: run a verified workspace with a local harness",
+        description="Legacy local debugging path. CityOS production execution "
+                    "uses the exported module plan, CityOS Synthesizer, and "
+                    "CityOS Runtime OS. Unknown flags are passed through to the "
+                    "selected harness.",
     )
     run.add_argument("--workspace", required=True,
                      help="Path to a verified workspace (spec/ir.json + prompts/)")
@@ -250,12 +277,36 @@ def main(argv=None) -> None:
     run.add_argument("--live", action="store_true",
                      help="Real-time D3/SSE visualization in the browser")
     run.add_argument("--verbose", action="store_true")
+    run.add_argument("--local-dev", "--legacy-runner", action="store_true",
+                     dest="local_dev",
+                     help="Acknowledge that this is the legacy local debug runner, "
+                          "not the CityOS production execution path")
+
+    export_plan = sub.add_parser(
+        "export-cityos-plan",
+        help="Export a verified workspace as a CityOS module plan",
+        description="Export an already-generated TraceFix workspace as a verified "
+                    "intermediate module plan. Docker packaging belongs to the "
+                    "later CityOS Synthesizer stage.",
+    )
+    export_plan.add_argument("--workspace", required=True,
+                             help="Path to a generated, verified TraceFix workspace")
+    export_plan.add_argument("--out", default=None,
+                             help="Optional output path. Defaults to spec/cityos_module_plan.json")
 
     args, extra = parser.parse_known_args(argv)
     if args.command == "design":
         sys.exit(cmd_design(args))
     if args.command == "run":
+        if not getattr(args, "local_dev", False):
+            print(
+                "warning: `tracefix run` is legacy/local-dev only. "
+                "CityOS production uses `tracefix export-cityos-plan` and the CityOS Synthesizer.",
+                file=sys.stderr,
+            )
         sys.exit(cmd_run(args, extra))
+    if args.command == "export-cityos-plan":
+        sys.exit(cmd_export_cityos_plan(args))
 
 
 if __name__ == "__main__":

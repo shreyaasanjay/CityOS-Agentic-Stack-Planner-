@@ -1,6 +1,6 @@
 const state = {
   tasks: [],
-  runMode: "pipeline",
+  runMode: "design",
   taskMode: "benchmark",
   runId: null,
   eventSource: null,
@@ -14,6 +14,8 @@ const state = {
 const els = {
   form: document.querySelector("#runForm"),
   provider: document.querySelector("#provider"),
+  providerFields: document.querySelector("#providerFields"),
+  keyFields: document.querySelector("#keyFields"),
   model: document.querySelector("#model"),
   modelSuggestions: document.querySelector("#modelSuggestions"),
   openaiKey: document.querySelector("#openaiKey"),
@@ -28,6 +30,7 @@ const els = {
   runtimeFields: document.querySelector("#runtimeFields"),
   runtimeWorkspaceField: document.querySelector("#runtimeWorkspaceField"),
   workspacePathInput: document.querySelector("#workspacePathInput"),
+  legacyRuntimeOptions: document.querySelector("#legacyRuntimeOptions"),
   harness: document.querySelector("#harness"),
   runtimeTask: document.querySelector("#runtimeTask"),
   maxTurns: document.querySelector("#maxTurns"),
@@ -52,6 +55,9 @@ const els = {
   graph: document.querySelector("#topologyGraph"),
   graphStatus: document.querySelector("#graphStatus"),
   refreshArtifacts: document.querySelector("#refreshArtifacts"),
+  openWorkspace: document.querySelector("#openWorkspace"),
+  openTlcError: document.querySelector("#openTlcError"),
+  openSpecFolder: document.querySelector("#openSpecFolder"),
   outputView: document.querySelector("#outputView"),
   toast: document.querySelector("#toast"),
 };
@@ -162,6 +168,28 @@ function bindEvents() {
     showToast("Artifacts refreshed");
   });
 
+  els.openWorkspace.addEventListener("click", async () => {
+    const workspacePath = currentWorkspacePath();
+    if (!workspacePath) {
+      showToast("No workspace selected");
+      return;
+    }
+    try {
+      await postJson("/api/open-workspace", { workspacePath });
+      showToast("Workspace opened");
+    } catch (error) {
+      showToast(error.message);
+    }
+  });
+
+  els.openTlcError.addEventListener("click", async () => {
+    await openArtifact("tlc_error", "TLC error opened");
+  });
+
+  els.openSpecFolder.addEventListener("click", async () => {
+    await openArtifact("spec_dir", "Spec folder opened");
+  });
+
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       state.activeView = button.dataset.view;
@@ -188,24 +216,27 @@ function updateModelSuggestions() {
 }
 
 function updateModeFields() {
-  const isPipeline = state.runMode === "pipeline";
-  const isDesignRun = state.runMode === "design_run";
   const isRuntime = state.runMode === "runtime";
-  els.taskSourceFields.classList.toggle("hidden", isRuntime);
-  els.runtimeFields.classList.toggle("hidden", !(isRuntime || isDesignRun));
-  els.runtimeWorkspaceField.classList.toggle("hidden", !isRuntime);
-  els.tracefixRunFields.classList.toggle("hidden", isPipeline);
-  document.querySelectorAll(".pipeline-only").forEach((item) => {
-    item.classList.toggle("hidden", !isPipeline);
+  const isPlan = state.runMode === "plan";
+  const isDesign = state.runMode === "design";
+  document.querySelectorAll("[data-run-mode]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.runMode === state.runMode);
   });
+  els.taskSourceFields.classList.toggle("hidden", isRuntime || isPlan);
+  els.providerFields.classList.toggle("hidden", isPlan);
+  els.keyFields.classList.toggle("hidden", isPlan);
+  els.runtimeFields.classList.toggle("hidden", isDesign);
+  els.runtimeWorkspaceField.classList.toggle("hidden", isDesign);
+  els.legacyRuntimeOptions.classList.toggle("hidden", !isRuntime);
+  els.tracefixRunFields.classList.toggle("hidden", !isRuntime);
   els.startRun.textContent =
     state.runMode === "design"
-      ? "Design"
-      : state.runMode === "design_run"
-        ? "Design + Run"
+      ? "Generate Verified Plan"
+      : state.runMode === "plan"
+        ? "Export Intermediary Plan"
         : state.runMode === "runtime"
-          ? "Run Workspace"
-          : "Run LLM";
+          ? "Run Legacy Debug"
+          : "Generate Verified Plan";
 }
 
 async function loadTasks() {
@@ -240,7 +271,8 @@ async function startRun() {
     runtimeTask: els.runtimeTask.value,
     opencodeBin: els.opencodeBin.value,
     timeout: Number(els.timeout.value || (state.runMode === "runtime" ? 600 : 1800)),
-    live: els.live.checked,
+    live: false,
+    legacyDebugView: false,
   };
 
   try {
@@ -254,19 +286,19 @@ async function startRun() {
     els.startRun.disabled = true;
     els.stopRun.disabled = false;
     if (state.runMode === "runtime") {
-      els.runTitle.textContent = `Running ${payload.workspacePath || "workspace"}`;
+      els.runTitle.textContent = `Legacy debug: ${payload.workspacePath || "workspace"}`;
       els.runMeta.textContent = `${payload.harness} / ${payload.model}`;
-    } else if (state.runMode === "design" || state.runMode === "design_run") {
-      const action = state.runMode === "design_run" ? "Designing then running" : "Designing";
+    } else if (state.runMode === "plan") {
+      els.runTitle.textContent = `Exporting intermediary plan`;
+      els.runMeta.textContent = payload.workspacePath || "workspace required";
+    } else if (state.runMode === "design") {
+      const action = "Designing";
       els.runTitle.textContent =
         state.taskMode === "benchmark" ? `${action} ${payload.taskId}` : `${action} custom task`;
-      els.runMeta.textContent =
-        state.runMode === "design_run"
-          ? `${payload.provider} / ${payload.model} -> ${payload.harness}`
-          : `${payload.provider} / ${payload.model}`;
+      els.runMeta.textContent = `${payload.provider} / ${payload.model}`;
     } else {
       els.runTitle.textContent =
-        state.taskMode === "benchmark" ? `Running ${payload.taskId}` : "Running custom task";
+        state.taskMode === "benchmark" ? `Planning ${payload.taskId}` : "Planning custom task";
       els.runMeta.textContent = `${payload.provider} / ${payload.model}`;
     }
     setStatus("running");
@@ -290,9 +322,9 @@ function resetRunUi() {
   state.artifacts = {};
   els.timeline.innerHTML = "";
   els.outputView.textContent = "";
-  els.workspacePath.textContent = "Waiting for run";
-  els.turnCount.textContent = "0";
-  els.toolCount.textContent = "0";
+  els.workspacePath.textContent = "Waiting for intermediary plan";
+  if (els.turnCount) els.turnCount.textContent = "0";
+  if (els.toolCount) els.toolCount.textContent = "0";
   els.artifactCount.textContent = "0";
   els.graph.innerHTML = "";
   els.graphStatus.textContent = "Waiting for IR";
@@ -304,7 +336,7 @@ function connectEvents(runId) {
   source.addEventListener("tracefix", async (message) => {
     const event = JSON.parse(message.data);
     handleRunEvent(event);
-    if (event.type === "status" && ["completed", "failed"].includes(event.status)) {
+    if (event.type === "status" && ["completed", "failed", "verification_incomplete"].includes(event.status)) {
       source.close();
       state.eventSource = null;
       els.startRun.disabled = false;
@@ -324,11 +356,11 @@ function handleRunEvent(event) {
     appendTimeline(event.type, event.line);
     if (event.type === "turn") {
       state.turns += 1;
-      els.turnCount.textContent = String(state.turns);
+      if (els.turnCount) els.turnCount.textContent = String(state.turns);
     }
     if (event.type === "tool") {
       state.tools += 1;
-      els.toolCount.textContent = String(state.tools);
+      if (els.toolCount) els.toolCount.textContent = String(state.tools);
     }
   }
 
@@ -343,6 +375,9 @@ function handleRunEvent(event) {
 
   if (event.type === "status") {
     setStatus(event.status);
+  }
+  if (event.type === "incomplete") {
+    setStatus("verification_incomplete");
   }
 
   renderOutput();
@@ -361,9 +396,18 @@ function appendTimeline(type, line) {
 }
 
 function setStatus(status) {
-  const normalized = status === "starting" || status === "stopping" ? "running" : status;
-  els.statusBadge.textContent = status;
+  const label = status === "verification_incomplete" ? "Verification incomplete" : status;
+  const normalized =
+    status === "starting" || status === "stopping"
+      ? "running"
+      : status === "verification_incomplete"
+        ? "incomplete"
+        : status;
+  els.statusBadge.textContent = label;
   els.statusBadge.className = `status-badge ${normalized || "idle"}`;
+  if (status === "verification_incomplete") {
+    setActiveView("error");
+  }
 }
 
 async function refreshRun() {
@@ -389,17 +433,137 @@ function renderOutput() {
     content = state.logs.join("\n");
   } else if (state.activeView === "ir") {
     content = state.artifacts.ir ? JSON.stringify(state.artifacts.ir, null, 2) : "No ir.json yet.";
+  } else if (state.activeView === "plan") {
+    content = renderPlanSummary(state.artifacts.cityosPlan, state.artifacts.cityosPlanPath);
   } else if (state.activeView === "protocol") {
     content = state.artifacts.protocol || "No Protocol.tla yet.";
   } else if (state.activeView === "states") {
     content = state.artifacts.states ? JSON.stringify(state.artifacts.states, null, 2) : "No states.json yet.";
   } else if (state.activeView === "error") {
-    content = state.artifacts.tlcError || "No tlc_error.md yet.";
+    content = renderTlcError();
   }
   els.outputView.textContent = content;
   if (state.activeView === "log") {
     els.outputView.scrollTop = els.outputView.scrollHeight;
   }
+}
+
+async function openArtifact(target, successText) {
+  const workspacePath = currentWorkspacePath();
+  if (!workspacePath) {
+    showToast("No workspace selected");
+    return;
+  }
+  try {
+    await postJson("/api/open-artifact", { workspacePath, target });
+    showToast(successText);
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+function currentWorkspacePath() {
+  const workspacePath = state.artifacts.workspace || els.workspacePath.textContent.trim();
+  return workspacePath.startsWith("Waiting for") ? "" : workspacePath;
+}
+
+function setActiveView(view) {
+  state.activeView = view;
+  document.querySelectorAll("[data-view]").forEach((item) => {
+    item.classList.toggle("active", item.dataset.view === view);
+  });
+  renderOutput();
+}
+
+function renderTlcError() {
+  const lines = [];
+  if (state.artifacts.tlcError) {
+    lines.push(state.artifacts.tlcError);
+  } else {
+    lines.push("No tlc_error.md found. Verification may have failed before TLC produced an error file.");
+  }
+  const recovery = state.artifacts.recovery;
+  if (recovery) {
+    lines.push("");
+    lines.push("Recovery Guidance");
+    lines.push(`Workspace: ${recovery.workspace}`);
+    lines.push(`TLC error: ${recovery.tlcErrorPath}`);
+    lines.push(`IR: ${recovery.irPath}`);
+    lines.push(`Protocol: ${recovery.protocolPath}`);
+    lines.push("");
+    lines.push("Suggested rerun:");
+    lines.push(recovery.rerunDesignCommand);
+    lines.push("");
+    lines.push("Manual checks:");
+    (recovery.manualCommands || []).forEach((command) => lines.push(command));
+    if (recovery.notes?.length) {
+      lines.push("");
+      lines.push("Notes:");
+      recovery.notes.forEach((note) => lines.push(`- ${note}`));
+    }
+  }
+  return lines.join("\n");
+}
+
+function renderPlanSummary(plan, planPath) {
+  if (!plan) {
+    return "No spec/cityos_module_plan.json yet. Use Design to generate a workspace, or choose Intermediary Plan with an existing workspace.";
+  }
+  const lines = [];
+  lines.push(`Artifact: ${plan.artifact_type || "unknown"}`);
+  lines.push(`Location: ${planPath || "spec/cityos_module_plan.json"}`);
+  lines.push(`Verification: ${plan.verification?.status || plan.tracefix?.verification_status || "unknown"}`);
+  lines.push(`Production ready: ${plan.verification?.production_ready === true ? "yes" : "no"}`);
+  lines.push(`Export status: ${planPath ? "cityos_module_plan.json available" : "not exported"}`);
+  lines.push("");
+  lines.push("Application Goals");
+  const goals = plan.goals || plan.application?.goals || [];
+  if (!goals.length) lines.push("- No explicit goals inferred yet.");
+  goals.forEach((goal) => {
+    lines.push(`- ${goal.id || "goal"}: ${goal.description || ""}`);
+  });
+  lines.push("");
+  lines.push("Generated Agents");
+  const agents = plan.agents || [];
+  if (!agents.length) lines.push("- No agents inferred yet.");
+  agents.forEach((agent) => {
+    lines.push(`- ${agent.name || agent.id}: ${agent.role || ""}`);
+    if (agent.prompt_path) lines.push(`  prompt: ${agent.prompt_path}`);
+    if (agent.inputs?.length) lines.push(`  inputs: ${agent.inputs.join(", ")}`);
+    if (agent.outputs?.length) lines.push(`  outputs: ${agent.outputs.join(", ")}`);
+  });
+  lines.push("");
+  lines.push("Protocol / Topology");
+  const topology = plan.topology || plan.protocol?.topology || {};
+  lines.push(`- agents: ${(topology.agents || []).length}`);
+  lines.push(`- resources: ${(topology.resources || []).length}`);
+  lines.push(`- channels: ${(topology.channels || []).length}`);
+  lines.push("");
+  lines.push("Communication Requirements");
+  const edges = plan.communication_requirements || plan.protocol?.allowed_communication_edges || [];
+  if (!edges.length) lines.push("- No explicit communication edges inferred yet.");
+  edges.forEach((edge) => {
+    lines.push(`- ${edge.from || "?"} -> ${edge.to || "?"} via ${edge.channel || "channel"} [${(edge.labels || []).join(", ")}]`);
+  });
+  lines.push("");
+  lines.push("Runtime Monitor Requirements");
+  lines.push(`- required: ${plan.runtime_monitor?.required === false ? "false" : "true"}`);
+  const monitorRules = plan.runtime_monitor?.monitor_rules || [];
+  if (!monitorRules.length) lines.push("- Monitor rules will be derived from verified protocol artifacts.");
+  monitorRules.forEach((rule) => lines.push(`- ${rule}`));
+  lines.push("");
+  lines.push("Resource Requirements");
+  const resources = plan.resource_requirements || [];
+  if (!resources.length) lines.push("- No external resources declared.");
+  resources.forEach((resource) => {
+    lines.push(`- ${resource.id || resource.name || JSON.stringify(resource)} ${resource.type ? `(${resource.type})` : ""}`);
+  });
+  lines.push("");
+  lines.push("Source Artifacts");
+  Object.entries(plan.source_artifacts || {}).forEach(([key, value]) => {
+    lines.push(`- ${key}: ${value}`);
+  });
+  return lines.join("\n");
 }
 
 function renderGraph(ir) {
@@ -561,9 +725,9 @@ function escapeHtml(text) {
 
 async function init() {
   bindEvents();
-updateKeyFields();
-updateModelSuggestions();
-updateModeFields();
+  updateKeyFields();
+  updateModelSuggestions();
+  updateModeFields();
   await loadTasks();
   renderOutput();
 }

@@ -6,10 +6,12 @@ Keep this folder at the root of the TraceFix repo.
 ## What You Get
 
 - TraceFix Studio viewer: `http://127.0.0.1:8787`
-- TraceFix Runner: `http://127.0.0.1:8788`
+- TraceFix Intermediary Planner: `http://127.0.0.1:8788`
 
 The viewer reads existing benchmark and artifact files.
-The runner can launch the classic TraceFix LLM pipeline, run the new headless `tracefix design` flow, chain `Design + Run`, or execute an existing verified workspace with `tracefix run`.
+The intermediary planner can launch the classic TraceFix LLM pipeline, run the headless `tracefix design` flow, export `spec/cityos_module_plan.json`, and inspect the verified intermediary expression.
+
+TraceFix does not execute production agents, create Dockerized CityOS apps, or provide the CityOS runtime. Local execution remains available only under `Legacy Debug` for development experiments. CityOS Synthesizer will later consume the intermediary expression and create one CityOS app/container per agent plus one monitor app/container. CityOS Runtime OS will execute those synthesized modules.
 
 ## First-Time Setup
 
@@ -26,7 +28,7 @@ ollama pull llama3.2:3b
 ollama serve
 ```
 
-For the new OpenCode runtime harness, install the external `opencode` CLI separately and make sure it is on `PATH`.
+For the design step, install the external `opencode` CLI separately and make sure it is on `PATH`. Exporting or viewing an existing intermediary plan does not require OpenCode.
 
 ## Start The UIs
 
@@ -42,7 +44,7 @@ Start only the viewer:
 .\local-ui\start-viewer.ps1
 ```
 
-Start only the LLM runner:
+Start only the intermediary planner:
 
 ```powershell
 .\local-ui\start-runner.ps1
@@ -63,7 +65,7 @@ Add `-Open` to open the links in your browser:
 ## Source Files
 
 - Viewer source: `tracefix/ui/`
-- Runner source: `tracefix/runner_ui/`
+- Intermediary planner source: `tracefix/runner_ui/`
 - Pipeline fixes needed by the runner: `tracefix/pipeline/cli.py`, `tracefix/pipeline/tool_client.py`, `tracefix/pipeline/pipeline/llm_client.py`
 
-API keys entered in the runner are passed only to the spawned process environment for that run. The UI does not write them to disk.
+API keys entered in the planner are passed only to the spawned process environment for that design/pipeline run. The UI does not write them to disk.

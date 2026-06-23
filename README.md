@@ -22,7 +22,7 @@ LangGraph-style centralized orchestration avoids concurrency — but also limits
 2. IR compiles to a TLA+ specification via PlusCal
 3. TLC model checker exhaustively explores all interleavings
 4. If verification fails, the counterexample trace guides LLM repair
-5. Post-verification, state machines are extracted and per-agent runtime prompts are generated
+5. Post-verification, state machines are extracted, per-agent prompts are generated, and a verified intermediary expression is emitted
 
 TLC doesn't check business logic — it checks coordination: *"Can two agents hold the same lock? Can the system deadlock? Does every agent eventually terminate?"*
 
@@ -54,7 +54,9 @@ Actively in progress — porting TraceFix onto a more robust harness and general
 └── LICENSE
 ```
 
-Run the pipeline to generate verified workspaces (`ir.json`, `Protocol.tla`, `states.json`, per-agent prompts) locally — see Quick Start.
+Run the pipeline to generate verified workspaces (`ir.json`, `Protocol.tla`, `states.json`, per-agent prompts) and a verified intermediary expression (`spec/cityos_module_plan.json`) locally — see Quick Start.
+
+For the TraceFix to CityOS boundary, see [docs/CITYOS_MODULE_PLAN.md](docs/CITYOS_MODULE_PLAN.md). TraceFix emits the verified blueprint; CityOS Synthesizer later builds one CityOS app/container per agent and one separate monitor app/container; CityOS Runtime OS executes and enforces lifecycle, permissions, sensors, privacy, ConcordFS communication, and monitoring.
 
 ## Verification Pipeline
 
@@ -83,9 +85,9 @@ Run the pipeline to generate verified workspaces (`ir.json`, `Protocol.tla`, `st
 
 Each task has `description.md`, `tools.json` (per-agent tool schemas), and `metadata.json`. Scenarios 12–16 include simulation environments with failure injection (`--difficulty 0-3`).
 
-## Runtime Architectures
+## Local Runtime Architectures
 
-Both consume the same TLC-verified spec and provide fine-grained locking (agents run in parallel, blocking only at contention) — unlike LangGraph's global serialization.
+These are legacy/local-development runners and benchmark harnesses. They consume the same TLC-verified spec and provide fine-grained locking (agents run in parallel, blocking only at contention) — unlike LangGraph's global serialization. They are useful for debugging and experiments, but they are not the CityOS production execution path.
 
 **`tracefix/runtime/enforcement/`** — **Enforcement**: Runtime mediator structurally prevents coordination violations. Agents are unaware of locks/channels.
 
@@ -111,6 +113,8 @@ Phase 3: tla-verify-pluscal verify . → TLC (repair loop on failure)
 Phase 4: tla-verify-pluscal extract-states . → states.json
     ↓
 Phase 5: Generate per-agent prompts → prompts/runtime_a/ + prompts/runtime_b/
+    ↓
+Phase 6: Emit verified intermediary expression → spec/cityos_module_plan.json
 ```
 
 ### Using Claude Code (Recommended)
@@ -162,7 +166,10 @@ pytest benchmark/tests/ -v                 # Benchmark tests
 # Run the agentic verification pipeline (produces a verified workspace/ )
 python -m tracefix.pipeline --benchmark 3E --verbose
 
-# Runtime B: run agents with monitoring against the generated workspace
+# Export a verified intermediary expression from a generated workspace
+tracefix export-cityos-plan --workspace workspace/3E
+
+# Legacy local debug only: run agents with monitoring against the generated workspace
 python -m tracefix.runtime.monitoring run --task 3E --workspace workspace/3E --verbose
 
 # ...add --live to watch the coordination in real time in your browser during the run

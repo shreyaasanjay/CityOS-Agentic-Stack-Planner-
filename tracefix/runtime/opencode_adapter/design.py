@@ -1,6 +1,6 @@
 """``tracefix design`` — drive an UNMODIFIED headless opencode through the
 /tla-verify-pluscal skill to turn a natural-language requirement into a
-verified, runnable workspace (spec/ + prompts/runtime_b/).
+verified workspace (spec/ + prompts/runtime_b/ + spec/cityos_module_plan.json).
 
 Architecture: the design *knowledge* lives in the skill (SKILL.md + references)
 and the *checks* live in the ``tla-verify-pluscal`` CLI — both harness-portable.
@@ -360,6 +360,16 @@ async def run_design(
     result.stderr_tail = disposition.get("stderr_tail", [])
     if result.status == "incomplete" and disposition.get("returncode") not in (0, None):
         result.status = "error"
+
+    if result.success:
+        from tracefix.runtime.cityos_plan import export_cityos_module_plan
+
+        try:
+            export_cityos_module_plan(ws)
+        except Exception as e:  # noqa: BLE001 - design should report the export issue cleanly
+            result.success = False
+            result.status = "cityos_plan_failed"
+            result.stderr_tail = [*result.stderr_tail, f"cityos plan export failed: {e}"]
 
     if live and bus is not None:
         if watcher_task is not None:

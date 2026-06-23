@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>TraceFix Runner</title>
+    <title>TraceFix Intermediary Planner</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
@@ -12,136 +12,140 @@
         <div class="brand-row">
           <div class="brand-mark">TF</div>
           <div>
-            <h1>TraceFix Runner</h1>
-            <p>LLM verification run</p>
+            <h1>TraceFix Intermediary Planner</h1>
+            <p>Generate verified intermediary expressions for CityOS synthesis</p>
           </div>
         </div>
 
         <form id="runForm" class="run-form">
-          <div class="task-mode" role="group" aria-label="Run mode">
-            <button class="mode-button active" type="button" data-run-mode="pipeline">Pipeline</button>
+          <div class="task-mode run-mode" role="group" aria-label="Run mode">
             <button class="mode-button" type="button" data-run-mode="design">Design</button>
-            <button class="mode-button" type="button" data-run-mode="design_run">Design + Run</button>
-            <button class="mode-button" type="button" data-run-mode="runtime">Run</button>
+            <button class="mode-button" type="button" data-run-mode="plan">Intermediary Plan</button>
+            <button class="mode-button legacy" type="button" data-run-mode="runtime">Legacy Debug</button>
           </div>
 
-          <div class="field-row">
-            <label>
-              Provider
-              <select id="provider" name="provider">
-                <option value="openai">OpenAI</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="ollama">Ollama</option>
-              </select>
-            </label>
-            <label>
-              Model
-              <input id="model" name="model" value="gpt-5-mini" autocomplete="off" list="modelSuggestions" />
-              <datalist id="modelSuggestions"></datalist>
-            </label>
-          </div>
+          <details class="sidebar-section" id="configurationSection">
+            <summary>Configuration</summary>
+            <div class="section-body">
+              <div id="providerFields" class="field-row">
+                <label>
+                  Provider
+                  <select id="provider" name="provider">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="ollama">Ollama</option>
+                  </select>
+                </label>
+                <label>
+                  Model
+                  <input id="model" name="model" value="gpt-5-mini" autocomplete="off" list="modelSuggestions" />
+                  <datalist id="modelSuggestions"></datalist>
+                </label>
+              </div>
 
-          <div class="keys-grid">
-            <label data-key-field="openai">
-              OpenAI key
-              <input id="openaiKey" type="password" autocomplete="off" />
-            </label>
-            <label data-key-field="anthropic">
-              Anthropic key
-              <input id="anthropicKey" type="password" autocomplete="off" />
-            </label>
-            <label data-key-field="openrouter">
-              OpenRouter key
-              <input id="openrouterKey" type="password" autocomplete="off" />
-            </label>
-            <label data-key-field="ollama">
-              Ollama URL
-              <input id="ollamaUrl" value="http://localhost:11434/v1" autocomplete="off" />
-            </label>
-          </div>
+              <div id="keyFields" class="keys-grid">
+                <label data-key-field="openai">
+                  API key
+                  <input id="openaiKey" type="password" autocomplete="off" />
+                </label>
+                <label data-key-field="anthropic">
+                  API key
+                  <input id="anthropicKey" type="password" autocomplete="off" />
+                </label>
+                <label data-key-field="openrouter">
+                  API key
+                  <input id="openrouterKey" type="password" autocomplete="off" />
+                </label>
+                <label data-key-field="ollama">
+                  Ollama URL
+                  <input id="ollamaUrl" value="http://localhost:11434/v1" autocomplete="off" />
+                </label>
+              </div>
+            </div>
+          </details>
 
-          <div id="taskSourceFields" class="task-source-fields">
-          <div class="task-mode" role="group" aria-label="Task source">
-            <button class="mode-button active" type="button" data-task-mode="benchmark">Benchmark</button>
-            <button class="mode-button" type="button" data-task-mode="custom">Custom</button>
-          </div>
+          <section id="taskSourceFields" class="sidebar-section task-source-fields">
+            <h2>Task</h2>
+            <div class="section-body">
+              <div class="task-mode" role="group" aria-label="Task source">
+                <button class="mode-button active" type="button" data-task-mode="benchmark">Benchmark</button>
+                <button class="mode-button" type="button" data-task-mode="custom">Custom</button>
+              </div>
 
-          <label id="benchmarkField">
-            Benchmark task
-            <select id="taskId"></select>
-          </label>
-
-          <label id="customTaskField" class="hidden">
-            Custom task
-            <textarea id="customTask" rows="7" placeholder="Describe the multi-agent coordination task"></textarea>
-          </label>
-          </div>
-
-          <div id="runtimeFields" class="runtime-fields hidden">
-            <label id="runtimeWorkspaceField">
-              Workspace
-              <input id="workspacePathInput" autocomplete="off" placeholder="workspace/my_task_20260617_142000" />
-            </label>
-            <div class="field-row">
-              <label>
-                Harness
-                <select id="harness">
-                  <option value="opencode">OpenCode</option>
-                  <option value="monitoring">Monitoring</option>
-                </select>
+              <label id="benchmarkField">
+                Task selection
+                <select id="taskId"></select>
               </label>
-              <label>
-                Task label
-                <input id="runtimeTask" autocomplete="off" placeholder="optional" />
+
+              <label id="customTaskField" class="hidden">
+                Task intent
+                <textarea id="customTask" rows="7" placeholder="Describe the multi-agent coordination task"></textarea>
               </label>
             </div>
-          </div>
+          </section>
 
-          <div class="field-row pipeline-only">
-            <label>
-              Max turns
-              <input id="maxTurns" type="number" min="1" max="80" value="20" />
-            </label>
-            <label>
-              Max tokens
-              <input id="maxTokens" type="number" min="1024" max="128000" value="32768" />
-            </label>
-          </div>
+          <section id="workspaceSection" class="sidebar-section">
+            <h2>Workspace</h2>
+            <div class="section-body">
+              <div id="runtimeFields" class="runtime-fields">
+                <label id="runtimeWorkspaceField">
+                  Workspace path
+                  <input id="workspacePathInput" autocomplete="off" placeholder="workspace/my_task_20260617_142000" />
+                </label>
+                <div id="legacyRuntimeOptions" class="field-row hidden">
+                  <label>
+                    Harness
+                    <select id="harness">
+                      <option value="opencode">OpenCode</option>
+                      <option value="monitoring">Monitoring</option>
+                    </select>
+                  </label>
+                  <label>
+                    Task label
+                    <input id="runtimeTask" autocomplete="off" placeholder="optional" />
+                  </label>
+                </div>
+              </div>
+              <div class="button-stack">
+                <button id="openWorkspace" class="secondary-button" type="button">Open Folder</button>
+                <button id="openSpecFolder" class="secondary-button" type="button">Open Spec</button>
+              </div>
+            </div>
+          </section>
 
-          <label class="pipeline-only">
-            Temperature (lower = more deterministic, less likely to hallucinate syntax)
-            <input id="temperature" type="number" min="0" max="2" step="0.1" value="0.3" />
-          </label>
+          <section class="sidebar-section action-section">
+            <h2>Actions</h2>
+            <div class="section-body">
+              <button id="startRun" class="primary-button" type="submit">Generate Verified Plan</button>
+              <button id="stopRun" class="secondary-button" type="button" disabled>Stop</button>
+            </div>
+          </section>
 
-          <div id="tracefixRunFields" class="tracefix-run-fields hidden">
-            <label>
-              OpenCode command
-              <input id="opencodeBin" autocomplete="off" value="opencode" />
-            </label>
-            <label>
-              Timeout seconds
-              <input id="timeout" type="number" min="30" max="7200" value="1800" />
-            </label>
-            <label class="check-row">
-              <input id="live" type="checkbox" />
-              <span>Live view</span>
-            </label>
-          </div>
+          <section class="sidebar-section debug-section">
+            <h2>Debug</h2>
+            <div class="section-body">
+              <button id="openTlcError" class="secondary-button" type="button">Open TLC Error</button>
+              <div id="tracefixRunFields" class="tracefix-run-fields hidden">
+                <label>
+                  OpenCode command
+                  <input id="opencodeBin" autocomplete="off" value="opencode" />
+                </label>
+                <label>
+                  Timeout seconds
+                  <input id="timeout" type="number" min="30" max="7200" value="1800" />
+                </label>
+                <input id="live" type="hidden" value="" />
+              </div>
+            </div>
+          </section>
 
-          <label class="check-row pipeline-only">
+          <div class="hidden">
+            <input id="maxTurns" type="number" value="20" />
+            <input id="maxTokens" type="number" value="32768" />
+            <input id="temperature" type="number" value="0.3" />
             <input id="noSummarize" type="checkbox" checked />
-            <span>Skip summarizer</span>
-          </label>
-
-          <label class="check-row pipeline-only">
             <input id="batchLint" type="checkbox" />
-            <span>Batch PlusCal syntax lint (report all issues at once)</span>
-          </label>
-
-          <div class="button-row">
-            <button id="startRun" class="primary-button" type="submit">Run LLM</button>
-            <button id="stopRun" class="secondary-button" type="button" disabled>Stop</button>
           </div>
         </form>
       </section>
@@ -150,34 +154,34 @@
         <header class="run-header">
           <div>
             <p id="runMeta" class="eyebrow">Idle</p>
-            <h2 id="runTitle">No run started</h2>
+            <h2 id="runTitle">No plan generated</h2>
           </div>
           <div id="statusBadge" class="status-badge idle">Idle</div>
         </header>
 
         <section class="metric-strip">
           <div>
-            <span>Turns</span>
-            <strong id="turnCount">0</strong>
-          </div>
-          <div>
-            <span>Tool calls</span>
-            <strong id="toolCount">0</strong>
-          </div>
-          <div>
             <span>Artifacts</span>
             <strong id="artifactCount">0</strong>
           </div>
           <div class="wide">
             <span>Workspace</span>
-            <p id="workspacePathDisplay">Waiting for run</p>
+            <p id="workspacePathDisplay">Waiting for intermediary plan</p>
           </div>
         </section>
 
         <section class="visual-grid">
+          <div class="graph-panel">
+            <div class="panel-heading">
+              <h3>Verified Architecture</h3>
+              <span id="graphStatus">Waiting for IR</span>
+            </div>
+            <svg id="topologyGraph" class="topology-graph"></svg>
+          </div>
+
           <div class="timeline-panel">
             <div class="panel-heading">
-              <h3>Live Timeline</h3>
+              <h3>Verification Timeline</h3>
               <button class="icon-button" id="refreshArtifacts" type="button" title="Refresh artifacts" aria-label="Refresh artifacts">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M17.7 6.3A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.76-4.24L13 11h8V3l-3.3 3.3Z" />
@@ -185,14 +189,6 @@
               </button>
             </div>
             <div id="timeline" class="timeline"></div>
-          </div>
-
-          <div class="graph-panel">
-            <div class="panel-heading">
-              <h3>Generated Topology</h3>
-              <span id="graphStatus">Waiting for IR</span>
-            </div>
-            <svg id="topologyGraph" class="topology-graph"></svg>
           </div>
         </section>
 
@@ -202,6 +198,7 @@
             <div class="tabs">
               <button class="tab active" type="button" data-view="log">Log</button>
               <button class="tab" type="button" data-view="ir">IR</button>
+              <button class="tab" type="button" data-view="plan">Intermediary Plan</button>
               <button class="tab" type="button" data-view="protocol">Protocol</button>
               <button class="tab" type="button" data-view="states">States</button>
               <button class="tab" type="button" data-view="error">TLC Error</button>

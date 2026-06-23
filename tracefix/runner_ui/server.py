@@ -22,7 +22,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -96,6 +96,8 @@ def _redact_command(command: list[str]) -> list[str]:
 
 def _event_kind(line: str) -> str:
     clean = line.strip()
+    if _is_incomplete_design_line(clean):
+        return "incomplete"
     if re.match(r"--- Turn \d+/\d+ ---", clean):
         return "turn"
     if clean.startswith("Tool: "):
@@ -111,6 +113,18 @@ def _event_kind(line: str) -> str:
     if clean.startswith("Workspace:") or clean.startswith("Session saved to:"):
         return "workspace"
     return "log"
+
+
+def _is_incomplete_design_line(line: str) -> bool:
+    clean = line.strip().lower()
+    return any(
+        marker in clean
+        for marker in (
+            "tracefix design: incomplete",
+            "not runnable yet",
+            "spec/tlc_error.md",
+        )
+    )
 
 
 def _parse_workspace_from_line(root: Path, line: str) -> Path | None:
@@ -157,6 +171,11 @@ def _spec_file(workspace: Path, name: str) -> Path:
     return (spec / name) if spec.is_dir() else (workspace / name)
 
 
+def _spec_dir(workspace: Path) -> Path:
+    spec = workspace / "spec"
+    return spec if spec.is_dir() else workspace
+
+
 def _prompt_files(workspace: Path) -> list[str]:
     prompt_root = workspace / "prompts"
     if not prompt_root.exists():
@@ -180,6 +199,11 @@ def _artifact_snapshot(workspace: Path | None) -> dict[str, Any]:
             "tlcError": "",
             "prompts": [],
             "runResult": None,
+            "cityosPlan": None,
+            "cityosPlanPath": "",
+            "tlcErrorPath": "",
+            "specDir": "",
+            "recovery": None,
         }
 
     files = []
@@ -198,7 +222,57 @@ def _artifact_snapshot(workspace: Path | None) -> dict[str, Any]:
         "tlcError": _read_text(_spec_file(workspace, "tlc_error.md")),
         "prompts": _prompt_files(workspace),
         "runResult": _read_json(workspace / "run_result.json"),
+        "cityosPlan": _read_json(_spec_file(workspace, "cityos_module_plan.json")),
+        "cityosPlanPath": str(_spec_file(workspace, "cityos_module_plan.json")),
+        "tlcErrorPath": str(_spec_file(workspace, "tlc_error.md")),
+        "specDir": str(_spec_dir(workspace)),
+        "recovery": _recovery_guidance(workspace),
     }
+
+
+def _recovery_guidance(workspace: Path) -> dict[str, Any]:
+    spec = _spec_dir(workspace)
+    return {
+        "workspace": str(workspace),
+        "tlcErrorPath": str(spec / "tlc_error.md"),
+        "irPath": str(spec / "ir.json"),
+        "protocolPath": str(spec / "Protocol.tla"),
+        "rerunDesignCommand": f"tracefix design --name {workspace.name} \"<same task or corrected task>\"",
+        "manualCommands": [
+            f"tla-verify-pluscal validate \"{spec / 'ir.json'}\"",
+            f"tla-verify-pluscal scaffold \"{spec / 'ir.json'}\" -o \"{spec}\"",
+            f"tla-verify-pluscal verify \"{spec}\"",
+        ],
+        "notes": [
+            "Do not treat this workspace as production-ready until TLC passes.",
+            "Inspect tlc_error.md first; then fix the IR/Protocol or rerun design with a clearer task.",
+        ],
+    }
+
+
+def _workspace_from_payload(root: Path, payload: dict[str, Any]) -> Path:
+    raw = str(payload.get("workspacePath") or payload.get("workspace") or "").strip()
+    if not raw:
+        raise ValueError("Workspace path is required")
+    workspace = Path(raw)
+    return (root / workspace).resolve() if not workspace.is_absolute() else workspace
+
+
+def _export_intermediary_plan(workspace: Path) -> Path:
+    from tracefix.runtime.cityos_plan import export_cityos_module_plan
+
+    return export_cityos_module_plan(workspace).plan_path
+
+
+def _open_local_path(path: Path) -> None:
+    if not path.exists():
+        raise FileNotFoundError(f"Path does not exist: {path}")
+    if sys.platform.startswith("win"):
+        os.startfile(path)  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
 
 
 @dataclass
@@ -220,6 +294,7 @@ class RunState:
     experiment_dir: Path | None = None
     workspace: Path | None = None
     error: str = ""
+    verification_incomplete: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def publish(self, event: dict[str, Any]) -> None:
@@ -260,6 +335,7 @@ class RunState:
             "experimentDir": str(self.experiment_dir or ""),
             "artifacts": _artifact_snapshot(self.workspace),
             "error": self.error,
+            "verificationIncomplete": self.verification_incomplete,
         }
 
 
@@ -387,7 +463,7 @@ def _build_design_command(root: Path, payload: dict[str, Any]) -> tuple[list[str
     model = _model_for_tracefix(payload)
     if model:
         command.extend(["--model", model])
-    if payload.get("live", False):
+    if payload.get("legacyDebugView", False):
         command.append("--live")
     if payload.get("verbose", True):
         command.append("--verbose")
@@ -408,6 +484,7 @@ def _build_runtime_command(payload: dict[str, Any]) -> tuple[list[str], dict[str
         "-m",
         "tracefix.runtime.cli",
         "run",
+        "--local-dev",
         "--workspace",
         workspace,
         "--harness",
@@ -466,6 +543,20 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
         command, env_updates, env_flags = _build_pipeline_command(payload)
     elif mode == "design":
         command, env_updates, env_flags = _build_design_command(root, payload)
+    elif mode == "plan":
+        workspace = _workspace_from_payload(root, payload)
+        command = [
+            sys.executable,
+            "-u",
+            "-B",
+            "-m",
+            "tracefix.runtime.cli",
+            "export-cityos-plan",
+            "--workspace",
+            str(workspace),
+        ]
+        env_updates = {}
+        env_flags = {}
     elif mode == "runtime":
         command, env_updates, env_flags = _build_runtime_command(payload)
     elif mode == "design_run":
@@ -486,6 +577,8 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
     if mode == "runtime":
         workspace = Path(str(payload.get("workspacePath", "")).strip())
         run.workspace = (root / workspace).resolve() if not workspace.is_absolute() else workspace
+    if mode == "plan":
+        run.workspace = _workspace_from_payload(root, payload)
 
     env = os.environ.copy()
     env.update(env_updates)
@@ -494,11 +587,29 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
     with RUNS_LOCK:
         RUNS[run_id] = run
 
-    target = _run_design_then_runtime if mode == "design_run" else _run_process
+    target = _run_plan_export if mode == "plan" else (_run_design_then_runtime if mode == "design_run" else _run_process)
     args = (run, env, payload) if mode == "design_run" else (run, env)
     thread = threading.Thread(target=target, args=args, daemon=True)
     thread.start()
     return run
+
+
+def _run_plan_export(run: RunState, env: dict[str, str]) -> None:
+    del env
+    run.status = "running"
+    run.publish({"type": "status", "status": "running"})
+    run.publish({"type": "phase", "line": "Exporting verified intermediary expression"})
+    try:
+        if run.workspace is None:
+            raise ValueError("Workspace path is required")
+        plan_path = _export_intermediary_plan(run.workspace)
+        run.publish({"type": "workspace", "line": f"Intermediary plan: {plan_path}", "workspace": str(run.workspace)})
+        run.publish({"type": "artifacts", "artifacts": _artifact_snapshot(run.workspace)})
+        _finish_run(run, 0)
+    except Exception as exc:  # noqa: BLE001 - local UI should surface clear errors
+        run.error = str(exc)
+        run.publish({"type": "error", "line": str(exc)})
+        _finish_run(run, 1)
 
 
 def _run_process(run: RunState, env: dict[str, str]) -> None:
@@ -588,6 +699,8 @@ def _stream_command(run: RunState, env: dict[str, str], command: list[str]) -> i
             "workspace": str(run.workspace or ""),
             "experimentDir": str(run.experiment_dir or ""),
         })
+        if _is_incomplete_design_line(line):
+            run.verification_incomplete = True
 
     exit_code = process.wait()
     run.process = None
@@ -597,7 +710,9 @@ def _stream_command(run: RunState, env: dict[str, str], command: list[str]) -> i
 def _finish_run(run: RunState, exit_code: int) -> None:
     run.exit_code = exit_code
     run.ended_at = datetime.now().isoformat(timespec="seconds")
-    run.status = "completed" if exit_code == 0 else "failed"
+    run.status = "verification_incomplete" if run.verification_incomplete else (
+        "completed" if exit_code == 0 else "failed"
+    )
     if run.workspace is None:
         run.workspace = _find_workspace(run.experiment_dir)
     run.publish({"type": "artifacts", "artifacts": _artifact_snapshot(run.workspace)})
@@ -631,6 +746,20 @@ class RunnerHandler(BaseHTTPRequestHandler):
         if path == "/api/tasks":
             self._send_json({"tasks": _task_options(self.root)})
             return
+        if path == "/api/intermediary-plan":
+            query = parse_qs(parsed.query)
+            workspace_raw = (query.get("workspace") or [""])[0]
+            try:
+                workspace = _workspace_from_payload(self.root, {"workspacePath": workspace_raw})
+            except ValueError as exc:
+                self._send_error(400, str(exc))
+                return
+            self._send_json({
+                "workspace": str(workspace),
+                "planPath": str(_spec_file(workspace, "cityos_module_plan.json")),
+                "plan": _read_json(_spec_file(workspace, "cityos_module_plan.json")),
+            })
+            return
         if path.startswith("/api/runs/") and path.endswith("/events"):
             run_id = path.split("/")[3]
             self._stream_events(run_id)
@@ -658,6 +787,59 @@ class RunnerHandler(BaseHTTPRequestHandler):
                 self._send_error(400, str(exc))
                 return
             self._send_json(run.snapshot(), status=201)
+            return
+        if parsed.path == "/api/export-intermediary-plan":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_error(400, "Invalid JSON")
+                return
+            try:
+                workspace = _workspace_from_payload(self.root, payload)
+                plan_path = _export_intermediary_plan(workspace)
+            except Exception as exc:  # noqa: BLE001 - local UI should surface clear errors
+                self._send_error(400, str(exc))
+                return
+            self._send_json({
+                "ok": True,
+                "workspace": str(workspace),
+                "planPath": str(plan_path),
+                "artifacts": _artifact_snapshot(workspace),
+            })
+            return
+        if parsed.path == "/api/open-workspace":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_error(400, "Invalid JSON")
+                return
+            try:
+                workspace = _workspace_from_payload(self.root, payload)
+                if not workspace.exists():
+                    raise FileNotFoundError(f"Workspace does not exist: {workspace}")
+                _open_local_path(workspace)
+            except Exception as exc:  # noqa: BLE001 - local UI should surface clear errors
+                self._send_error(400, str(exc))
+                return
+            self._send_json({"ok": True, "workspace": str(workspace)})
+            return
+        if parsed.path == "/api/open-artifact":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_error(400, "Invalid JSON")
+                return
+            try:
+                workspace = _workspace_from_payload(self.root, payload)
+                target = str(payload.get("target", "")).strip()
+                if target == "tlc_error":
+                    path = _spec_file(workspace, "tlc_error.md")
+                elif target == "spec_dir":
+                    path = _spec_dir(workspace)
+                else:
+                    raise ValueError("Unknown artifact target")
+                _open_local_path(path)
+            except Exception as exc:  # noqa: BLE001 - local UI should surface clear errors
+                self._send_error(400, str(exc))
+                return
+            self._send_json({"ok": True, "path": str(path)})
             return
         if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/stop"):
             run_id = parsed.path.split("/")[3]
@@ -742,12 +924,12 @@ def run_server(host: str = "127.0.0.1", port: int = 8788, root: Path | None = No
     repo_root = (root or _repo_root()).resolve()
     server = ThreadingHTTPServer((host, port), RunnerHandler)
     server.root = repo_root  # type: ignore[attr-defined]
-    print(f"TraceFix Runner running at http://{host}:{port}")
+    print(f"TraceFix Intermediary Planner running at http://{host}:{port}")
     print(f"Reading repo data from {repo_root}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nTraceFix Runner stopped")
+        print("\nTraceFix Intermediary Planner stopped")
     finally:
         server.server_close()
 

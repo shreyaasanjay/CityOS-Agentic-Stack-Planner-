@@ -1,20 +1,22 @@
 :root {
-  --bg: #eef1ee;
-  --panel: #fbfcf9;
-  --ink: #1f2624;
-  --muted: #66716d;
-  --line: #cfd8d1;
-  --line-strong: #9eaca5;
-  --green: #2f6f5f;
-  --green-soft: #dbeae4;
-  --blue: #435f93;
-  --blue-soft: #dce5f4;
-  --red: #9c3d32;
-  --red-soft: #f1d8d4;
-  --amber: #9a6a18;
-  --amber-soft: #f1e3c7;
-  --dark: #202927;
-  --shadow: 0 12px 32px rgba(31, 38, 36, 0.08);
+  --bg: #111315;
+  --panel: #1b1e21;
+  --panel-soft: #202428;
+  --ink: #edf2ef;
+  --muted: #98a29d;
+  --line: #2a2e33;
+  --line-strong: #3a4047;
+  --green: #3c8d7b;
+  --green-soft: rgba(60, 141, 123, 0.18);
+  --blue: #6687b8;
+  --blue-soft: rgba(102, 135, 184, 0.18);
+  --red: #d05f5f;
+  --red-soft: rgba(208, 95, 95, 0.18);
+  --amber: #d6a34b;
+  --amber-soft: rgba(214, 163, 75, 0.18);
+  --success: #5faf88;
+  --dark: #15181b;
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
 }
 
 * {
@@ -30,7 +32,7 @@ body {
   margin: 0;
   color: var(--ink);
   background: var(--bg);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: Inter, "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
 }
 
@@ -47,15 +49,16 @@ button {
 
 .runner-shell {
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
+  grid-template-columns: 330px minmax(0, 1fr);
   min-height: 100vh;
 }
 
 .control-panel {
   min-height: 100vh;
-  padding: 20px;
-  color: #f7faf7;
+  padding: 18px;
+  color: var(--ink);
   background: var(--dark);
+  border-right: 1px solid var(--line);
 }
 
 .brand-row {
@@ -73,7 +76,7 @@ button {
   flex: 0 0 44px;
   border-radius: 8px;
   background: var(--green-soft);
-  color: var(--green);
+  color: #bfe6d8;
   font-weight: 800;
 }
 
@@ -85,14 +88,43 @@ button {
 
 .brand-row p {
   margin: 4px 0 0;
-  color: #bdc7c3;
+  color: var(--muted);
   font-size: 12px;
 }
 
 .run-form {
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: 10px;
+}
+
+.sidebar-section {
+  display: block;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.sidebar-section summary,
+.sidebar-section h2 {
+  margin: 0;
+  color: #dce7e1;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.sidebar-section summary {
+  cursor: pointer;
+}
+
+.section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .task-source-fields,
@@ -107,7 +139,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: #dfe7e2;
+  color: #d5ddd9;
   font-size: 12px;
   font-weight: 700;
 }
@@ -117,16 +149,16 @@ select,
 textarea {
   width: 100%;
   min-height: 38px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   outline: 0;
-  color: #f7faf7;
-  background: rgba(255, 255, 255, 0.065);
+  color: var(--ink);
+  background: #15181b;
   padding: 8px 10px;
 }
 
 select option {
-  color: var(--ink);
+  color: #1b1e21;
 }
 
 textarea {
@@ -137,7 +169,7 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus {
-  border-color: #9fd3be;
+  border-color: var(--green);
 }
 
 .field-row,
@@ -152,10 +184,14 @@ textarea:focus {
 }
 
 .task-mode,
-.button-row,
+.button-stack,
 .tabs {
   display: flex;
   gap: 8px;
+}
+
+.button-stack {
+  flex-direction: column;
 }
 
 .mode-button,
@@ -170,15 +206,20 @@ textarea:focus {
 
 .mode-button {
   flex: 1;
-  height: 34px;
+  min-height: 36px;
   color: #c8d2ce;
-  border-color: rgba(255, 255, 255, 0.13);
+  border-color: var(--line-strong);
+  background: var(--panel);
 }
 
 .mode-button.active {
   color: #fff;
-  border-color: #9fd3be;
-  background: rgba(159, 211, 190, 0.16);
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+
+.mode-button.legacy {
+  color: #f4d3ce;
 }
 
 .check-row {
@@ -196,20 +237,21 @@ textarea:focus {
 .primary-button,
 .secondary-button {
   height: 40px;
+  width: 100%;
   padding: 0 15px;
   font-weight: 800;
 }
 
 .primary-button {
-  flex: 1;
   color: #fff;
   border-color: var(--green);
   background: var(--green);
 }
 
 .secondary-button {
-  color: #f4d3ce;
-  border-color: rgba(244, 211, 206, 0.35);
+  color: #d8e2de;
+  border-color: var(--line-strong);
+  background: #171a1d;
 }
 
 .secondary-button:disabled {
@@ -224,6 +266,7 @@ textarea:focus {
 .run-panel {
   min-width: 0;
   padding: 22px;
+  background: #121416;
 }
 
 .run-header {
@@ -258,23 +301,28 @@ textarea:focus {
 }
 
 .status-badge.idle {
-  color: #3e4642;
-  background: #dce3df;
+  color: #cbd5d0;
+  background: #252a2e;
 }
 
 .status-badge.running {
-  color: #203b32;
+  color: #caf3e2;
   background: var(--green-soft);
 }
 
 .status-badge.completed {
-  color: #173c2b;
-  background: #ccebd6;
+  color: #dcf7ea;
+  background: rgba(95, 175, 136, 0.2);
 }
 
 .status-badge.failed {
-  color: #6d2119;
+  color: #ffdada;
   background: var(--red-soft);
+}
+
+.status-badge.incomplete {
+  color: #ffe5b2;
+  background: var(--amber-soft);
 }
 
 .metric-strip,
@@ -289,7 +337,7 @@ textarea:focus {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: 104px 124px 118px minmax(0, 1fr);
+  grid-template-columns: 140px minmax(0, 1fr);
   gap: 1px;
   overflow: hidden;
   margin-bottom: 16px;
@@ -313,7 +361,7 @@ textarea:focus {
 .metric-strip strong {
   display: block;
   margin-top: 5px;
-  color: var(--green);
+  color: var(--success);
   font-size: 27px;
   line-height: 1;
 }
@@ -329,7 +377,7 @@ textarea:focus {
 
 .visual-grid {
   display: grid;
-  grid-template-columns: 420px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.75fr) minmax(280px, 0.65fr);
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -362,7 +410,7 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  height: 430px;
+  height: 520px;
   overflow: auto;
   padding-right: 4px;
 }
@@ -374,7 +422,7 @@ textarea:focus {
   padding: 9px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #f7faf6;
+  background: var(--panel-soft);
 }
 
 .timeline-kind {
@@ -414,10 +462,10 @@ textarea:focus {
 
 .topology-graph {
   width: 100%;
-  height: 430px;
+  height: 520px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: linear-gradient(180deg, #fcfdfa 0%, #eef3ef 100%);
+  background: linear-gradient(180deg, #181c1f 0%, #141719 100%);
 }
 
 .node-label {
@@ -472,7 +520,7 @@ textarea:focus {
   width: 32px;
   height: 32px;
   color: var(--ink);
-  background: #fff;
+  background: var(--panel-soft);
 }
 
 .icon-button svg {
@@ -490,7 +538,7 @@ textarea:focus {
   border: 1px solid var(--line);
   border-radius: 8px;
   color: #eef5f0;
-  background: #1d2422;
+  background: #101213;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.45;
@@ -504,7 +552,7 @@ textarea:focus {
   padding: 10px 12px;
   border-radius: 8px;
   color: #fff;
-  background: #1d2422;
+  background: var(--panel);
   box-shadow: var(--shadow);
   opacity: 0;
   transform: translateY(8px);
@@ -518,11 +566,16 @@ textarea:focus {
 
 @media (max-width: 1120px) {
   .runner-shell {
-    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-columns: 310px minmax(0, 1fr);
   }
 
   .visual-grid {
     grid-template-columns: 1fr;
+  }
+
+  .timeline,
+  .topology-graph {
+    height: 420px;
   }
 }
 
@@ -536,7 +589,7 @@ textarea:focus {
   }
 
   .metric-strip {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 1fr;
   }
 
   .metric-strip .wide {
