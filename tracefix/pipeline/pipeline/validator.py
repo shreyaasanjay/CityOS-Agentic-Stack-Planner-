@@ -130,6 +130,7 @@ def normalize_ir_with_diagnostics(ir_data: dict) -> tuple[dict, list[str]]:
         else:
             resources.append(resource)
 
+    existing_resource_ids = {r["id"] for r in resources if isinstance(r, dict) and "id" in r}
     for legacy_key in ("locks", "counters"):
         if legacy_key in normalized:
             legacy_resources, legacy_diagnostics = _legacy_resource_entries(
@@ -137,8 +138,16 @@ def normalize_ir_with_diagnostics(ir_data: dict) -> tuple[dict, list[str]]:
                 kind=legacy_key,
                 path=f"$.{legacy_key}",
             )
-            resources.extend(legacy_resources)
-            diagnostics.extend(legacy_diagnostics)
+            for res, diag in zip(legacy_resources, legacy_diagnostics):
+                if res.get("id") in existing_resource_ids:
+                    diagnostics.append(
+                        f"IR normalized: skipped duplicate legacy resource {res['id']} "
+                        f"(already in $.resources)"
+                    )
+                else:
+                    resources.append(res)
+                    existing_resource_ids.add(res["id"])
+                    diagnostics.append(diag)
 
     normalized["resources"] = resources
 

@@ -678,6 +678,40 @@ async def run_design(
             timed_out=repair_disposition["status"] == "timeout",
         )
         diagnostics.extend(repair_diagnostics)
+        # If repair produced a valid IR but Protocol.tla still missing, scaffold now.
+        if (
+            status == "ir_incomplete"
+            and repair_disposition["status"] != "timeout"
+            and any("before PlusCal scaffolding" in error for error in ir_errors)
+        ):
+            diagnostics.append("IR valid after repair; starting PlusCal scaffold")
+            try:
+                diagnostics.extend(_scaffold_valid_ir(ws))
+            except Exception as exc:  # noqa: BLE001
+                diagnostics.append(f"PlusCal scaffold after repair failed: {exc}")
+            else:
+                diagnostics.append("PlusCal continuation pass started (post-repair)")
+                post_repair_continuation = await run_opencode_agent(
+                    "designer",
+                    cfg,
+                    opencode_cmd=opencode_cmd or ["opencode"],
+                    output_dir=root,
+                    kickoff=pluscal_completion_kickoff(ws_rel),
+                    timeout=timeout,
+                    on_event=on_event,
+                    env_overrides=env,
+                )
+                diagnostics.append("PlusCal continuation pass finished (post-repair)")
+                status, ir_errors, post_repair_diagnostics = classify_design_artifacts(
+                    ws,
+                    timed_out=post_repair_continuation["status"] == "timeout",
+                )
+                diagnostics.extend(post_repair_diagnostics)
+                if repair_disposition is not None:
+                    repair_disposition["events"] = (
+                        repair_disposition.get("events", 0)
+                        + post_repair_continuation.get("events", 0)
+                    )
 
     result = judge(ws, timed_out=timed_out)
     if result.success:

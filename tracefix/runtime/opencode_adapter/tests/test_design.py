@@ -101,12 +101,15 @@ def test_design_config_omits_model_when_unset():
 # --- artifact judging ---------------------------------------------------------
 
 def _make_ws(tmp_path: Path, *, tlc_passed=True, states=True,
-             prompts=("A", "B"), agents=("A", "B"), repairs=1) -> Path:
+             prompts=("A", "B"), agents=("A", "B"), repairs=1,
+             protocol=True) -> Path:
     ws = tmp_path / "ws"
     spec = ws / "spec"
     spec.mkdir(parents=True)
     (spec / "ir.json").write_text(json.dumps(
         {"agents": [{"id": a} for a in agents], "resources": [], "channels": []}))
+    if protocol:
+        (spec / "Protocol.tla").write_text("---- MODULE Protocol ----\n====\n")
     if states:
         (spec / "states.json").write_text("{}")
     (spec / "summary.json").write_text(json.dumps(
