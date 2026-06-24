@@ -214,7 +214,10 @@ def cmd_design(args: argparse.Namespace) -> int:
         print(f"  tracefix run --local-dev --workspace {result.workspace}")
     else:
         if result.status == "ir_incomplete":
-            print("\nIR incomplete: multi-agent topology has no communication channels. PlusCal scaffolding and TLC did not run.")
+            if result.ir_errors and any("PlusCal scaffolding" in error for error in result.ir_errors):
+                print("\nIR complete, but the design stopped before PlusCal scaffolding/TLC completed.")
+            else:
+                print("\nIR incomplete: multi-agent topology has no communication channels. PlusCal scaffolding and TLC did not run.")
             if result.ir_errors:
                 print("IR validation errors:")
                 for error in result.ir_errors:

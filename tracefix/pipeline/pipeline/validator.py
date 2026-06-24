@@ -7,6 +7,7 @@ as PlusCal process bodies, not JSON states.
 import json
 from copy import deepcopy
 from dataclasses import dataclass, field
+from collections.abc import Iterable
 from pathlib import Path
 
 import jsonschema
@@ -37,34 +38,116 @@ def _normalize_list(val) -> list[str]:
     return list(val)
 
 
-def normalize_ir(ir_data: dict) -> dict:
+def _json_path(parts: Iterable) -> str:
+    path = "$"
+    for part in parts:
+        if isinstance(part, int):
+            path += f"[{part}]"
+        else:
+            path += f".{part}"
+    return path
+
+
+def _legacy_resource_entries(value, *, kind: str, path: str) -> tuple[list[dict], list[str]]:
+    resources: list[dict] = []
+    diagnostics: list[str] = []
+    resource_type = "Lock" if kind == "locks" else "Counter"
+
+    if isinstance(value, dict):
+        iterable = list(value.items())
+    elif isinstance(value, list):
+        iterable = list(enumerate(value))
+    else:
+        diagnostics.append(
+            f"IR normalized: ignored legacy field {path}; expected list/object"
+        )
+        return resources, diagnostics
+
+    for key, entry in iterable:
+        entry_path = f"{path}.{key}" if isinstance(value, dict) else f"{path}[{key}]"
+        if isinstance(entry, str):
+            resource = {"id": entry, "type": resource_type}
+        elif isinstance(entry, dict):
+            rid = entry.get("id") or entry.get("name") or (key if isinstance(key, str) else None)
+            if not rid:
+                diagnostics.append(
+                    f"IR normalized: ignored legacy field {entry_path}; missing id"
+                )
+                continue
+            resource = {"id": str(rid), "type": resource_type}
+            if resource_type == "Counter":
+                if isinstance(entry.get("config"), dict):
+                    resource["config"] = deepcopy(entry["config"])
+                elif "initial" in entry:
+                    resource["config"] = {"initial": entry["initial"]}
+        elif isinstance(key, str):
+            resource = {"id": key, "type": resource_type}
+            if resource_type == "Counter" and isinstance(entry, int):
+                resource["config"] = {"initial": entry}
+        else:
+            diagnostics.append(
+                f"IR normalized: ignored legacy field {entry_path}; expected string/object"
+            )
+            continue
+        resources.append(resource)
+        diagnostics.append(
+            f"IR normalized: moved legacy field {entry_path} to $.resources as {resource_type}"
+        )
+
+    return resources, diagnostics
+
+
+def normalize_ir_with_diagnostics(ir_data: dict) -> tuple[dict, list[str]]:
     """Return a scaffold-friendly copy of an IR-like object.
 
     The planner sometimes carries benchmark metadata through the IR boundary
-    (string agents/resources, agent_resources, tool_resource_map). The TLA+
-    scaffold expects object agents/resources and explicit communication
-    channels. This function keeps metadata intact while normalizing the
-    verified topology fields.
+    (string agents/resources, legacy top-level locks/counters,
+    agent_resources, tool_resource_map). The TLA+ scaffold expects object
+    agents/resources and explicit communication channels. This function keeps
+    allowed metadata intact while normalizing the verified topology fields.
     """
     normalized = deepcopy(ir_data)
+    diagnostics: list[str] = []
 
     agents = []
-    for agent in normalized.get("agents", []):
+    for index, agent in enumerate(normalized.get("agents", [])):
         if isinstance(agent, str):
             agents.append({"id": agent})
+            diagnostics.append(
+                f"IR normalized: moved legacy field $.agents[{index}] to object id"
+            )
         else:
             agents.append(agent)
     normalized["agents"] = agents
 
     resources = []
-    for resource in normalized.get("resources", []):
+    for index, resource in enumerate(normalized.get("resources", [])):
         if isinstance(resource, str):
             resources.append({"id": resource, "type": "Lock"})
+            diagnostics.append(
+                f"IR normalized: moved legacy field $.resources[{index}] to Lock resource"
+            )
         else:
             resources.append(resource)
+
+    for legacy_key in ("locks", "counters"):
+        if legacy_key in normalized:
+            legacy_resources, legacy_diagnostics = _legacy_resource_entries(
+                normalized.pop(legacy_key),
+                kind=legacy_key,
+                path=f"$.{legacy_key}",
+            )
+            resources.extend(legacy_resources)
+            diagnostics.extend(legacy_diagnostics)
+
     normalized["resources"] = resources
 
-    return normalized
+    return normalized, diagnostics
+
+
+def normalize_ir(ir_data: dict) -> dict:
+    """Return a scaffold-friendly copy of an IR-like object."""
+    return normalize_ir_with_diagnostics(ir_data)[0]
 
 
 def _agent_id_to_const(agent_id: str) -> str:
@@ -89,8 +172,17 @@ def validate_ir(ir_data: dict) -> ValidationResult:
     schema = _get_schema()
     validator = jsonschema.Draft7Validator(schema)
     for error in validator.iter_errors(ir_data):
-        path = ".".join(str(p) for p in error.absolute_path)
-        errors.append(f"Schema: {error.message}" + (f" (at {path})" if path else ""))
+        path = _json_path(error.absolute_path)
+        if error.validator == "additionalProperties" and isinstance(error.instance, dict):
+            allowed = set((error.schema or {}).get("properties", {}))
+            illegal = sorted(set(error.instance) - allowed)
+            if illegal:
+                for field in illegal:
+                    errors.append(
+                        f"Schema: Illegal field at {path}.{field}: not allowed by IR schema"
+                    )
+                continue
+        errors.append(f"Schema: {error.message} (at {path})")
 
     if errors:
         return ValidationResult(valid=False, errors=errors)

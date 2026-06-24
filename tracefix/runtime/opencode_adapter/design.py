@@ -66,6 +66,14 @@ below with these adjustments:
   each shared resource is and why it is exclusive (Lock) vs a capacity pool
   (Counter), and the channel topology — in `plan.md` under an
   `## Assumptions` heading. Unrecorded assumptions count as silent guessing.
+- The IR schema allows ONLY these topology fields: `agents`, `resources`, and
+  `channels` (plus documented planner metadata such as `state_tasks`,
+  `agent_resources`, and `tool_resource_map`). Do NOT emit top-level or nested
+  `locks`, `counters`, `permissions`, `edges`, `messages`, or other ad hoc
+  schema fields. Lock-like behavior is encoded as
+  `{"id": "RESOURCE_ID", "type": "Lock"}` inside `resources`; counter-like
+  behavior is encoded as `{"id": "POOL_ID", "type": "Counter", "config":
+  {"initial": N}}` inside `resources`.
 - Typed tools: most domain work runs on builtins (read/write/edit/bash). If a
   step needs a structured typed tool (a real external API, or custom typed
   logic), tag it in PlusCal `[tool: ...; impl: external|local]` and list it
@@ -97,7 +105,7 @@ def build_designer_prompt(root: Path) -> str:
         end = skill_text.find("\n---", 3)
         if end != -1:
             skill_text = skill_text[end + 4:]
-    preamble = _HEADLESS_PREAMBLE.format(prompt_gen_skill=_PROMPT_GEN_SKILL)
+    preamble = _HEADLESS_PREAMBLE.replace("{prompt_gen_skill}", _PROMPT_GEN_SKILL)
     return preamble + skill_text.lstrip("\n")
 
 
@@ -107,6 +115,9 @@ def design_kickoff(workspace_rel: str) -> str:
         f"task described in `{workspace_rel}/description.md`. The workspace is "
         f"`{workspace_rel}/` (already initialized: spec/ir.json is a stub to replace). "
         "Before scaffolding PlusCal/TLC, replace the stub with a complete IR. "
+        "The IR must contain only schema-allowed fields. Do not write `locks` "
+        "or `counters`; encode them as `resources` entries with type `Lock` "
+        "or `Counter`. "
         "If the IR keeps two or more agents, `channels` must be non-empty: add "
         "the minimal directed FIFO channels required by task handoffs, shared "
         "resource coordination, review/approval flow, data dependencies, or "
@@ -128,6 +139,10 @@ def ir_repair_kickoff(workspace_rel: str, errors: list[str]) -> str:
         "Rules:\n"
         "- Do not remove agents.\n"
         "- Do not remove resources.\n"
+        "- The IR must contain only schema-allowed fields. Do not add `locks`, "
+        "`counters`, `permissions`, `edges`, `messages`, or other ad hoc fields.\n"
+        "- Lock-like behavior belongs in `resources` as {\"id\": \"...\", \"type\": \"Lock\"}; "
+        "counter-like behavior belongs in `resources` as type `Counter` with config.initial.\n"
         "- Normalize agents to objects like {\"id\": \"DEVELOPER_A\"} if needed.\n"
         "- If two or more agents remain, channels must be non-empty.\n"
         "- Infer the minimal directed FIFO channels from task handoffs, shared-resource "
@@ -142,6 +157,25 @@ def ir_repair_kickoff(workspace_rel: str, errors: list[str]) -> str:
         "- Write spec/ir_repair_notes.md listing each channel added and why.\n"
         "- Do not edit Protocol.tla, Protocol.cfg, states.json, prompts, or runtime files.\n\n"
         "After writing spec/ir.json, call validate_ir(). Stop after the IR validates."
+    )
+
+
+def pluscal_completion_kickoff(workspace_rel: str) -> str:
+    return (
+        f"Continue the TraceFix design workflow for `{workspace_rel}/`.\n\n"
+        "TraceFix has already validated `spec/ir.json` and deterministically "
+        "generated `spec/Protocol.tla` plus `spec/Protocol.cfg` from that IR. "
+        "Do not redesign the IR unless verify reports a concrete IR problem.\n\n"
+        "Required next steps:\n"
+        "- Read `spec/Protocol.tla` and the PlusCal rules before editing.\n"
+        "- Replace the scaffolded process-body placeholders with faithful "
+        "PlusCal coordination logic for every agent.\n"
+        "- Run `tla-verify-pluscal verify` on the spec directory.\n"
+        "- If TLC fails, repair `Protocol.tla` and verify again, up to the "
+        "workflow's repair limit.\n"
+        "- After TLC passes, extract states and follow the prompt-generation "
+        "phase for this same workspace.\n"
+        "- Finish only when `prompts/runtime_b/` contains one prompt per agent."
     )
 
 
@@ -263,7 +297,10 @@ def _channel_diagnostics(before: dict | None, after: dict | None) -> list[str]:
 
 def validate_design_ir(ws: Path) -> tuple[bool, list[str], list[str]]:
     """Normalize and validate spec/ir.json for design postflight."""
-    from tracefix.pipeline.pipeline.validator import normalize_ir, validate_ir
+    from tracefix.pipeline.pipeline.validator import (
+        normalize_ir_with_diagnostics,
+        validate_ir,
+    )
 
     spec = _spec_dir(ws)
     ir_path = spec / "ir.json"
@@ -276,10 +313,11 @@ def validate_design_ir(ws: Path) -> tuple[bool, list[str], list[str]]:
     except (json.JSONDecodeError, OSError) as exc:
         return False, [f"invalid spec/ir.json: {exc}"], diagnostics
 
-    normalized = normalize_ir(original)
+    normalized, normalize_diagnostics = normalize_ir_with_diagnostics(original)
     if normalized != original:
         ir_path.write_text(json.dumps(normalized, indent=2) + "\n", encoding="utf-8")
         diagnostics.append("IR normalized: agent/resource schemas canonicalized")
+        diagnostics.extend(normalize_diagnostics)
 
     result = validate_ir(normalized)
     if result.valid:
@@ -288,6 +326,31 @@ def validate_design_ir(ws: Path) -> tuple[bool, list[str], list[str]]:
 
     diagnostics.append("IR validation failed")
     return False, list(result.errors), diagnostics
+
+
+def _scaffold_valid_ir(ws: Path) -> list[str]:
+    """Generate Protocol.tla/Protocol.cfg after postflight proves IR is valid."""
+    from tracefix.pipeline.pipeline.pluscal_generator import (
+        generate_pluscal_scaffold,
+        generate_tlc_config,
+    )
+    from tracefix.pipeline.pipeline.validator import normalize_ir, validate_ir
+
+    spec = _spec_dir(ws)
+    ir_path = spec / "ir.json"
+    ir_data = normalize_ir(json.loads(ir_path.read_text(encoding="utf-8")))
+    result = validate_ir(ir_data)
+    if not result.valid:
+        errors = "; ".join(result.errors)
+        raise ValueError(f"cannot scaffold invalid IR: {errors}")
+
+    (spec / "ir.json").write_text(json.dumps(ir_data, indent=2) + "\n", encoding="utf-8")
+    (spec / "Protocol.tla").write_text(generate_pluscal_scaffold(ir_data), encoding="utf-8")
+    (spec / "Protocol.cfg").write_text(generate_tlc_config(ir_data), encoding="utf-8")
+    return [
+        "Valid IR had no Protocol.tla; deterministic scaffold fallback ran",
+        "Scaffold fallback wrote Protocol.tla and Protocol.cfg",
+    ]
 
 
 def classify_design_artifacts(ws: Path, *, timed_out: bool = False) -> tuple[str, list[str], list[str]]:
@@ -561,6 +624,36 @@ async def run_design(
     status, ir_errors, diagnostics = classify_design_artifacts(ws, timed_out=timed_out)
     diagnostics = [*run_diagnostics, *diagnostics]
     repair_disposition = None
+    continuation_disposition = None
+    if (
+        status == "ir_incomplete"
+        and not timed_out
+        and any("before PlusCal scaffolding" in error for error in ir_errors)
+    ):
+        diagnostics.append("PlusCal scaffold fallback started")
+        try:
+            diagnostics.extend(_scaffold_valid_ir(ws))
+        except Exception as exc:  # noqa: BLE001 - keep the design report actionable
+            diagnostics.append(f"PlusCal scaffold fallback failed: {exc}")
+        else:
+            diagnostics.append("PlusCal continuation pass started")
+            continuation_disposition = await run_opencode_agent(
+                "designer",
+                cfg,
+                opencode_cmd=opencode_cmd or ["opencode"],
+                output_dir=root,
+                kickoff=pluscal_completion_kickoff(ws_rel),
+                timeout=timeout,
+                on_event=on_event,
+                env_overrides=env,
+            )
+            diagnostics.append("PlusCal continuation pass finished")
+            status, ir_errors, continuation_diagnostics = classify_design_artifacts(
+                ws,
+                timed_out=continuation_disposition["status"] == "timeout",
+            )
+            diagnostics.extend(continuation_diagnostics)
+
     if (
         status == "ir_incomplete"
         and not timed_out
@@ -596,9 +689,12 @@ async def run_design(
     result.duration = time.time() - start
     result.events = disposition.get("events", 0) + (
         repair_disposition.get("events", 0) if repair_disposition else 0
+    ) + (
+        continuation_disposition.get("events", 0) if continuation_disposition else 0
     )
     result.stderr_tail = [
         *disposition.get("stderr_tail", []),
+        *(continuation_disposition.get("stderr_tail", []) if continuation_disposition else []),
         *(repair_disposition.get("stderr_tail", []) if repair_disposition else []),
     ]
     if result.status == "incomplete" and disposition.get("returncode") not in (0, None):

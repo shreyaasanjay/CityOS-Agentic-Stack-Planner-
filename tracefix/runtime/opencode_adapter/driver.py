@@ -74,6 +74,12 @@ def _try_json(value) -> dict | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _agent_model(config: dict, key: str) -> str | None:
+    agent = (config.get("agent") or {}).get(key) or {}
+    model = agent.get("model")
+    return model.strip() if isinstance(model, str) and model.strip() else None
+
+
 class AgentRunState:
     """Accumulates disposition signals from an agent's OpenCode JSONL event stream.
 
@@ -199,6 +205,9 @@ async def run_opencode_agent(
     env = {**os.environ, **to_env(config), **(env_overrides or {})}
     cmd = [*_spawnable_command(opencode_cmd), "run", kickoff, "--agent", key,
            "--format", "json", "--dir", str(output_dir)]
+    model = _agent_model(config, key)
+    if model:
+        cmd.extend(["--model", model])
 
     proc = await asyncio.create_subprocess_exec(
         *cmd, env=env, limit=_STREAM_LIMIT,

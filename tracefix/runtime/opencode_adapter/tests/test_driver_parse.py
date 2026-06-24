@@ -7,7 +7,7 @@ Event shapes mirror opencode `cli/cmd/run.ts --format json`:
 
 import json
 
-from tracefix.runtime.opencode_adapter.driver import AgentRunState, classify
+from tracefix.runtime.opencode_adapter.driver import AgentRunState, _agent_model, classify
 
 
 def _tool_event(name: str, result=None, *, status: str = "completed") -> dict:
@@ -81,6 +81,12 @@ def test_tool_with_non_json_output_is_safe():
     st.feed(_tool_event("bash", "tracefix-probe\n"))   # plain text output
     assert st.tool_calls[-1]["tool"] == "bash"
     assert not st.signaled_done and not st.correction_limit
+
+
+def test_agent_model_reads_selected_opencode_model():
+    cfg = {"agent": {"designer": {"model": "openai/gpt-4.1-mini"}}}
+    assert _agent_model(cfg, "designer") == "openai/gpt-4.1-mini"
+    assert _agent_model(cfg, "missing") is None
 
 
 def test_classify_matrix():

@@ -99,6 +99,7 @@ This hazard table directly feeds into Steps 2–3 below.
 - **Every agent that reads or writes a shared resource MUST acquire its Lock** — including coordinators, editors, reviewers, and any agent that finalizes/combines output from that resource
 - **Decomposition (when the task names no agents)**: if the requirement is a goal in prose with no explicit cast (e.g. "take each order from placement to shipment"), deriving the agent SET is your job. Split the work into the smallest set of agents that each own ONE cohesive responsibility and make the required ordering/failure paths explicit — do not invent extra supervisory layers, and do not fuse unrelated duties into one agent. Record each invented agent and *why it exists* in `plan.md` under `## Assumptions`. A pipeline (intake→QC→pack→ship) wires direct peer-to-peer channels — do NOT invent a coordinator/router agent that only relays messages; a supervisor is justified only by genuine multi-party orchestration (voting, consensus, comparing inputs from several sources) or by the requirement naming one. Test each candidate agent: does it own autonomous work, or does it exist only to pass messages between others? If the latter, delete it and connect the peers directly — TLC will happily verify a spurious coordinator, so nothing else catches this.
 - **Naming rule**: when the task (or its `metadata.json`) names agents/resources, the IR MUST use those exact names verbatim — typically UPPER_CASE like `DEVELOPER_A`, `AUTH_MODULE`, `OVEN`; do NOT rename to snake_case, camelCase, or abstract names like `agent1`. When you invented the roles yourself, name them by responsibility in the same UPPER_CASE style (`ORDER_DESK`, `PICKER`).
+- **Schema boundary rule**: the IR topology schema allows `agents`, `resources`, and `channels` (plus documented planner metadata such as `state_tasks`, `agent_resources`, and `tool_resource_map`). Do NOT emit top-level or nested `locks`, `counters`, `permissions`, `edges`, `messages`, or other ad hoc fields. Lock-like behavior is represented by `{"id": "RESOURCE_ID", "type": "Lock"}` inside `resources`; counter-like behavior is represented by `{"id": "POOL_ID", "type": "Counter", "config": {"initial": N}}` inside `resources`.
 
 **Step 3 — Design Communication Topology**: Map out message channels between agents.
 - **One channel per directed pair**: if A sends to B, create exactly ONE channel A→B. List ALL message types in its `labels` array
@@ -110,7 +111,7 @@ This hazard table directly feeds into Steps 2–3 below.
 - For every **failure/recovery path** from hazard analysis Step 4, ensure there are channels to carry failure notifications and re-submission messages
 
 **Step 4 — Write IR & Generate Scaffold**:
-1. Assemble the IR (agents, resources, channels) and write `ir.json` via Write tool
+1. Assemble the IR (agents, resources, channels) and write `ir.json` via Write tool. Do not write fields outside the schema; especially do not write `locks` or `counters` as top-level or nested properties.
 2. Run `tla-verify-pluscal scaffold ir.json` to generate Protocol.tla with process stubs + macros and Protocol.cfg
 
 ### Phase 1.5: Coordination Plan (review gate — do NOT skip)

@@ -8,11 +8,13 @@ from pathlib import Path
 from tracefix.runtime.opencode_adapter.config_gen import build_design_config
 from tracefix.runtime.opencode_adapter.design import (
     _channel_diagnostics,
+    _scaffold_valid_ir,
     build_designer_prompt,
     classify_design_artifacts,
     design_kickoff,
     ir_repair_kickoff,
     judge,
+    pluscal_completion_kickoff,
     repo_root,
     slugify,
     validate_design_ir,
@@ -35,6 +37,15 @@ def test_designer_prompt_embeds_skill_without_frontmatter():
     assert "name: tla-verify-pluscal" not in prompt        # frontmatter stripped
     assert "Phase 1: Structured Analysis" in prompt        # the actual workflow
     assert ".claude/skills/tla-prompt-gen/SKILL.md" in prompt  # Phase-5 redirection
+    assert "Do NOT emit top-level or nested" in prompt
+    assert "`locks`, `counters`" in prompt
+
+
+def test_designer_prompt_preserves_literal_ir_json_examples():
+    prompt = build_designer_prompt(repo_root())
+    assert '{"id": "RESOURCE_ID", "type": "Lock"}' in prompt
+    assert '{"initial": N}' in prompt
+    assert "{prompt_gen_skill}" not in prompt
 
 
 def test_kickoff_names_the_workspace():
@@ -42,6 +53,7 @@ def test_kickoff_names_the_workspace():
     assert "workspace/my_task/description.md" in k
     assert "prompts/runtime_b/" in k
     assert "`channels` must be non-empty" in k
+    assert "Do not write `locks`" in k
     assert "Do not add arbitrary complete-graph channels" in k
 
 
@@ -49,7 +61,16 @@ def test_ir_repair_kickoff_requires_channel_rationale():
     k = ir_repair_kickoff("workspace/my_task", ["channels must not be empty"])
     assert "channels must be non-empty" in k
     assert "spec/ir_repair_notes.md" in k
+    assert "Do not add `locks`" in k
     assert "Do not add arbitrary complete-graph channels" in k
+
+
+def test_pluscal_completion_kickoff_continues_after_scaffold():
+    k = pluscal_completion_kickoff("workspace/my_task")
+    assert "Protocol.tla" in k
+    assert "Run `tla-verify-pluscal verify`" in k
+    assert "prompts/runtime_b/" in k
+    assert "Do not redesign the IR" in k
 
 
 # --- design config (no MCP, headless-safe permissions) ------------------------
@@ -67,6 +88,7 @@ def test_design_config_shape():
     repair = cfg["agent"]["designer_ir_repair"]
     assert repair["model"] == "openai/gpt-5.4"
     assert "IR repair mode" in repair["prompt"]
+    assert "Do not add locks, counters" in repair["prompt"]
     assert repair["permission"] == perm
 
 
@@ -145,6 +167,62 @@ def test_validate_design_ir_normalizes_string_agents(tmp_path):
     assert "IR validation passed" in diagnostics
     normalized = json.loads((spec / "ir.json").read_text())
     assert normalized["agents"] == [{"id": "A"}, {"id": "B"}]
+
+
+def test_validate_design_ir_normalizes_legacy_locks_and_counters(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": ["A", "B"],
+        "resources": [],
+        "locks": ["SHARED_FILE"],
+        "counters": [{"id": "API_POOL", "initial": 2}],
+        "channels": [{"id": "a_to_b", "from": "A", "to": "B", "labels": ["go"]}],
+    }))
+
+    valid, errors, diagnostics = validate_design_ir(ws)
+    assert valid, errors
+    assert any("$.locks[0]" in item for item in diagnostics)
+    assert any("$.counters[0]" in item for item in diagnostics)
+    normalized = json.loads((spec / "ir.json").read_text())
+    assert "locks" not in normalized
+    assert "counters" not in normalized
+    assert {"id": "SHARED_FILE", "type": "Lock"} in normalized["resources"]
+    assert {"id": "API_POOL", "type": "Counter", "config": {"initial": 2}} in normalized["resources"]
+
+
+def test_validate_design_ir_rejects_nested_locks_with_path(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": [{"id": "A", "locks": ["SHARED_FILE"]}, {"id": "B"}],
+        "resources": [{"id": "SHARED_FILE", "type": "Lock"}],
+        "channels": [{"id": "a_to_b", "from": "A", "to": "B", "labels": ["go"]}],
+    }))
+
+    valid, errors, diagnostics = validate_design_ir(ws)
+    assert not valid
+    assert any("$.agents[0].locks" in error for error in errors)
+    assert "IR validation failed" in diagnostics
+
+
+def test_scaffold_valid_ir_writes_protocol_artifacts(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": [{"id": "A"}, {"id": "B"}],
+        "resources": [{"id": "R", "type": "Lock"}],
+        "channels": [{"id": "a_to_b", "from": "A", "to": "B", "labels": ["go"]}],
+    }))
+
+    diagnostics = _scaffold_valid_ir(ws)
+
+    assert "Scaffold fallback wrote Protocol.tla and Protocol.cfg" in diagnostics
+    assert (spec / "Protocol.tla").exists()
+    assert (spec / "Protocol.cfg").exists()
 
 
 def test_classify_design_artifacts_ir_incomplete_for_empty_channels(tmp_path):

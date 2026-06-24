@@ -219,19 +219,22 @@ function updateModeFields() {
   const isRuntime = state.runMode === "runtime";
   const isPlan = state.runMode === "plan";
   const isDesign = state.runMode === "design";
+  const isDesignRun = state.runMode === "design_run";
   document.querySelectorAll("[data-run-mode]").forEach((item) => {
     item.classList.toggle("active", item.dataset.runMode === state.runMode);
   });
   els.taskSourceFields.classList.toggle("hidden", isRuntime || isPlan);
   els.providerFields.classList.toggle("hidden", isPlan);
   els.keyFields.classList.toggle("hidden", isPlan);
-  els.runtimeFields.classList.toggle("hidden", isDesign);
-  els.runtimeWorkspaceField.classList.toggle("hidden", isDesign);
+  els.runtimeFields.classList.toggle("hidden", isDesign || isDesignRun);
+  els.runtimeWorkspaceField.classList.toggle("hidden", isDesign || isDesignRun);
   els.legacyRuntimeOptions.classList.toggle("hidden", !isRuntime);
-  els.tracefixRunFields.classList.toggle("hidden", !isRuntime);
+  els.tracefixRunFields.classList.toggle("hidden", !(isRuntime || isDesignRun));
   els.startRun.textContent =
     state.runMode === "design"
       ? "Generate Verified Plan"
+      : state.runMode === "design_run"
+        ? "Design + Run"
       : state.runMode === "plan"
         ? "Export Intermediary Plan"
         : state.runMode === "runtime"
@@ -293,6 +296,11 @@ async function startRun() {
       els.runMeta.textContent = payload.workspacePath || "workspace required";
     } else if (state.runMode === "design") {
       const action = "Designing";
+      els.runTitle.textContent =
+        state.taskMode === "benchmark" ? `${action} ${payload.taskId}` : `${action} custom task`;
+      els.runMeta.textContent = `${payload.provider} / ${payload.model}`;
+    } else if (state.runMode === "design_run") {
+      const action = "Designing + running";
       els.runTitle.textContent =
         state.taskMode === "benchmark" ? `${action} ${payload.taskId}` : `${action} custom task`;
       els.runMeta.textContent = `${payload.provider} / ${payload.model}`;
