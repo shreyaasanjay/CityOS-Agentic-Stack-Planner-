@@ -28,6 +28,13 @@ def _resolve_jar(args: argparse.Namespace) -> str:
     return resolve_jar(getattr(args, "jar_path", None))
 
 
+def _print_tla_tool_log(phase: str, java: str, jar: str, command: list[str], *, as_json: bool = False) -> None:
+    from tracefix.pipeline.pipeline.toolchain import tla_tool_log
+
+    stream = sys.stderr if as_json else sys.stdout
+    print(tla_tool_log(phase, java, jar, command), file=stream)
+
+
 def _load_ir(path: str) -> dict:
     with open(path) as f:
         return json.load(f)
@@ -67,13 +74,13 @@ def cmd_validate(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 def cmd_scaffold(args: argparse.Namespace) -> int:
-    from tracefix.pipeline.pipeline.validator import validate_ir
+    from tracefix.pipeline.pipeline.validator import normalize_ir, validate_ir
     from tracefix.pipeline.pipeline.pluscal_generator import (
         generate_pluscal_scaffold,
         generate_tlc_config,
     )
 
-    ir_data = _load_ir(args.ir_json)
+    ir_data = normalize_ir(_load_ir(args.ir_json))
 
     vr = validate_ir(ir_data)
     if not vr.valid:
@@ -89,6 +96,7 @@ def cmd_scaffold(args: argparse.Namespace) -> int:
     tla_path = out / "Protocol.tla"
     cfg_path = out / "Protocol.cfg"
 
+    (out / "ir.json").write_text(json.dumps(ir_data, indent=2) + "\n")
     tla_path.write_text(tla_spec)
     cfg_path.write_text(tlc_cfg)
 
@@ -248,12 +256,22 @@ def cmd_verify(args: argparse.Namespace) -> int:
     tla_content = tla_path.read_text()
     cfg_content = cfg_path.read_text()
 
+    print("TRACEFIX VERIFY ENV")
+    print("TLA_VERIFY_JAVA =", os.getenv("TLA_VERIFY_JAVA"))
+    print("JAVA_EXE =", os.getenv("JAVA_EXE"))
+    print("JAVA_HOME =", os.getenv("JAVA_HOME"))
+
+    java = _resolve_java(args)
+    jar = _resolve_jar(args)
+
     # Step 2: Translate PlusCal → TLA+
+    pcal_command = [java, "-cp", jar, "pcal.trans", "Protocol.tla"]
+    _print_tla_tool_log("PlusCal translation", java, jar, pcal_command, as_json=as_json)
     pcal_result = translate_pluscal(
         tla_content,
         cfg_content,
-        java_path=_resolve_java(args),
-        tla2tools_jar=_resolve_jar(args),
+        java_path=java,
+        tla2tools_jar=jar,
     )
 
     if not pcal_result.success:
@@ -281,12 +299,22 @@ def cmd_verify(args: argparse.Namespace) -> int:
     translated_path.write_text(pcal_result.translated_tla)
 
     # Step 3: Run TLC on translated spec
+    tlc_command = [
+        java,
+        "-Xmx4g",
+        "-cp", jar,
+        "tlc2.TLC",
+        "-config", "Protocol.cfg",
+        "-workers", "auto",
+        "Protocol.tla",
+    ]
+    _print_tla_tool_log("TLC model checking", java, jar, tlc_command, as_json=as_json)
     tlc_result = run_tlc(
         pcal_result.translated_tla,
         cfg_content,
         timeout=args.timeout,
-        java_path=_resolve_java(args),
-        tla2tools_jar=_resolve_jar(args),
+        java_path=java,
+        tla2tools_jar=jar,
     )
 
     # Save raw output
@@ -755,3 +783,7 @@ def main():
         "guide": cmd_guide,
     }
     sys.exit(handlers[args.command](args))
+
+
+if __name__ == "__main__":
+    main()

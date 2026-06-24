@@ -17,6 +17,7 @@ from pathlib import Path
 from .toolchain import (
     JAR_MISSING_HINT,
     JAVA_MISSING_HINT,
+    tla_tool_log,
     resolve_java,
     resolve_jar,
 )
@@ -79,6 +80,7 @@ def translate_pluscal(
             "pcal.trans",
             "Protocol.tla",
         ]
+        diagnostic_log = tla_tool_log("PlusCal translation", java_path, tla2tools_jar, cmd)
 
         try:
             proc = subprocess.run(
@@ -91,12 +93,12 @@ def translate_pluscal(
         except subprocess.TimeoutExpired:
             return PlusCaLResult(
                 success=False,
-                error_message="PlusCal translation timed out after 30 seconds.",
+                error_message=f"{diagnostic_log}\n\nPlusCal translation timed out after 30 seconds.",
             )
         except (FileNotFoundError, OSError) as e:
             return PlusCaLResult(
                 success=False,
-                error_message=f"Could not run Java at '{java_path}' ({e}). {JAVA_MISSING_HINT}",
+                error_message=f"{diagnostic_log}\n\nCould not run Java at '{java_path}' ({e}). {JAVA_MISSING_HINT}",
             )
 
         combined_output = proc.stdout + "\n" + proc.stderr
@@ -107,7 +109,7 @@ def translate_pluscal(
             error_msg = _extract_pcal_error(combined_output, tla_content)
             return PlusCaLResult(
                 success=False,
-                error_message=error_msg,
+                error_message=f"{diagnostic_log}\n\n{error_msg}",
             )
 
         # Read back the translated file
@@ -117,7 +119,7 @@ def translate_pluscal(
         except OSError:
             return PlusCaLResult(
                 success=False,
-                error_message="Failed to read translated file after pcal.trans.",
+                error_message=f"{diagnostic_log}\n\nFailed to read translated file after pcal.trans.",
             )
 
         # Verify translation actually happened (look for TLA+ translation block)
@@ -126,6 +128,7 @@ def translate_pluscal(
             return PlusCaLResult(
                 success=False,
                 error_message=(
+                    f"{diagnostic_log}\n\n"
                     "pcal.trans ran but no translation block found. "
                     f"Output: {combined_output[:500]}"
                 ),

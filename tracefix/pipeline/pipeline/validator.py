@@ -5,6 +5,7 @@ as PlusCal process bodies, not JSON states.
 """
 
 import json
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -36,6 +37,36 @@ def _normalize_list(val) -> list[str]:
     return list(val)
 
 
+def normalize_ir(ir_data: dict) -> dict:
+    """Return a scaffold-friendly copy of an IR-like object.
+
+    The planner sometimes carries benchmark metadata through the IR boundary
+    (string agents/resources, agent_resources, tool_resource_map). The TLA+
+    scaffold expects object agents/resources and explicit communication
+    channels. This function keeps metadata intact while normalizing the
+    verified topology fields.
+    """
+    normalized = deepcopy(ir_data)
+
+    agents = []
+    for agent in normalized.get("agents", []):
+        if isinstance(agent, str):
+            agents.append({"id": agent})
+        else:
+            agents.append(agent)
+    normalized["agents"] = agents
+
+    resources = []
+    for resource in normalized.get("resources", []):
+        if isinstance(resource, str):
+            resources.append({"id": resource, "type": "Lock"})
+        else:
+            resources.append(resource)
+    normalized["resources"] = resources
+
+    return normalized
+
+
 def _agent_id_to_const(agent_id: str) -> str:
     """Convert agent ID to PlusCal CONSTANT name (must match pluscal_generator)."""
     s = agent_id.replace("-", "_").replace(" ", "_")
@@ -51,6 +82,8 @@ def validate_ir(ir_data: dict) -> ValidationResult:
     (behavior is written as PlusCal process bodies).
     """
     errors: list[str] = []
+
+    ir_data = normalize_ir(ir_data)
 
     # --- Schema validation ---
     schema = _get_schema()
@@ -127,5 +160,10 @@ def validate_ir(ir_data: dict) -> ValidationResult:
                     )
                 else:
                     directed_pairs[pair] = cid
+
+    if len(agent_ids) > 1 and not channel_ids:
+        errors.append(
+            "IR incomplete: no communication channels generated. PlusCal/TLC cannot run."
+        )
 
     return ValidationResult(valid=len(errors) == 0, errors=errors)

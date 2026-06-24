@@ -223,6 +223,39 @@ class TestValidateIR:
         result = validate_ir(ws)
         assert "INVALID" in result
 
+    def test_multi_agent_empty_channels_fails_clearly(self, ws):
+        from tracefix.pipeline.tools import write_file, validate_ir
+        bad_ir = {
+            "agents": [{"id": "a"}, {"id": "b"}],
+            "resources": [{"id": "shared", "type": "Lock"}],
+            "channels": [],
+        }
+        write_file(ws, path="ir.json", content=json.dumps(bad_ir))
+        result = validate_ir(ws)
+        assert "IR incomplete: no communication channels generated" in result
+
+    def test_string_agents_can_be_normalized_before_scaffold(self, ws):
+        from tracefix.pipeline.tools import compile_scaffold, write_file
+        string_agent_ir = {
+            "agents": ["DEVELOPER_A", "DEVELOPER_B"],
+            "resources": ["AUTH_MODULE"],
+            "channels": [
+                {
+                    "id": "developer_a_to_developer_b",
+                    "from": "DEVELOPER_A",
+                    "to": "DEVELOPER_B",
+                    "labels": ["ready"],
+                },
+            ],
+        }
+        write_file(ws, path="ir.json", content=json.dumps(string_agent_ir))
+        result = compile_scaffold(ws)
+        assert "OK" in result
+        normalized = json.loads(ws.read_file("ir.json"))
+        assert normalized["agents"] == [{"id": "DEVELOPER_A"}, {"id": "DEVELOPER_B"}]
+        assert normalized["resources"] == [{"id": "AUTH_MODULE", "type": "Lock"}]
+        assert normalized["channels"] == string_agent_ir["channels"]
+
 
 # ---------------------------------------------------------------------------
 # compile_scaffold
@@ -245,6 +278,19 @@ class TestCompileScaffold:
         # Check TLA+ content has PlusCal markers
         tla_content = ws_with_ir.read_file("Protocol.tla")
         assert "MODULE Protocol" in tla_content
+
+    def test_scaffold_rejects_empty_channels(self, ws):
+        from tracefix.pipeline.tools import compile_scaffold, write_file
+        bad_ir = {
+            "agents": [{"id": "a"}, {"id": "b"}],
+            "resources": [{"id": "shared", "type": "Lock"}],
+            "channels": [],
+        }
+        write_file(ws, path="ir.json", content=json.dumps(bad_ir))
+        result = compile_scaffold(ws)
+        assert "INVALID IR" in result
+        assert "IR incomplete: no communication channels generated" in result
+        assert ws.read_file("Protocol.tla") is None
 
 
 # ---------------------------------------------------------------------------

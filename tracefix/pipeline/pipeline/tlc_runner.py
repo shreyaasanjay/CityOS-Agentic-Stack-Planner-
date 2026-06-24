@@ -13,6 +13,7 @@ from pathlib import Path
 from .toolchain import (
     JAR_MISSING_HINT,
     JAVA_MISSING_HINT,
+    tla_tool_log,
     resolve_java,
     resolve_jar,
 )
@@ -75,6 +76,7 @@ def run_tlc(
             "-workers", "auto",
             "Protocol.tla",
         ]
+        diagnostic_log = tla_tool_log("TLC model checking", java_path, tla2tools_jar, cmd)
 
         start_time = time.time()
         try:
@@ -86,7 +88,7 @@ def run_tlc(
                 timeout=timeout,
             )
             elapsed = time.time() - start_time
-            raw_output = proc.stdout + "\n" + proc.stderr
+            raw_output = diagnostic_log + "\n\n" + proc.stdout + "\n" + proc.stderr
         except subprocess.TimeoutExpired as e:
             # subprocess.run kills the process and stores partial output on the exception.
             # e.stdout/e.stderr may be bytes even when text=True was requested.
@@ -94,7 +96,7 @@ def run_tlc(
                 if b is None:
                     return ""
                 return b.decode("utf-8", errors="replace") if isinstance(b, bytes) else b
-            partial_out = _decode(e.stdout) + "\n" + _decode(e.stderr)
+            partial_out = diagnostic_log + "\n\n" + _decode(e.stdout) + "\n" + _decode(e.stderr)
             elapsed = time.time() - start_time
             return TLCResult(
                 success=False,
@@ -113,7 +115,7 @@ def run_tlc(
                 success=False,
                 violation_type="error",
                 error_trace=f"Could not run Java at '{java_path}' ({e}). {JAVA_MISSING_HINT}",
-                raw_output="",
+                raw_output=diagnostic_log,
             )
 
     return _parse_tlc_output(raw_output, elapsed)

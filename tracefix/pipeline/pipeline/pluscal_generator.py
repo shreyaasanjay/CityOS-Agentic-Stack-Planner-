@@ -222,7 +222,8 @@ def generate_pluscal_scaffold(ir_data: dict, *, channel_bound: int = 3, depth_bo
         for lock in locks:
             lock_var = _sanitize_id(lock["id"])
             lock_checks.append(f'{lock_var} = "FREE"')
-        emit(f"  AllDone => ({' /\\ '.join(lock_checks)})")
+        lock_expr = " /\\ ".join(lock_checks)
+        emit(f"  AllDone => ({lock_expr})")
         emit()
 
     # ChannelsDrained
@@ -232,7 +233,8 @@ def generate_pluscal_scaffold(ir_data: dict, *, channel_bound: int = 3, depth_bo
         for ch in channels:
             ch_var = _sanitize_id(ch["id"])
             ch_checks.append(f"Len({ch_var}) = 0")
-        emit(f"  AllDone => ({' /\\ '.join(ch_checks)})")
+        channel_expr = " /\\ ".join(ch_checks)
+        emit(f"  AllDone => ({channel_expr})")
         emit()
 
     # ChannelBound
@@ -242,7 +244,8 @@ def generate_pluscal_scaffold(ir_data: dict, *, channel_bound: int = 3, depth_bo
         for ch in channels:
             ch_var = _sanitize_id(ch["id"])
             bound_checks.append(f"Len({ch_var}) <= {channel_bound}")
-        emit(f"  {' /\\ '.join(bound_checks)}")
+        bound_expr = " /\\ ".join(bound_checks)
+        emit(f"  {bound_expr}")
         emit()
 
     # DepthBound

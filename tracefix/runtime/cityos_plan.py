@@ -115,13 +115,23 @@ def _allowed_transitions(states: Any) -> list[Any]:
     return state_rows if isinstance(state_rows, list) else []
 
 
-def _verification_status(summary: dict[str, Any], states_path: Path, tlc_error_path: Path) -> str:
+def _verification_status(
+    summary: dict[str, Any],
+    states_path: Path,
+    tlc_error_path: Path,
+    protocol_path: Path,
+    ir: dict[str, Any],
+) -> str:
     if summary.get("tlc_passed") is True:
         return "verified"
     if summary.get("tlc_passed") is False:
         return "incomplete"
     if tlc_error_path.exists():
         return "incomplete"
+    if not protocol_path.exists():
+        if len(ir.get("agents", [])) > 1 and not ir.get("channels"):
+            return "ir_incomplete"
+        return "pre_scaffold"
     if states_path.exists():
         return "states_extracted"
     return "unknown"
@@ -214,10 +224,6 @@ def build_cityos_module_plan(workspace: Path) -> dict[str, Any]:
         raise ValueError(f"invalid JSON object: {ir_path}")
 
     prompts = _prompt_paths(workspace)
-    if not prompts:
-        raise FileNotFoundError(
-            "missing agent prompts: expected prompts/runtime_b/*.md or prompts/*.md"
-        )
 
     states_path = spec / "states.json"
     summary_path = spec / "summary.json"
@@ -247,13 +253,22 @@ def build_cityos_module_plan(workspace: Path) -> dict[str, Any]:
         "resources": resources,
         "channels": channels,
     }
-    verification_status = _verification_status(summary, states_path, tlc_error_path)
+    protocol_path = spec / "Protocol.tla"
+    verification_status = _verification_status(
+        summary,
+        states_path,
+        tlc_error_path,
+        protocol_path,
+        ir,
+    )
     verification = {
         "status": verification_status,
         "summary": summary,
         "states_available": states_path.exists(),
         "tlc_passed": summary.get("tlc_passed"),
         "tlc_error_path": _rel(workspace, tlc_error_path),
+        "protocol_path": _rel(workspace, protocol_path),
+        "protocol_available": protocol_path.exists(),
         "production_ready": verification_status == "verified",
     }
     source_artifacts = {
@@ -276,6 +291,7 @@ def build_cityos_module_plan(workspace: Path) -> dict[str, Any]:
             "notes": [
                 "TraceFix generated this intermediary expression from verified workspace artifacts.",
                 "TraceFix does not run production agents or create Docker containers.",
+                *([] if prompts else ["No agent prompts were found; this plan is not production-ready."]),
             ],
         },
         "protocol": {

@@ -230,16 +230,16 @@ def write_file(ws: Workspace, *, path: str, content: str) -> str:
         channels = ir_data.get("channels", [])
         return (
             f"Wrote ir.json. Downstream files cleared.\n"
-            f"  Agents: {len(agents)} ({', '.join(a.get('id', '?') for a in agents)})\n"
+            f"  Agents: {len(agents)} ({', '.join(_agent_display(a) for a in agents)})\n"
             f"  Resources: {len(resources)}"
             + (
-                f" ({', '.join(r.get('id', '?') + ' (' + r.get('type', '?') + ')' for r in resources)})"
+                f" ({', '.join(_resource_display(r) for r in resources)})"
                 if resources
                 else ""
             )
             + f"\n  Channels: {len(channels)}"
             + (
-                f" ({', '.join(c.get('id', '?') for c in channels)})"
+                f" ({', '.join(_channel_display(c) for c in channels)})"
                 if channels
                 else ""
             )
@@ -399,6 +399,30 @@ def think(ws: Workspace, *, thoughts: str) -> str:
     return "OK"
 
 
+def _agent_display(agent) -> str:
+    if isinstance(agent, str):
+        return agent
+    if isinstance(agent, dict):
+        return agent.get("id", "?")
+    return "?"
+
+
+def _resource_display(resource) -> str:
+    if isinstance(resource, str):
+        return resource
+    if isinstance(resource, dict):
+        return resource.get("id", "?") + " (" + resource.get("type", "?") + ")"
+    return "?"
+
+
+def _channel_display(channel) -> str:
+    if isinstance(channel, str):
+        return channel
+    if isinstance(channel, dict):
+        return channel.get("id", "?")
+    return "?"
+
+
 # ---------------------------------------------------------------------------
 # Verification tools
 # ---------------------------------------------------------------------------
@@ -430,6 +454,10 @@ def validate_ir(ws: Workspace) -> str:
 
 def compile_scaffold(ws: Workspace) -> str:
     """Generate PlusCal scaffold from ir.json."""
+    from tracefix.pipeline.pipeline.validator import (
+        normalize_ir,
+        validate_ir as _validate_ir,
+    )
     from tracefix.pipeline.pipeline.pluscal_generator import (
         generate_pluscal_scaffold,
         generate_tlc_config,
@@ -438,6 +466,18 @@ def compile_scaffold(ws: Workspace) -> str:
     ir_data = ws.read_ir()
     if ir_data is None:
         return "ERROR: No valid ir.json in workspace. Write ir.json first."
+
+    ir_data = normalize_ir(ir_data)
+    result = _validate_ir(ir_data)
+    ws.result.ir_valid = result.valid
+    ws.result.ir_errors = list(result.errors)
+    if ws.result.repairs:
+        ws.result.repairs[-1].ir_valid = result.valid
+    if not result.valid:
+        errors = "\n".join(f"  - {e}" for e in result.errors)
+        return f"INVALID IR — cannot generate scaffold.\n{errors}"
+
+    ws.write_ir(ir_data)
 
     try:
         tla_scaffold = generate_pluscal_scaffold(ir_data)

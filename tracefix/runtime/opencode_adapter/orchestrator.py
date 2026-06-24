@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import secrets
 import sys
 import time
@@ -84,6 +85,10 @@ class OpencodeRunResult:
 
 def _load_json(path: Path) -> dict:
     return json.loads(Path(path).read_text())
+
+
+def _subprocess_python() -> str:
+    return os.environ.get("TRACEFIX_PYTHON_EXE", "").strip() or sys.executable
 
 
 class OpencodeOrchestrator:
@@ -223,8 +228,9 @@ class OpencodeOrchestrator:
                                           verbose=self.verbose, tokens=tokens)
             await service.start()
             coord_url = f"http://{self.host}:{self.port}"
-        coord_cmd = [sys.executable, "-m", "tracefix.runtime.coord_mcp"]
-        domain_cmd = [sys.executable, "-m", "tracefix.runtime.domain_mcp"]
+        python_exe = _subprocess_python()
+        coord_cmd = [python_exe, "-m", "tracefix.runtime.coord_mcp"]
+        domain_cmd = [python_exe, "-m", "tracefix.runtime.domain_mcp"]
         out = str(self.run_dir.resolve())          # run-output root (holds .agents/ XDG)
         shared_out = str(shared_workdir(self.run_dir).resolve())  # agents' cwd (--dir)
         run_agents = [a for a in ir["agents"]

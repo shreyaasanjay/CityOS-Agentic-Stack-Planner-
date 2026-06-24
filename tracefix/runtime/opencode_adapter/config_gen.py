@@ -83,7 +83,7 @@ DESIGN_PERMISSION = {
 
 
 def build_design_config(prompt: str, *, model: str | None = None) -> dict:
-    """OpenCode config for the single protocol-designer agent (no MCP servers).
+    """OpenCode config for protocol design agents (no MCP servers).
 
     The design workflow's knowledge arrives as the agent ``prompt`` (the
     /tla-verify-pluscal SKILL.md + a headless preamble); its actions are plain
@@ -96,9 +96,32 @@ def build_design_config(prompt: str, *, model: str | None = None) -> dict:
     }
     if model:
         agent_def["model"] = model
+    repair_prompt = (
+        prompt
+        + "\n\n---\n"
+        + "IR repair mode: you are invoked only after TraceFix rejected "
+        + "`spec/ir.json` before PlusCal/TLC. Repair only the IR. Preserve the "
+        + "existing task intent, agents, and resources unless the agents are "
+        + "truly independent. If two or more agents remain, infer the minimal "
+        + "directed FIFO communication channels required by task handoffs, "
+        + "shared-resource coordination, review/approval flow, data dependencies, "
+        + "or failure/retry paths. Do not create arbitrary complete-graph "
+        + "channels. Write `spec/ir_repair_notes.md` explaining each channel "
+        + "added and why it is required."
+    )
+    repair_def: dict = {
+        "mode": "primary",
+        "prompt": repair_prompt,
+        "permission": dict(DESIGN_PERMISSION),
+    }
+    if model:
+        repair_def["model"] = model
     return {
         "$schema": "https://opencode.ai/config.json",
-        "agent": {"designer": agent_def},
+        "agent": {
+            "designer": agent_def,
+            "designer_ir_repair": repair_def,
+        },
     }
 
 

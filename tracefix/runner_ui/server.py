@@ -37,6 +37,86 @@ def _repo_root() -> Path:
     return Path.cwd()
 
 
+def _subprocess_python() -> str:
+    configured = os.environ.get("TRACEFIX_PYTHON_EXE", "").strip()
+    if configured:
+        python_path = Path(configured).expanduser()
+        if not python_path.exists():
+            raise ValueError(f"TRACEFIX_PYTHON_EXE does not exist: {configured}")
+        return str(python_path)
+    return sys.executable
+
+
+_DEFAULT_WINDOWS_JAVA17 = Path(r"C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot\bin\java.exe")
+
+
+def _default_java17() -> str:
+    return str(_DEFAULT_WINDOWS_JAVA17) if _DEFAULT_WINDOWS_JAVA17.exists() else ""
+
+
+def _path_beginning(path_value: str, *, max_parts: int = 5) -> str:
+    parts = [part for part in path_value.split(os.pathsep) if part]
+    return os.pathsep.join(parts[:max_parts])
+
+
+def _ensure_java_env(env: dict[str, str]) -> dict[str, str]:
+    java = (env.get("TLA_VERIFY_JAVA") or env.get("JAVA_EXE") or "").strip()
+    default_java = _default_java17()
+    if not java and default_java:
+        java = default_java
+        env["TLA_VERIFY_JAVA"] = java
+        env["JAVA_EXE"] = java
+    elif java:
+        env.setdefault("TLA_VERIFY_JAVA", java)
+        env.setdefault("JAVA_EXE", java)
+
+    if java:
+        java_path = Path(java)
+        if not java_path.exists():
+            raise ValueError(f"Configured Java executable does not exist: {java}")
+        env.setdefault("JAVA_HOME", str(java_path.parent.parent))
+        java_bin = str(java_path.parent)
+        path_parts = [part for part in env.get("PATH", "").split(os.pathsep) if part]
+        if not any(Path(part) == Path(java_bin) for part in path_parts):
+            env["PATH"] = java_bin + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def _selected_java_for_env(env: dict[str, str]) -> str:
+    from tracefix.pipeline.pipeline.toolchain import resolve_java
+
+    old_values = {name: os.environ.get(name) for name in ("TLA_VERIFY_JAVA", "JAVA_EXE", "JAVA_HOME", "PATH")}
+    try:
+        for name in old_values:
+            if name in env:
+                os.environ[name] = env[name]
+            else:
+                os.environ.pop(name, None)
+        return resolve_java()
+    finally:
+        for name, value in old_values.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+def _run_diagnostics(root: Path, command: list[str], env: dict[str, str]) -> list[str]:
+    has_java_arg = "--java-path" in command
+    selected_java = _selected_java_for_env(env)
+    return [
+        f"[tracefix runner] cwd: {root}",
+        f"[tracefix runner] Python executable used: {command[0] if command else ''}",
+        f"[tracefix runner] command launched: {' '.join(command)}",
+        f"[tracefix runner] TLA_VERIFY_JAVA: {env.get('TLA_VERIFY_JAVA', '')}",
+        f"[tracefix runner] JAVA_EXE: {env.get('JAVA_EXE', '')}",
+        f"[tracefix runner] JAVA_HOME: {env.get('JAVA_HOME', '')}",
+        f"[tracefix runner] PATH beginning: {_path_beginning(env.get('PATH', ''))}",
+        f"[tracefix runner] --java-path argument passed: {has_java_arg}",
+        f"[tracefix runner] final Java selected by TraceFix toolchain: {selected_java}",
+    ]
+
+
 def _read_text(path: Path, limit: int = 180_000) -> str:
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -232,6 +312,21 @@ def _artifact_snapshot(workspace: Path | None) -> dict[str, Any]:
 
 def _recovery_guidance(workspace: Path) -> dict[str, Any]:
     spec = _spec_dir(workspace)
+    ir = _read_json(spec / "ir.json")
+    protocol_exists = (spec / "Protocol.tla").exists()
+    channels = ir.get("channels", []) if isinstance(ir, dict) else []
+    notes = [
+        "Do not treat this workspace as production-ready until TLC passes.",
+        "Inspect tlc_error.md first; then fix the IR/Protocol or rerun design with a clearer task.",
+    ]
+    if isinstance(ir, dict) and not protocol_exists:
+        notes = [
+            "Design stopped before PlusCal scaffolding. TLC did not run.",
+            "Likely cause: incomplete IR, schema mismatch, or missing communication channels.",
+            f"Channels detected in ir.json: {len(channels)}.",
+            "Fix the IR or rerun design; Protocol.tla must exist before TLC can produce tlc_error.md.",
+            "Do not treat this workspace as production-ready until TLC passes.",
+        ]
     return {
         "workspace": str(workspace),
         "tlcErrorPath": str(spec / "tlc_error.md"),
@@ -243,10 +338,7 @@ def _recovery_guidance(workspace: Path) -> dict[str, Any]:
             f"tla-verify-pluscal scaffold \"{spec / 'ir.json'}\" -o \"{spec}\"",
             f"tla-verify-pluscal verify \"{spec}\"",
         ],
-        "notes": [
-            "Do not treat this workspace as production-ready until TLC passes.",
-            "Inspect tlc_error.md first; then fix the IR/Protocol or rerun design with a clearer task.",
-        ],
+        "notes": notes,
     }
 
 
@@ -406,7 +498,7 @@ def _build_pipeline_command(payload: dict[str, Any]) -> tuple[list[str], dict[st
     ollama_url = str(payload.get("ollamaUrl", "http://localhost:11434/v1")).strip()
 
     command = [
-        sys.executable,
+        _subprocess_python(),
         "-u",
         "-B",
         "-m",
@@ -448,7 +540,7 @@ def _build_design_command(root: Path, payload: dict[str, Any]) -> tuple[list[str
     timeout = float(payload.get("timeout") or 1800)
     opencode_bin = str(payload.get("opencodeBin", "opencode")).strip() or "opencode"
     command = [
-        sys.executable,
+        _subprocess_python(),
         "-u",
         "-B",
         "-m",
@@ -478,7 +570,7 @@ def _build_runtime_command(payload: dict[str, Any]) -> tuple[list[str], dict[str
         raise ValueError("Workspace path is required")
     harness = str(payload.get("harness", "opencode")).strip() or "opencode"
     command = [
-        sys.executable,
+        _subprocess_python(),
         "-u",
         "-B",
         "-m",
@@ -546,7 +638,7 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
     elif mode == "plan":
         workspace = _workspace_from_payload(root, payload)
         command = [
-            sys.executable,
+            _subprocess_python(),
             "-u",
             "-B",
             "-m",
@@ -582,6 +674,7 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
 
     env = os.environ.copy()
     env.update(env_updates)
+    env = _ensure_java_env(env)
     env["PYTHONUNBUFFERED"] = "1"
 
     with RUNS_LOCK:
@@ -659,6 +752,13 @@ def _run_design_then_runtime(run: RunState, env: dict[str, str], payload: dict[s
 def _stream_command(run: RunState, env: dict[str, str], command: list[str]) -> int:
     run.command = command
     run.publish({"type": "command", "command": _redact_command(command)})
+    try:
+        for line in _run_diagnostics(run.root, command, env):
+            run.publish({"type": "phase", "line": line})
+    except Exception as exc:
+        run.error = str(exc)
+        run.publish({"type": "error", "line": str(exc)})
+        return 1
     try:
         process = subprocess.Popen(
             command,
@@ -922,10 +1022,19 @@ class RunnerHandler(BaseHTTPRequestHandler):
 
 def run_server(host: str = "127.0.0.1", port: int = 8788, root: Path | None = None) -> None:
     repo_root = (root or _repo_root()).resolve()
+    subprocess_python = _subprocess_python()
+    startup_env = _ensure_java_env(os.environ.copy())
     server = ThreadingHTTPServer((host, port), RunnerHandler)
     server.root = repo_root  # type: ignore[attr-defined]
     print(f"TraceFix Intermediary Planner running at http://{host}:{port}")
     print(f"Reading repo data from {repo_root}")
+    print(f"TraceFix UI Python: {sys.executable}")
+    print(f"TraceFix subprocess Python: {subprocess_python}")
+    print(f"TraceFix TLA_VERIFY_JAVA: {startup_env.get('TLA_VERIFY_JAVA', '')}")
+    print(f"TraceFix JAVA_EXE: {startup_env.get('JAVA_EXE', '')}")
+    print(f"TraceFix JAVA_HOME: {startup_env.get('JAVA_HOME', '')}")
+    print(f"TraceFix PATH beginning: {_path_beginning(startup_env.get('PATH', ''))}")
+    print(f"TraceFix final Java selected by toolchain: {_selected_java_for_env(startup_env)}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

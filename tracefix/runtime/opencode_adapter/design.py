@@ -37,6 +37,10 @@ _PROMPT_GEN_SKILL = ".claude/skills/tla-prompt-gen/SKILL.md"
 DEFAULT_TIMEOUT = 1800.0
 
 
+def _subprocess_python() -> str:
+    return os.environ.get("TRACEFIX_PYTHON_EXE", "").strip() or sys.executable
+
+
 def repo_root() -> Path:
     return next(p for p in Path(__file__).resolve().parents
                 if (p / "pyproject.toml").exists())
@@ -102,8 +106,42 @@ def design_kickoff(workspace_rel: str) -> str:
         f"Design, verify, and generate prompts for the coordination protocol of the "
         f"task described in `{workspace_rel}/description.md`. The workspace is "
         f"`{workspace_rel}/` (already initialized: spec/ir.json is a stub to replace). "
+        "Before scaffolding PlusCal/TLC, replace the stub with a complete IR. "
+        "If the IR keeps two or more agents, `channels` must be non-empty: add "
+        "the minimal directed FIFO channels required by task handoffs, shared "
+        "resource coordination, review/approval flow, data dependencies, or "
+        "failure/retry paths. Each channel must include id, from, to, and a "
+        "non-empty labels list, and endpoints must match agent ids. Do not add "
+        "arbitrary complete-graph channels. If the task is truly independent "
+        "and needs no communication, collapse it to a single-agent design or "
+        "document why in plan.md before continuing. "
         f"Follow your instructions end to end — finish only when "
         f"`{workspace_rel}/prompts/runtime_b/` holds one prompt per agent."
+    )
+
+
+def ir_repair_kickoff(workspace_rel: str, errors: list[str]) -> str:
+    error_text = "\n".join(f"- {error}" for error in errors) or "- unknown IR validation failure"
+    return (
+        f"Repair ONLY `{workspace_rel}/spec/ir.json`.\n\n"
+        f"Current IR validation errors:\n{error_text}\n\n"
+        "Rules:\n"
+        "- Do not remove agents.\n"
+        "- Do not remove resources.\n"
+        "- Normalize agents to objects like {\"id\": \"DEVELOPER_A\"} if needed.\n"
+        "- If two or more agents remain, channels must be non-empty.\n"
+        "- Infer the minimal directed FIFO channels from task handoffs, shared-resource "
+        "coordination, review/approval flow, data dependencies, or failure/retry paths.\n"
+        "- Do not add arbitrary complete-graph channels just to satisfy validation.\n"
+        "- If agents are truly independent, collapse to a single-agent IR and explain why.\n"
+        "- Each channel must include id, from, to, and labels.\n"
+        "- labels must be a non-empty list of task-relevant message labels.\n"
+        "- Every channel endpoint must reference an existing agent id.\n"
+        "- Preserve JSON validity.\n"
+        "- The IR must be scaffoldable by tla-verify-pluscal.\n"
+        "- Write spec/ir_repair_notes.md listing each channel added and why.\n"
+        "- Do not edit Protocol.tla, Protocol.cfg, states.json, prompts, or runtime files.\n\n"
+        "After writing spec/ir.json, call validate_ir(). Stop after the IR validates."
     )
 
 
@@ -112,7 +150,7 @@ class DesignResult:
     """Artifact-judged outcome of one design run."""
     success: bool
     workspace: str
-    status: str                       # ready | verify_failed | incomplete | timeout | error
+    status: str                       # ready | ir_incomplete | pluscal_error | tlc_error | timeout | error
     tlc_passed: bool | None = None
     agents: list[str] = field(default_factory=list)
     prompts: list[str] = field(default_factory=list)
@@ -120,13 +158,17 @@ class DesignResult:
     duration: float = 0.0
     events: int = 0
     stderr_tail: list[str] = field(default_factory=list)
+    ir_errors: list[str] = field(default_factory=list)
+    diagnostics: list[str] = field(default_factory=list)
 
 
 def inspect_workspace(ws: Path) -> dict:
     """Judge a design run purely from its artifacts (transcript-independent)."""
     spec = ws / "spec" if (ws / "spec").is_dir() else ws
     out: dict = {"ir": None, "states": (spec / "states.json").exists(),
-                 "tlc_passed": None, "repairs": None, "prompts": []}
+                 "tlc_passed": None, "repairs": None, "prompts": [],
+                 "protocol": (spec / "Protocol.tla").exists(),
+                 "tlc_error": (spec / "tlc_error.md").exists()}
     ir_path = spec / "ir.json"
     if ir_path.exists():
         try:
@@ -147,10 +189,163 @@ def inspect_workspace(ws: Path) -> dict:
     return out
 
 
+def _agent_ids(ir: dict | None) -> list[str]:
+    if not isinstance(ir, dict):
+        return []
+    try:
+        from tracefix.pipeline.pipeline.validator import normalize_ir
+
+        ir = normalize_ir(ir)
+    except Exception:
+        pass
+    agents = ir.get("agents", []) if isinstance(ir, dict) else []
+    return [
+        agent["id"]
+        for agent in agents
+        if isinstance(agent, dict) and isinstance(agent.get("id"), str)
+    ]
+
+
+def _spec_dir(ws: Path) -> Path:
+    spec = ws / "spec"
+    return spec if spec.is_dir() else ws
+
+
+def _load_ir(ws: Path) -> dict | None:
+    ir_path = _spec_dir(ws) / "ir.json"
+    try:
+        return json.loads(ir_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _channel_key(channel: dict) -> str:
+    return str(channel.get("id") or f"{channel.get('from')}->{channel.get('to')}")
+
+
+def _channel_diagnostics(before: dict | None, after: dict | None) -> list[str]:
+    if not isinstance(after, dict):
+        return ["IR repair diagnostics: spec/ir.json is unreadable after repair"]
+    before_channels = before.get("channels", []) if isinstance(before, dict) else []
+    after_channels = after.get("channels", [])
+    if not isinstance(before_channels, list):
+        before_channels = []
+    if not isinstance(after_channels, list):
+        return ["IR repair diagnostics: channels is not a list after repair"]
+
+    before_keys = {
+        _channel_key(channel)
+        for channel in before_channels
+        if isinstance(channel, dict)
+    }
+    added = [
+        channel
+        for channel in after_channels
+        if isinstance(channel, dict) and _channel_key(channel) not in before_keys
+    ]
+    if not added:
+        return ["IR repair diagnostics: no channels were added"]
+
+    diagnostics = []
+    for channel in added:
+        labels = channel.get("labels", [])
+        if isinstance(labels, list):
+            label_text = ", ".join(str(label) for label in labels)
+        else:
+            label_text = str(labels)
+        diagnostics.append(
+            "IR repair added channel "
+            f"{_channel_key(channel)}: {channel.get('from')} -> {channel.get('to')} "
+            f"labels=[{label_text}]"
+        )
+    return diagnostics
+
+
+def validate_design_ir(ws: Path) -> tuple[bool, list[str], list[str]]:
+    """Normalize and validate spec/ir.json for design postflight."""
+    from tracefix.pipeline.pipeline.validator import normalize_ir, validate_ir
+
+    spec = _spec_dir(ws)
+    ir_path = spec / "ir.json"
+    diagnostics = ["IR validation started"]
+    if not ir_path.exists():
+        return False, ["missing spec/ir.json"], diagnostics
+
+    try:
+        original = json.loads(ir_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return False, [f"invalid spec/ir.json: {exc}"], diagnostics
+
+    normalized = normalize_ir(original)
+    if normalized != original:
+        ir_path.write_text(json.dumps(normalized, indent=2) + "\n", encoding="utf-8")
+        diagnostics.append("IR normalized: agent/resource schemas canonicalized")
+
+    result = validate_ir(normalized)
+    if result.valid:
+        diagnostics.append("IR validation passed")
+        return True, [], diagnostics
+
+    diagnostics.append("IR validation failed")
+    return False, list(result.errors), diagnostics
+
+
+def classify_design_artifacts(ws: Path, *, timed_out: bool = False) -> tuple[str, list[str], list[str]]:
+    """Classify the design stage from artifacts without trusting transcript text."""
+    if timed_out:
+        return "timeout", [], ["Design timed out"]
+
+    valid_ir, ir_errors, diagnostics = validate_design_ir(ws)
+    spec = _spec_dir(ws)
+    protocol_path = spec / "Protocol.tla"
+    states_path = spec / "states.json"
+    summary_path = spec / "summary.json"
+    tlc_error_path = spec / "tlc_error.md"
+
+    if not valid_ir:
+        diagnostics.append("PlusCal scaffold skipped because IR is incomplete")
+        diagnostics.append("TLC did not run")
+        return "ir_incomplete", ir_errors, diagnostics
+
+    if not protocol_path.exists():
+        diagnostics.append("Protocol.tla missing after valid IR")
+        return (
+            "ir_incomplete",
+            ["Design stopped before PlusCal scaffolding. TLC did not run."],
+            diagnostics,
+        )
+
+    diagnostics.append("PlusCal scaffold artifact present")
+    if summary_path.exists():
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            summary = {}
+        if summary.get("tlc_passed") is True and states_path.exists():
+            diagnostics.append("TLC passed and states extracted")
+            return "ready", [], diagnostics
+        if summary.get("tlc_passed") is False:
+            diagnostics.append("TLC ran and failed")
+            return "tlc_error", [], diagnostics
+
+    if tlc_error_path.exists():
+        diagnostics.append("TLC error artifact present")
+        return "tlc_error", [], diagnostics
+
+    if not states_path.exists():
+        diagnostics.append("Protocol.tla exists but states.json is missing")
+        return (
+            "pluscal_error",
+            ["Protocol.tla exists, but TLC/states extraction did not complete."],
+            diagnostics,
+        )
+
+    return "incomplete", [], diagnostics
+
+
 def judge(ws: Path, *, timed_out: bool = False) -> DesignResult:
     info = inspect_workspace(ws)
-    agents = [a["id"] for a in (info["ir"] or {}).get("agents", [])
-              if isinstance(a, dict) and "id" in a]
+    agents = _agent_ids(info["ir"])
     have_all_prompts = bool(agents) and set(agents) <= set(info["prompts"])
     ready = bool(info["tlc_passed"]) and info["states"] and have_all_prompts
     if ready:
@@ -158,7 +353,11 @@ def judge(ws: Path, *, timed_out: bool = False) -> DesignResult:
     elif timed_out:
         status = "timeout"
     elif info["tlc_passed"] is False:
-        status = "verify_failed"   # honest failure — capped repair attempts exhausted
+        status = "tlc_error"
+    elif not info["protocol"]:
+        status = "ir_incomplete"
+    elif info["tlc_error"]:
+        status = "tlc_error"
     else:
         status = "incomplete"
     return DesignResult(
@@ -332,7 +531,7 @@ async def run_design(
     inst = ws / ".design"
     for sub in ("data", "state"):
         (inst / sub).mkdir(parents=True, exist_ok=True)
-    venv_bin = str(Path(sys.executable).resolve().parent)
+    venv_bin = str(Path(_subprocess_python()).resolve().parent)
     env = {
         "XDG_DATA_HOME": str(inst / "data"),
         "XDG_STATE_HOME": str(inst / "state"),
@@ -354,10 +553,54 @@ async def run_design(
         env_overrides=env,
     )
 
-    result = judge(ws, timed_out=disposition["status"] == "timeout")
+    timed_out = disposition["status"] == "timeout"
+    run_diagnostics = [
+        f"Workspace initialized: {ws_rel}",
+        "OpenCode design attempt finished",
+    ]
+    status, ir_errors, diagnostics = classify_design_artifacts(ws, timed_out=timed_out)
+    diagnostics = [*run_diagnostics, *diagnostics]
+    repair_disposition = None
+    if (
+        status == "ir_incomplete"
+        and not timed_out
+        and any("no communication channels" in error for error in ir_errors)
+    ):
+        diagnostics.append("IR repair pass started")
+        ir_before_repair = _load_ir(ws)
+        repair_disposition = await run_opencode_agent(
+            "designer_ir_repair",
+            cfg,
+            opencode_cmd=opencode_cmd or ["opencode"],
+            output_dir=root,
+            kickoff=ir_repair_kickoff(ws_rel, ir_errors),
+            timeout=min(timeout, 600.0),
+            on_event=on_event,
+            env_overrides=env,
+        )
+        diagnostics.append("IR repair pass finished")
+        diagnostics.extend(_channel_diagnostics(ir_before_repair, _load_ir(ws)))
+        status, ir_errors, repair_diagnostics = classify_design_artifacts(
+            ws,
+            timed_out=repair_disposition["status"] == "timeout",
+        )
+        diagnostics.extend(repair_diagnostics)
+
+    result = judge(ws, timed_out=timed_out)
+    if result.success:
+        result.status = "ready"
+    elif status != "ready":
+        result.status = status
+    result.ir_errors = ir_errors
+    result.diagnostics = diagnostics
     result.duration = time.time() - start
-    result.events = disposition.get("events", 0)
-    result.stderr_tail = disposition.get("stderr_tail", [])
+    result.events = disposition.get("events", 0) + (
+        repair_disposition.get("events", 0) if repair_disposition else 0
+    )
+    result.stderr_tail = [
+        *disposition.get("stderr_tail", []),
+        *(repair_disposition.get("stderr_tail", []) if repair_disposition else []),
+    ]
     if result.status == "incomplete" and disposition.get("returncode") not in (0, None):
         result.status = "error"
 

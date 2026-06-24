@@ -213,9 +213,23 @@ def cmd_design(args: argparse.Namespace) -> int:
         print("\nLegacy local debug runner:")
         print(f"  tracefix run --local-dev --workspace {result.workspace}")
     else:
-        print("\nNot runnable yet — inspect the workspace (spec/tlc_error.md, "
-              "spec/history/) and re-run `tracefix design`, or finish manually "
-              "with the /tla-verify-pluscal skill.")
+        if result.status == "ir_incomplete":
+            print("\nIR incomplete: multi-agent topology has no communication channels. PlusCal scaffolding and TLC did not run.")
+            if result.ir_errors:
+                print("IR validation errors:")
+                for error in result.ir_errors:
+                    print(f"  - {error}")
+            print("\nFix spec/ir.json or re-run `tracefix design` with a clearer task.")
+        elif result.status == "pluscal_error":
+            print("\nPlusCal stage incomplete: Protocol.tla exists, but TLC/states extraction did not complete.")
+        elif result.status == "tlc_error":
+            print("\nTLC verification failed. Inspect spec/tlc_error.md and spec/history/.")
+        else:
+            print("\nNot runnable yet. Re-run `tracefix design`, or finish manually with the /tla-verify-pluscal skill.")
+        if result.diagnostics:
+            print("Design diagnostics:")
+            for line in result.diagnostics:
+                print(f"  - {line}")
         if result.stderr_tail and args.verbose:
             print("--- opencode stderr tail ---")
             for line in result.stderr_tail:
