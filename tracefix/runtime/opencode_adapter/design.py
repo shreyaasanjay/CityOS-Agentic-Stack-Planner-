@@ -413,8 +413,8 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
     java = resolve_java()
     jar = resolve_jar()
 
-    # Step 1: PlusCal → TLA+ translation
-    diagnostics.append("TLC fallback: translating PlusCal → TLA+")
+    # Step 1: PlusCal to TLA+ translation
+    diagnostics.append("TLC fallback: translating PlusCal to TLA+")
     pcal_result = translate_pluscal(tla_content, cfg_content, java_path=java, tla2tools_jar=jar)
 
     if not pcal_result.success:
