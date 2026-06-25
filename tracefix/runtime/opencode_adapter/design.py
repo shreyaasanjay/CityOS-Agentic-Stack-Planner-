@@ -353,6 +353,149 @@ def _scaffold_valid_ir(ws: Path) -> list[str]:
     ]
 
 
+def _run_tlc_and_extract(ws: Path) -> list[str]:
+    """Python-level TLC verification + state extraction fallback.
+
+    Called when Protocol.tla exists but TLC was never invoked (the opencode
+    continuation pass didn't call `tla-verify-pluscal verify`). Mirrors
+    cmd_verify + cmd_extract_states, writing the same artifact set:
+
+    - Success: Protocol_translated.tla, tlc_output.log, states.json, summary.json
+    - Failure: tlc_error.md, tlc_output.log (and summary.json with tlc_passed=false)
+    """
+    from tracefix.pipeline.pipeline.pluscal_compiler import translate_pluscal
+    from tracefix.pipeline.pipeline.tlc_runner import run_tlc
+    from tracefix.pipeline.pipeline.trace_parser import parse_trace
+    from tracefix.pipeline.pipeline.error_formatter import format_tlc_error
+    from tracefix.pipeline.pipeline.pluscal_parser import parse_pluscal
+    from tracefix.pipeline.pipeline.toolchain import resolve_java, resolve_jar
+
+    spec = _spec_dir(ws)
+    tla_path = spec / "Protocol.tla"
+    cfg_path = spec / "Protocol.cfg"
+    ir_path = spec / "ir.json"
+    diagnostics: list[str] = []
+
+    diagnostics.append(
+        "TLC fallback: Protocol.tla present but TLC never ran; invoking verification"
+    )
+
+    def _artifact_inventory() -> str:
+        checks = [
+            ("Protocol.tla", tla_path),
+            ("Protocol.cfg", cfg_path),
+            ("Protocol_translated.tla", spec / "Protocol_translated.tla"),
+            ("tlc_output.log", spec / "tlc_output.log"),
+            ("states.json", spec / "states.json"),
+        ]
+        return "; ".join(f"{n}={'yes' if p.exists() else 'no'}" for n, p in checks)
+
+    if not tla_path.exists():
+        diagnostics.append("TLC fallback aborted: Protocol.tla missing")
+        (spec / "tlc_error.md").write_text(
+            f"# PlusCal/TLC Stage Incomplete\n\nProtocol.tla missing.\n\n"
+            f"**Artifacts**: {_artifact_inventory()}\n",
+            encoding="utf-8",
+        )
+        return diagnostics
+
+    if not cfg_path.exists():
+        diagnostics.append("TLC fallback aborted: Protocol.cfg missing")
+        (spec / "tlc_error.md").write_text(
+            f"# PlusCal/TLC Stage Incomplete\n\nProtocol.cfg missing.\n\n"
+            f"**Artifacts**: {_artifact_inventory()}\n",
+            encoding="utf-8",
+        )
+        return diagnostics
+
+    tla_content = tla_path.read_text(encoding="utf-8")
+    cfg_content = cfg_path.read_text(encoding="utf-8")
+    java = resolve_java()
+    jar = resolve_jar()
+
+    # Step 1: PlusCal → TLA+ translation
+    diagnostics.append("TLC fallback: translating PlusCal → TLA+")
+    pcal_result = translate_pluscal(tla_content, cfg_content, java_path=java, tla2tools_jar=jar)
+
+    if not pcal_result.success:
+        diagnostics.append(
+            f"TLC fallback: PlusCal translation failed: {pcal_result.error_message[:120]}"
+        )
+        (spec / "tlc_error.md").write_text(
+            f"# PlusCal Translation Error\n\n```\n{pcal_result.error_message}\n```\n\n"
+            f"**Artifacts**: {_artifact_inventory()}\n"
+            f"**Expected**: {spec / 'states.json'}\n",
+            encoding="utf-8",
+        )
+        return diagnostics
+
+    (spec / "Protocol_translated.tla").write_text(pcal_result.translated_tla, encoding="utf-8")
+    diagnostics.append(
+        "TLC fallback: PlusCal translation succeeded; wrote Protocol_translated.tla"
+    )
+
+    # Step 2: Run TLC on translated spec
+    diagnostics.append("TLC fallback: running TLC model checker")
+    tlc_result = run_tlc(pcal_result.translated_tla, cfg_content, java_path=java, tla2tools_jar=jar)
+    (spec / "tlc_output.log").write_text(tlc_result.raw_output, encoding="utf-8")
+
+    if not tlc_result.success:
+        trace = parse_trace(tlc_result.raw_output)
+        error_md = format_tlc_error(tlc_result, trace)
+        (spec / "tlc_error.md").write_text(error_md, encoding="utf-8")
+        (spec / "summary.json").write_text(
+            json.dumps({"tlc_passed": False, "total_repairs": 0}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        diagnostics.append(
+            f"TLC fallback: TLC failed ({tlc_result.violation_type}); "
+            "wrote tlc_error.md and summary.json(tlc_passed=false)"
+        )
+        return diagnostics
+
+    diagnostics.append("TLC fallback: TLC passed; wrote tlc_output.log")
+
+    # Step 3: Extract per-agent states
+    diagnostics.append("TLC fallback: extracting states from translated spec")
+    try:
+        ir_data: dict = {}
+        if ir_path.exists():
+            ir_data = json.loads(ir_path.read_text(encoding="utf-8"))
+        parse_result = parse_pluscal(pcal_result.translated_tla, ir_data)
+    except Exception as exc:  # noqa: BLE001
+        diagnostics.append(f"TLC fallback: state extraction failed: {exc}")
+        (spec / "tlc_error.md").write_text(
+            f"# State Extraction Failed\n\nTLC passed but state extraction raised:\n\n"
+            f"```\n{exc}\n```\n\n"
+            f"**Artifacts**: {_artifact_inventory()}\n",
+            encoding="utf-8",
+        )
+        return diagnostics
+
+    if parse_result.errors:
+        diagnostics.append(
+            f"TLC fallback: {len(parse_result.errors)} parse warning(s) during "
+            "state extraction (continuing)"
+        )
+
+    out_data: dict = {
+        "states": parse_result.states,
+        "initial_states": parse_result.initial_states,
+    }
+    if parse_result.local_variables:
+        out_data["local_variables"] = parse_result.local_variables
+    (spec / "states.json").write_text(json.dumps(out_data, indent=2) + "\n", encoding="utf-8")
+    (spec / "summary.json").write_text(
+        json.dumps({"tlc_passed": True, "total_repairs": 0}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    diagnostics.append(
+        f"TLC fallback: extracted {len(parse_result.states)} states; "
+        "wrote states.json and summary.json(tlc_passed=true)"
+    )
+    return diagnostics
+
+
 def classify_design_artifacts(ws: Path, *, timed_out: bool = False) -> tuple[str, list[str], list[str]]:
     """Classify the design stage from artifacts without trusting transcript text."""
     if timed_out:
@@ -396,7 +539,17 @@ def classify_design_artifacts(ws: Path, *, timed_out: bool = False) -> tuple[str
         return "tlc_error", [], diagnostics
 
     if not states_path.exists():
-        diagnostics.append("Protocol.tla exists but states.json is missing")
+        inv = "; ".join(
+            f"{n}={'yes' if (spec / f).exists() else 'no'}"
+            for n, f in [
+                ("Protocol.cfg", "Protocol.cfg"),
+                ("Protocol_translated.tla", "Protocol_translated.tla"),
+                ("tlc_output.log", "tlc_output.log"),
+            ]
+        )
+        diagnostics.append(
+            f"Protocol.tla exists but states.json is missing ({inv})"
+        )
         return (
             "pluscal_error",
             ["Protocol.tla exists, but TLC/states extraction did not complete."],
@@ -653,6 +806,16 @@ async def run_design(
                 timed_out=continuation_disposition["status"] == "timeout",
             )
             diagnostics.extend(continuation_diagnostics)
+            if (
+                status == "pluscal_error"
+                and continuation_disposition["status"] != "timeout"
+            ):
+                try:
+                    diagnostics.extend(_run_tlc_and_extract(ws))
+                except Exception as exc:  # noqa: BLE001
+                    diagnostics.append(f"TLC direct fallback exception: {exc}")
+                status, ir_errors, tlc_fallback_diagnostics = classify_design_artifacts(ws)
+                diagnostics.extend(tlc_fallback_diagnostics)
 
     if (
         status == "ir_incomplete"
@@ -707,6 +870,16 @@ async def run_design(
                     timed_out=post_repair_continuation["status"] == "timeout",
                 )
                 diagnostics.extend(post_repair_diagnostics)
+                if (
+                    status == "pluscal_error"
+                    and post_repair_continuation["status"] != "timeout"
+                ):
+                    try:
+                        diagnostics.extend(_run_tlc_and_extract(ws))
+                    except Exception as exc:  # noqa: BLE001
+                        diagnostics.append(f"TLC direct fallback exception (post-repair): {exc}")
+                    status, ir_errors, tlc_fallback_diagnostics = classify_design_artifacts(ws)
+                    diagnostics.extend(tlc_fallback_diagnostics)
                 if repair_disposition is not None:
                     repair_disposition["events"] = (
                         repair_disposition.get("events", 0)

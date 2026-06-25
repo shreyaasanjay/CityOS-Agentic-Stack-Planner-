@@ -8,6 +8,7 @@ from pathlib import Path
 from tracefix.runtime.opencode_adapter.config_gen import build_design_config
 from tracefix.runtime.opencode_adapter.design import (
     _channel_diagnostics,
+    _run_tlc_and_extract,
     _scaffold_valid_ir,
     build_designer_prompt,
     classify_design_artifacts,
@@ -260,6 +261,47 @@ def test_classify_design_artifacts_tlc_error(tmp_path):
     assert status == "tlc_error"
     assert errors == []
     assert "TLC error artifact present" in diagnostics
+
+
+def test_classify_design_artifacts_pluscal_error_includes_artifact_inventory(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": [{"id": "A"}, {"id": "B"}],
+        "resources": [{"id": "R", "type": "Lock"}],
+        "channels": [{"id": "a_to_b", "from": "A", "to": "B", "labels": ["go"]}],
+    }))
+    (spec / "Protocol.tla").write_text("---- MODULE Protocol ----\n====\n")
+    # No states.json, no tlc_error.md — the pluscal_error case.
+
+    status, errors, diagnostics = classify_design_artifacts(ws)
+
+    assert status == "pluscal_error"
+    assert any("states.json is missing" in d for d in diagnostics)
+    # The diagnostic should mention Protocol.cfg and tlc_output.log presence.
+    inv_diag = next(d for d in diagnostics if "states.json is missing" in d)
+    assert "Protocol.cfg=" in inv_diag
+    assert "tlc_output.log=" in inv_diag
+
+
+def test_run_tlc_and_extract_writes_tlc_error_when_cfg_missing(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": [{"id": "A"}, {"id": "B"}],
+        "resources": [],
+        "channels": [{"id": "a_to_b", "from": "A", "to": "B", "labels": ["go"]}],
+    }))
+    # Protocol.tla present but Protocol.cfg absent
+    (spec / "Protocol.tla").write_text("---- MODULE Protocol ----\n====\n")
+
+    diagnostics = _run_tlc_and_extract(ws)
+
+    assert any("Protocol.cfg missing" in d for d in diagnostics)
+    assert (spec / "tlc_error.md").exists()
+    assert "Protocol.cfg missing" in (spec / "tlc_error.md").read_text()
 
 
 def test_channel_diagnostics_reports_added_channels():
