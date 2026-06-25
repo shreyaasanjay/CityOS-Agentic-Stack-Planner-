@@ -15,6 +15,8 @@ import shutil
 import sys
 from pathlib import Path
 
+from tracefix.textio import safe_read_json, safe_read_text
+
 
 def _resolve_java(args: argparse.Namespace) -> str:
     from tracefix.pipeline.pipeline.toolchain import resolve_java
@@ -36,8 +38,10 @@ def _print_tla_tool_log(phase: str, java: str, jar: str, command: list[str], *, 
 
 
 def _load_ir(path: str) -> dict:
-    with open(path) as f:
-        return json.load(f)
+    data = safe_read_json(path)
+    if not isinstance(data, dict):
+        raise ValueError(f"invalid IR JSON object: {path}")
+    return data
 
 
 def _output_dir(args: argparse.Namespace, ir_path: str) -> Path:
@@ -253,8 +257,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
         if not vr.valid:
             return _setup_error("invalid IR", {"ir_errors": vr.errors})
 
-    tla_content = tla_path.read_text()
-    cfg_content = cfg_path.read_text()
+    tla_content = safe_read_text(tla_path)
+    cfg_content = safe_read_text(cfg_path)
 
     print("TRACEFIX VERIFY ENV")
     print("TLA_VERIFY_JAVA =", os.getenv("TLA_VERIFY_JAVA"))
@@ -467,7 +471,7 @@ def cmd_extract_states(args: argparse.Namespace) -> int:
         return 1
 
     ir_data = _load_ir(str(ir_path))
-    tla_content = tla_path.read_text()
+    tla_content = safe_read_text(tla_path)
 
     if getattr(args, "legacy", False):
         from tracefix.pipeline.pipeline.tla_parser import parse_translated_tla
@@ -611,8 +615,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         from tracefix.pipeline.pipeline.pluscal_compiler import translate_pluscal
         from tracefix.pipeline.pipeline.tlc_runner import run_tlc
 
-        tla = (example / "Protocol.tla").read_text()
-        cfg = (example / "Protocol.cfg").read_text()
+        tla = safe_read_text(example / "Protocol.tla")
+        cfg = safe_read_text(example / "Protocol.cfg")
         pcal = translate_pluscal(tla, cfg, java_path=java, tla2tools_jar=jar)
         if not pcal.success:
             print(f"\n  [FAIL] smoke test  PlusCal translation failed: {pcal.error_message[:200]}")
@@ -696,17 +700,17 @@ def cmd_guide(args: argparse.Namespace) -> int:
         if not f.exists():
             print(f"guide section file missing: {f}", file=sys.stderr)
             return 1
-        sys.stdout.write(_strip_frontmatter(f.read_text()) if f.name == "SKILL.md"
-                         else f.read_text())
+        text = safe_read_text(f)
+        sys.stdout.write(_strip_frontmatter(text) if f.name == "SKILL.md" else text)
         return 0
 
     # Default: the design+verify workflow + its references, inlined in one shot.
-    out = [_strip_frontmatter((root / _SKILL_DESIGN / "SKILL.md").read_text())]
+    out = [_strip_frontmatter(safe_read_text(root / _SKILL_DESIGN / "SKILL.md"))]
     for name in ("schema", "pluscal", "plan"):
         skill_dir, rel = _GUIDE_SECTIONS[name]
         f = root / skill_dir / rel
         if f.exists():
-            out.append(f"\n\n===== reference: {name} =====\n\n{f.read_text()}")
+            out.append(f"\n\n===== reference: {name} =====\n\n{safe_read_text(f)}")
     sys.stdout.write("\n".join(out) + "\n")
     return 0
 

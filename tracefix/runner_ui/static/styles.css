@@ -337,20 +337,35 @@ textarea:focus {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
+  grid-template-columns: 140px minmax(0, 1fr) 190px;
   gap: 1px;
   overflow: hidden;
   margin-bottom: 16px;
   background: var(--line);
 }
 
-.metric-strip > div {
+.metric-strip > div,
+.usage-card {
   min-height: 78px;
   padding: 13px;
   background: var(--panel);
 }
 
-.metric-strip span {
+.usage-card {
+  display: block;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  text-align: left;
+}
+
+.usage-card:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -4px;
+}
+
+.metric-strip span,
+.usage-card span {
   display: block;
   color: var(--muted);
   font-size: 12px;
@@ -358,7 +373,8 @@ textarea:focus {
   text-transform: uppercase;
 }
 
-.metric-strip strong {
+.metric-strip strong,
+.usage-card strong {
   display: block;
   margin-top: 5px;
   color: var(--success);
@@ -366,13 +382,71 @@ textarea:focus {
   line-height: 1;
 }
 
-.metric-strip p {
+.metric-strip p,
+.usage-card p,
+.usage-card small {
   margin: 6px 0 0;
   overflow: hidden;
   color: var(--ink);
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.usage-card small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.usage-details {
+  margin: -4px 0 16px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.usage-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.usage-detail-grid > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.usage-detail-grid h4 {
+  margin: 0 0 10px;
+  color: #dce7e1;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.usage-detail-grid dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 10px;
+  margin: 0;
+}
+
+.usage-detail-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.usage-detail-grid dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .visual-grid {
@@ -577,6 +651,10 @@ textarea:focus {
   .topology-graph {
     height: 420px;
   }
+
+  .usage-detail-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
 }
 
 @media (max-width: 820px) {
@@ -594,6 +672,10 @@ textarea:focus {
 
   .metric-strip .wide {
     grid-column: 1 / -1;
+  }
+
+  .usage-detail-grid {
+    grid-template-columns: 1fr;
   }
 
   .run-header,

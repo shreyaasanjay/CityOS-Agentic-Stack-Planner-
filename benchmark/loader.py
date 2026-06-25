@@ -11,6 +11,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from tracefix.textio import safe_read_json, safe_read_text
+
 _BASE_DIR = Path(__file__).resolve().parent
 _TASKS_DIR = _BASE_DIR / "descriptions"
 _ENV_DIR = _BASE_DIR / "environments"
@@ -74,7 +76,7 @@ def load_task(task_id: str) -> TaskEntry:
         raise ValueError(f"Unknown task_id '{task_id}'. Available: {available}")
 
     desc_path = task_dir / "description.md"
-    description = desc_path.read_text(encoding="utf-8")
+    description = safe_read_text(desc_path)
 
     # Extract task name from first heading
     title_match = re.search(r"^#\s+(.+)$", description, re.MULTILINE)
@@ -89,8 +91,7 @@ def load_task(task_id: str) -> TaskEntry:
     checklist_path = _ENV_DIR / task_id / "checklist.json"
     checklist: list[dict] = []
     if checklist_path.exists():
-        with open(checklist_path, encoding="utf-8") as f:
-            checklist = json.load(f)
+        checklist = safe_read_json(checklist_path, [])
 
     return TaskEntry(
         task_id=task_id,

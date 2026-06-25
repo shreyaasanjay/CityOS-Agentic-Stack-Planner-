@@ -9,6 +9,8 @@ const state = {
   tools: 0,
   artifacts: {},
   activeView: "log",
+  usage: null,
+  usageDetailsOpen: false,
 };
 
 const els = {
@@ -51,6 +53,25 @@ const els = {
   toolCount: document.querySelector("#toolCount"),
   artifactCount: document.querySelector("#artifactCount"),
   workspacePath: document.querySelector("#workspacePathDisplay"),
+  llmUsageCard: document.querySelector("#llmUsageCard"),
+  llmUsageDetails: document.querySelector("#llmUsageDetails"),
+  llmCost: document.querySelector("#llmCost"),
+  llmTokenSummary: document.querySelector("#llmTokenSummary"),
+  llmModelName: document.querySelector("#llmModelName"),
+  llmUsageSource: document.querySelector("#llmUsageSource"),
+  usageInputTokens: document.querySelector("#usageInputTokens"),
+  usageOutputTokens: document.querySelector("#usageOutputTokens"),
+  usageTotalTokens: document.querySelector("#usageTotalTokens"),
+  usageCost: document.querySelector("#usageCost"),
+  usageDesignTokens: document.querySelector("#usageDesignTokens"),
+  usageDesignCost: document.querySelector("#usageDesignCost"),
+  usageRepairTokens: document.querySelector("#usageRepairTokens"),
+  usageRepairCost: document.querySelector("#usageRepairCost"),
+  usageVerificationTokens: document.querySelector("#usageVerificationTokens"),
+  usageVerificationCost: document.querySelector("#usageVerificationCost"),
+  usageTotalRuns: document.querySelector("#usageTotalRuns"),
+  usageSessionTokens: document.querySelector("#usageSessionTokens"),
+  usageSessionCost: document.querySelector("#usageSessionCost"),
   timeline: document.querySelector("#timeline"),
   graph: document.querySelector("#topologyGraph"),
   graphStatus: document.querySelector("#graphStatus"),
@@ -190,6 +211,12 @@ function bindEvents() {
     await openArtifact("spec_dir", "Spec folder opened");
   });
 
+  els.llmUsageCard.addEventListener("click", () => {
+    state.usageDetailsOpen = !state.usageDetailsOpen;
+    els.llmUsageCard.setAttribute("aria-expanded", String(state.usageDetailsOpen));
+    els.llmUsageDetails.classList.toggle("hidden", !state.usageDetailsOpen);
+  });
+
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       state.activeView = button.dataset.view;
@@ -286,6 +313,10 @@ async function startRun() {
       state.artifacts = run.artifacts;
       renderArtifacts();
     }
+    if (run.usage) {
+      state.usage = run.usage;
+      renderUsage();
+    }
     els.startRun.disabled = true;
     els.stopRun.disabled = false;
     if (state.runMode === "runtime") {
@@ -328,14 +359,19 @@ function resetRunUi() {
   state.turns = 0;
   state.tools = 0;
   state.artifacts = {};
+  state.usage = null;
+  state.usageDetailsOpen = false;
   els.timeline.innerHTML = "";
   els.outputView.textContent = "";
   els.workspacePath.textContent = "Waiting for intermediary plan";
   if (els.turnCount) els.turnCount.textContent = "0";
   if (els.toolCount) els.toolCount.textContent = "0";
   els.artifactCount.textContent = "0";
+  els.llmUsageDetails.classList.add("hidden");
+  els.llmUsageCard.setAttribute("aria-expanded", "false");
   els.graph.innerHTML = "";
   els.graphStatus.textContent = "Waiting for IR";
+  renderUsage();
 }
 
 function connectEvents(runId) {
@@ -381,6 +417,11 @@ function handleRunEvent(event) {
     renderArtifacts();
   }
 
+  if (event.type === "usage" && event.usage) {
+    state.usage = event.usage;
+    renderUsage();
+  }
+
   if (event.type === "status") {
     setStatus(event.status);
   }
@@ -422,10 +463,12 @@ async function refreshRun() {
   if (!state.runId) return;
   const run = await getJson(`/api/runs/${state.runId}`);
   state.artifacts = run.artifacts || {};
+  state.usage = run.usage || state.usage;
   if (run.artifacts?.workspace) {
     els.workspacePath.textContent = run.artifacts.workspace;
   }
   renderArtifacts();
+  renderUsage();
   renderOutput();
 }
 
@@ -433,6 +476,39 @@ function renderArtifacts() {
   const files = state.artifacts.files || [];
   els.artifactCount.textContent = String(files.length);
   renderGraph(state.artifacts.ir);
+}
+
+function renderUsage() {
+  const usage = state.usage || {};
+  const totalTokens = Number(usage.total_tokens || 0);
+  const cost = Number(usage.estimated_cost_usd || 0);
+  const estimated = usage.estimated !== false;
+  const source = usage.source || "no_usage_metadata";
+  els.llmCost.textContent = `${estimated ? "~" : ""}${formatMoney(cost)}`;
+  els.llmTokenSummary.textContent = `${formatCompactTokens(totalTokens)} tokens`;
+  els.llmModelName.textContent = usage.model || "No model";
+  els.llmUsageSource.textContent = sourceLabel(source, estimated, usage.cost_known);
+
+  els.usageInputTokens.textContent = formatNumber(usage.input_tokens || 0);
+  els.usageOutputTokens.textContent = formatNumber(usage.output_tokens || 0);
+  els.usageTotalTokens.textContent = formatNumber(totalTokens);
+  els.usageCost.textContent = `${estimated ? "~" : ""}${formatMoney(cost)}`;
+
+  const phases = usage.phases || {};
+  renderPhaseUsage("Design", phases.design, els.usageDesignTokens, els.usageDesignCost);
+  renderPhaseUsage("Repair", phases.repair, els.usageRepairTokens, els.usageRepairCost);
+  renderPhaseUsage("Verification", phases.verification, els.usageVerificationTokens, els.usageVerificationCost);
+
+  const totals = usage.session_totals || {};
+  els.usageTotalRuns.textContent = formatNumber(totals.total_runs || 0);
+  els.usageSessionTokens.textContent = formatNumber(totals.total_tokens || 0);
+  els.usageSessionCost.textContent = formatMoney(totals.total_cost_usd || 0);
+}
+
+function renderPhaseUsage(_label, phase, tokenEl, costEl) {
+  const data = phase || {};
+  tokenEl.textContent = formatNumber(data.total_tokens || 0);
+  costEl.textContent = `${data.cost_known === false ? "~" : ""}${formatMoney(data.estimated_cost_usd || 0)}`;
 }
 
 function renderOutput() {
@@ -722,6 +798,29 @@ function compact(id) {
   return text.length > 17 ? `${text.slice(0, 16)}...` : text;
 }
 
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function formatCompactTokens(value) {
+  const tokens = Number(value || 0);
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(tokens >= 10_000_000 ? 0 : 1)}M`;
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(tokens >= 100_000 ? 0 : 1)}K`;
+  return String(tokens);
+}
+
+function formatMoney(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function sourceLabel(source, estimated, costKnown) {
+  if (source === "session_json") return estimated ? "Session metadata, estimated cost" : "Session metadata";
+  if (source === "json_usage_event") return estimated ? "API usage metadata, estimated cost" : "API usage metadata";
+  if (source?.startsWith("stdout")) return "Parsed from run output, estimated";
+  if (costKnown === false) return "No pricing for this model yet";
+  return estimated ? "Waiting for usage metadata" : "Usage metadata";
+}
+
 function escapeHtml(text) {
   return String(text)
     .replaceAll("&", "&amp;")
@@ -737,6 +836,7 @@ async function init() {
   updateModelSuggestions();
   updateModeFields();
   await loadTasks();
+  renderUsage();
   renderOutput();
 }
 

@@ -25,14 +25,15 @@ from tracefix.runtime.monitoring.coord import CoordinationContext, COORD_TOOL_SC
 from tracefix.runtime.monitoring.orchestrator import RunResult, _COORD_FOOTER
 from tracefix.runtime.baselines.null_monitor.null_monitor import NullMonitor
 from tracefix.runtime.baselines.null_monitor.prompt_gen import generate_b2_prompt
+from tracefix.textio import safe_read_json, safe_read_text
 
 
 _ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load_json(path: Path) -> dict:
-    with open(path) as f:
-        return json.load(f)
+    data = safe_read_json(path, {})
+    return data if isinstance(data, dict) else {}
 
 
 def _load_task_desc(task_id: str) -> str:
@@ -40,7 +41,7 @@ def _load_task_desc(task_id: str) -> str:
     task_dir = _ROOT / "benchmark" / "descriptions" / task_id
     desc_path = task_dir / "description.md"
     if desc_path.exists():
-        return desc_path.read_text()
+        return safe_read_text(desc_path)
     raise FileNotFoundError(f"No description.md found for task '{task_id}'")
 
 
@@ -189,7 +190,7 @@ class RuntimeBase2:
                 if not prompt_path.exists():
                     raise FileNotFoundError(
                         f"Missing prompt: {prompt_path}")
-                prompt = prompt_path.read_text() + _COORD_FOOTER
+                prompt = safe_read_text(prompt_path) + _COORD_FOOTER
             else:
                 prompt = generate_b2_prompt(agent_id, task_desc, ir) + _COORD_FOOTER
 

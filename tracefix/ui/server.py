@@ -17,6 +17,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+from tracefix.textio import safe_read_json, safe_read_text
+
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -29,17 +31,11 @@ def _repo_root() -> Path:
 
 
 def _read_json(path: Path) -> Any | None:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+    return safe_read_json(path)
 
 
 def _read_text(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError:
-        return ""
+    return safe_read_text(path)
 
 
 def _task_title(task_id: str, description: str) -> str:

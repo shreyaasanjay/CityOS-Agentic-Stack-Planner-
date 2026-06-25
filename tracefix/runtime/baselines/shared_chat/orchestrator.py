@@ -21,14 +21,15 @@ from tracefix.runtime.baselines.shared_chat.chat_coord import (
     SharedChat, ChatCoordinationContext, CHAT_TOOL_SCHEMAS, CHAT_FOOTER,
 )
 from tracefix.runtime.baselines.shared_chat.prompt_gen import generate_b1_prompt
+from tracefix.textio import safe_read_json, safe_read_text
 
 
 _ROOT = Path(__file__).resolve().parent.parent
 
 
 def _load_json(path: Path) -> dict:
-    with open(path) as f:
-        return json.load(f)
+    data = safe_read_json(path, {})
+    return data if isinstance(data, dict) else {}
 
 
 def _load_task_desc(task_id: str) -> str:
@@ -36,7 +37,7 @@ def _load_task_desc(task_id: str) -> str:
     task_dir = _ROOT / "benchmark" / "descriptions" / task_id
     desc_path = task_dir / "description.md"
     if desc_path.exists():
-        return desc_path.read_text()
+        return safe_read_text(desc_path)
     raise FileNotFoundError(f"No description.md found for task '{task_id}'")
 
 

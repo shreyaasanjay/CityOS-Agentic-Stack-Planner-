@@ -23,6 +23,8 @@ from __future__ import annotations
 import json
 import re
 
+from tracefix.textio import safe_read_json
+
 #: Built-in tool permissions for a tracefix peer agent: deny everything, then allow
 #: the data-plane file/shell tools AND the coordination MCP tools. ``task`` (subagent
 #: fan-out) is denied — a tracefix agent is one peer and keeps coordination in its
@@ -160,7 +162,7 @@ def domain_wiring(workspace, agent_id: str, *, domain_cmd: list[str] | None = No
     tools_path = ws / "tools.json"
     if not tools_path.exists():
         return None
-    tools = json.loads(tools_path.read_text())
+    tools = safe_read_json(tools_path, [])
 
     owns_local = any(
         (fn := s.get("function", s)).get("x-impl") == "local"
@@ -181,7 +183,8 @@ def domain_wiring(workspace, agent_id: str, *, domain_cmd: list[str] | None = No
     external: dict = {}
     mcp_path = ws / "mcp.json"
     if mcp_path.exists():
-        servers = json.loads(mcp_path.read_text()).get("mcpServers", {})
+        mcp_data = safe_read_json(mcp_path, {})
+        servers = mcp_data.get("mcpServers", {}) if isinstance(mcp_data, dict) else {}
         for name, server in servers.items():
             agents = server.get("agent_ids") or []
             if agents and agent_id not in agents:

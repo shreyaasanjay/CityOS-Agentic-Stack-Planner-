@@ -18,6 +18,7 @@ from tracefix.runtime.monitoring.coord import CoordinationContext, COORD_TOOL_SC
 from tracefix.runtime.workspace_layout import spec_path
 from tracefix.runtime.monitoring.agent_runner import AgentRunner, AgentConfig, AgentResult
 from tracefix.runtime.monitoring.state_tracker import StateTracker
+from tracefix.textio import safe_read_json, safe_read_text
 
 
 @dataclass
@@ -61,8 +62,8 @@ You MUST call signal_done() — do NOT just stop calling tools.
 
 
 def _load_json(path: Path) -> dict:
-    with open(path) as f:
-        return json.load(f)
+    data = safe_read_json(path, {})
+    return data if isinstance(data, dict) else {}
 
 
 class RuntimeB:
@@ -107,7 +108,7 @@ class RuntimeB:
         tracker = None
         states_path = spec_path(self.workspace, "states.json")
         if states_path.exists():
-            states_data = json.loads(states_path.read_text())
+            states_data = safe_read_json(states_path, {})
             tracker = StateTracker(states_data)
             if self.verbose:
                 print(f"[RuntimeB] State tracker loaded: "
@@ -202,7 +203,7 @@ class RuntimeB:
             if not prompt_path.exists():
                 raise FileNotFoundError(
                     f"Missing prompt: {prompt_path}")
-            prompt = prompt_path.read_text() + _COORD_FOOTER
+            prompt = safe_read_text(prompt_path) + _COORD_FOOTER
 
             # Combine domain tools + coordination tools
             domain_schemas = []

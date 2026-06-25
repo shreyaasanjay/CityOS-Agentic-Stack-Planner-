@@ -8,6 +8,9 @@ from pathlib import Path
 from tracefix.runtime.opencode_adapter.config_gen import build_design_config
 from tracefix.runtime.opencode_adapter.design import (
     _channel_diagnostics,
+    _ensure_plan_before_prompts,
+    _normalize_legacy_endeither_syntax,
+    _runtime_prompts_current,
     _run_tlc_and_extract,
     _scaffold_valid_ir,
     build_designer_prompt,
@@ -16,6 +19,7 @@ from tracefix.runtime.opencode_adapter.design import (
     ir_repair_kickoff,
     judge,
     pluscal_completion_kickoff,
+    prompt_generation_kickoff,
     repo_root,
     slugify,
     validate_design_ir,
@@ -72,6 +76,67 @@ def test_pluscal_completion_kickoff_continues_after_scaffold():
     assert "Run `tla-verify-pluscal verify`" in k
     assert "prompts/runtime_b/" in k
     assert "Do not redesign the IR" in k
+    assert "Never write `endeither`" in k
+    assert "spec/cityos_module_plan.json" in k
+    assert "do not generate prompts from raw IR alone" in k
+
+
+def test_prompt_generation_kickoff_requires_verified_plan():
+    k = prompt_generation_kickoff("workspace/my_task")
+    assert "spec/cityos_module_plan.json" in k
+    assert "Protocol_translated.tla" in k
+    assert "prompts/runtime_b/" in k
+    assert "never from raw IR alone" in k
+    assert "Do not edit `spec/ir.json`" in k
+
+
+def test_normalize_legacy_endeither_syntax():
+    tla = "\n".join([
+        "choice:",
+        "  either",
+        "    \\* ok",
+        "    { assert msg = \"ok\"; goto done; }",
+        "  or",
+        "    { assert msg = \"fail\";",
+        "      goto retry; }",
+        "  endeither",
+        "done:",
+        "  skip;",
+    ])
+
+    fixed, diagnostics = _normalize_legacy_endeither_syntax(tla)
+    assert "endeither" not in fixed
+    assert "  either {" in fixed
+    assert "  } or {" in fixed
+    assert "  };" in fixed
+    assert "assert msg = \"ok\"; goto done;" in fixed
+    assert "goto retry;" in fixed
+    assert diagnostics
+
+
+def test_prompt_gate_removes_prompts_created_before_plan(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    pdir = ws / "prompts" / "runtime_b"
+    spec.mkdir(parents=True)
+    pdir.mkdir(parents=True)
+    (spec / "Protocol.tla").write_text("---- MODULE Protocol ----\n====\n")
+    (spec / "Protocol_translated.tla").write_text("---- MODULE Protocol ----\n====\n")
+    (spec / "states.json").write_text("{}")
+    (spec / "summary.json").write_text(json.dumps({"tlc_passed": True}))
+    prompt = pdir / "A.md"
+    prompt.write_text("# stale")
+    plan = spec / "cityos_module_plan.json"
+    plan.write_text("{}")
+    old = plan.stat().st_mtime - 10
+    import os
+    os.utime(prompt, (old, old))
+
+    diagnostics = _ensure_plan_before_prompts(ws)
+
+    assert any("removed 1 stale runtime prompt" in item for item in diagnostics)
+    assert not prompt.exists()
+    assert not _runtime_prompts_current(ws)
 
 
 # --- design config (no MCP, headless-safe permissions) ------------------------

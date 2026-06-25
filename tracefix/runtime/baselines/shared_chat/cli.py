@@ -10,6 +10,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from tracefix.textio import safe_read_json
+
 
 def _print_trace(result):
     """Print per-agent tool call trace."""
@@ -195,8 +197,7 @@ def _save_visualization(rt, result, output_dir: Path, *, open_browser: bool = Fa
     from tracefix.runtime.baselines.shared_chat.orchestrator import RuntimeBase1
 
     ir_path = rt.workspace / "ir.json"
-    with open(ir_path) as f:
-        ir = json.load(f)
+    ir = safe_read_json(ir_path, {})
 
     # Use star topology (group_chat hub) instead of protocol IR — tracefix.runtime.baselines.shared_chat
     # agents communicate via group chat only, and the star IR's "group_chat"

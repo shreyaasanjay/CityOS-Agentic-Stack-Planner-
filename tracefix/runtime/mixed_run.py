@@ -36,10 +36,12 @@ from tracefix.runtime.workspace_layout import (
 )
 from tracefix.runtime.opencode_adapter.orchestrator import OpencodeOrchestrator
 from tracefix.runtime.sdk_adapter.orchestrator import SdkOrchestrator
+from tracefix.textio import safe_read_json
 
 
 def _load_json(path: Path) -> dict:
-    return json.loads(Path(path).read_text())
+    data = safe_read_json(path, {})
+    return data if isinstance(data, dict) else {}
 
 
 def _split(csv: str | None) -> list[str]:

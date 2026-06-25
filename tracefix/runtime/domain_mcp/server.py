@@ -20,6 +20,7 @@ import os
 import sys
 from pathlib import Path
 
+from tracefix.textio import safe_read_json
 from tracefix.runtime.domain_mcp.impl_loader import load_impls
 
 _MCP_HINT = (
@@ -43,7 +44,7 @@ def local_tool_schemas(tools_path: str | Path, agent_id: str) -> list[dict]:
 
     Filters by ``agent_ids`` (empty/missing → available to all) and by
     ``x-impl == 'local'`` (externals are served by their own MCP server)."""
-    tools = json.loads(Path(tools_path).read_text())
+    tools = safe_read_json(Path(tools_path), [])
     out = []
     for schema in tools:
         fn = schema.get("function", schema)

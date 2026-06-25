@@ -4,13 +4,14 @@ Validates agents, resources, and channels only. Agent behavior is written
 as PlusCal process bodies, not JSON states.
 """
 
-import json
 from copy import deepcopy
 from dataclasses import dataclass, field
 from collections.abc import Iterable
 from pathlib import Path
 
 import jsonschema
+
+from tracefix.textio import safe_read_json
 
 
 @dataclass
@@ -26,8 +27,7 @@ _SCHEMA = None
 def _get_schema() -> dict:
     global _SCHEMA
     if _SCHEMA is None:
-        with open(_SCHEMA_PATH) as f:
-            _SCHEMA = json.load(f)
+        _SCHEMA = safe_read_json(_SCHEMA_PATH, {})
     return _SCHEMA
 
 

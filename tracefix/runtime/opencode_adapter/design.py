@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from tracefix.textio import safe_read_json, safe_read_text
 from tracefix.runtime.opencode_adapter.config_gen import build_design_config
 from tracefix.runtime.opencode_adapter.driver import run_opencode_agent
 
@@ -91,6 +92,9 @@ below with these adjustments:
   `tla-verify-pluscal` CLI via bash (it is on PATH).
 - If verification still fails after 5 attempts, record `"tlc_passed": false` in
   `summary.json`, write an honest failure report, and stop — never fake a pass.
+- After TLC passes and `states.json` is extracted, export/read
+  `spec/cityos_module_plan.json` before generating Runtime B prompts. Runtime
+  prompts must be downstream of the verified module plan, never raw IR alone.
 
 ---
 
@@ -99,7 +103,7 @@ below with these adjustments:
 
 def build_designer_prompt(root: Path) -> str:
     """The designer agent's system prompt: headless preamble + the skill itself."""
-    skill_text = (root / _SKILL).read_text(encoding="utf-8")
+    skill_text = safe_read_text(root / _SKILL)
     # Strip the YAML frontmatter (invocation metadata, meaningless to opencode).
     if skill_text.startswith("---"):
         end = skill_text.find("\n---", 3)
@@ -170,12 +174,39 @@ def pluscal_completion_kickoff(workspace_rel: str) -> str:
         "- Read `spec/Protocol.tla` and the PlusCal rules before editing.\n"
         "- Replace the scaffolded process-body placeholders with faithful "
         "PlusCal coordination logic for every agent.\n"
+        "- Use brace-form choices only: `either { ... } or { ... };`. Never "
+        "write `endeither`.\n"
         "- Run `tla-verify-pluscal verify` on the spec directory.\n"
         "- If TLC fails, repair `Protocol.tla` and verify again, up to the "
         "workflow's repair limit.\n"
-        "- After TLC passes, extract states and follow the prompt-generation "
-        "phase for this same workspace.\n"
+        "- After TLC passes, extract states, export/read "
+        "`spec/cityos_module_plan.json`, and only then follow the "
+        "prompt-generation phase for this same workspace.\n"
+        "- Runtime prompts must derive from the verified protocol, "
+        "`states.json`, and `spec/cityos_module_plan.json`; do not generate "
+        "prompts from raw IR alone.\n"
         "- Finish only when `prompts/runtime_b/` contains one prompt per agent."
+    )
+
+
+def prompt_generation_kickoff(workspace_rel: str) -> str:
+    return (
+        f"Generate Runtime B prompts for `{workspace_rel}/` only.\n\n"
+        "TraceFix has already completed protocol verification. Required inputs "
+        "are present and must be read before writing prompts:\n"
+        "- `spec/ir.json`\n"
+        "- `spec/Protocol.tla`\n"
+        "- `spec/Protocol_translated.tla`\n"
+        "- `spec/states.json`\n"
+        "- `spec/summary.json`\n"
+        "- `spec/cityos_module_plan.json`\n\n"
+        f"Read `{_PROMPT_GEN_SKILL}` and follow it directly. Do not edit "
+        "`spec/ir.json`, `spec/Protocol.tla`, `spec/Protocol.cfg`, "
+        "`spec/Protocol_translated.tla`, `spec/states.json`, "
+        "`spec/summary.json`, or `spec/cityos_module_plan.json`. "
+        "Write one prompt per agent to `prompts/runtime_b/`. Prompts must "
+        "derive from the verified protocol, `states.json`, and "
+        "`spec/cityos_module_plan.json`, never from raw IR alone."
     )
 
 
@@ -206,13 +237,13 @@ def inspect_workspace(ws: Path) -> dict:
     ir_path = spec / "ir.json"
     if ir_path.exists():
         try:
-            out["ir"] = json.loads(ir_path.read_text(encoding="utf-8"))
+            out["ir"] = safe_read_json(ir_path)
         except (json.JSONDecodeError, OSError):
             pass
     summary = spec / "summary.json"
     if summary.exists():
         try:
-            s = json.loads(summary.read_text(encoding="utf-8"))
+            s = safe_read_json(summary, {})
             out["tlc_passed"] = s.get("tlc_passed")
             out["repairs"] = s.get("total_repairs")
         except (json.JSONDecodeError, OSError):
@@ -248,7 +279,7 @@ def _spec_dir(ws: Path) -> Path:
 def _load_ir(ws: Path) -> dict | None:
     ir_path = _spec_dir(ws) / "ir.json"
     try:
-        return json.loads(ir_path.read_text(encoding="utf-8"))
+        return safe_read_json(ir_path)
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -295,6 +326,148 @@ def _channel_diagnostics(before: dict | None, after: dict | None) -> list[str]:
     return diagnostics
 
 
+def _normalize_legacy_endeither_syntax(tla_content: str) -> tuple[str, list[str]]:
+    """Convert simple Pascal-style `either/or/endeither` to PlusCal brace form."""
+    lines = tla_content.splitlines()
+    out: list[str] = []
+    diagnostics: list[str] = []
+    legacy_depth = 0
+
+    for line_num, line in enumerate(lines, start=1):
+        indent = line[: len(line) - len(line.lstrip())]
+        stripped = line.strip()
+
+        if stripped == "either":
+            out.append(f"{indent}either {{")
+            legacy_depth += 1
+            diagnostics.append(f"normalized line {line_num}: either -> either {{")
+            continue
+        if legacy_depth > 0 and stripped == "or":
+            out.append(f"{indent}}} or {{")
+            diagnostics.append(f"normalized line {line_num}: or -> }} or {{")
+            continue
+        if legacy_depth > 0 and stripped == "endeither":
+            out.append(f"{indent}}};")
+            legacy_depth -= 1
+            diagnostics.append(f"normalized line {line_num}: endeither -> }};")
+            continue
+
+        if legacy_depth > 0 and stripped.startswith("{"):
+            body = stripped[1:].lstrip()
+            if body.endswith("}"):
+                body = body[:-1].rstrip()
+            if body:
+                out.append(f"{indent}{body}")
+            diagnostics.append(f"normalized line {line_num}: removed legacy branch opening brace")
+            continue
+
+        if legacy_depth > 0 and stripped.endswith("}"):
+            body = stripped[:-1].rstrip()
+            if body:
+                out.append(f"{indent}{body}")
+            diagnostics.append(f"normalized line {line_num}: removed legacy branch closing brace")
+            continue
+
+        out.append(line)
+
+    if legacy_depth != 0:
+        return tla_content, [
+            "legacy either normalization skipped: unbalanced either/endeither blocks"
+        ]
+
+    normalized = "\n".join(out)
+    if tla_content.endswith("\n"):
+        normalized += "\n"
+    if normalized == tla_content:
+        return tla_content, []
+    return normalized, diagnostics
+
+
+def _verified_protocol_ready(ws: Path) -> bool:
+    spec = _spec_dir(ws)
+    try:
+        summary = safe_read_json(spec / "summary.json", {})
+    except (json.JSONDecodeError, OSError):
+        summary = {}
+    return (
+        summary.get("tlc_passed") is True
+        and (spec / "states.json").is_file()
+        and (spec / "Protocol.tla").is_file()
+        and (spec / "Protocol_translated.tla").is_file()
+    )
+
+
+def _ensure_cityos_plan(ws: Path) -> list[str]:
+    if not _verified_protocol_ready(ws):
+        return [
+            "CityOS plan export skipped: verified protocol artifacts are not complete"
+        ]
+
+    plan_path = _spec_dir(ws) / "cityos_module_plan.json"
+    if plan_path.is_file():
+        return [f"CityOS module plan already present: {plan_path}"]
+
+    from tracefix.runtime.cityos_plan import export_cityos_module_plan
+
+    result = export_cityos_module_plan(ws)
+    return [f"CityOS module plan exported: {result.plan_path}"]
+
+
+def _runtime_prompt_files(ws: Path) -> list[Path]:
+    pdir = ws / "prompts" / "runtime_b"
+    if not pdir.is_dir():
+        return []
+    return sorted(p for p in pdir.glob("*.md") if p.is_file())
+
+
+def _remove_runtime_prompts(ws: Path) -> list[str]:
+    prompts = _runtime_prompt_files(ws)
+    for prompt in prompts:
+        prompt.unlink()
+    if not prompts:
+        return []
+    return [
+        f"Prompt gate: removed {len(prompts)} stale runtime prompt(s) "
+        "generated before the verified CityOS module plan"
+    ]
+
+
+def _runtime_prompts_current(ws: Path) -> bool:
+    plan_path = _spec_dir(ws) / "cityos_module_plan.json"
+    if not plan_path.is_file():
+        return False
+    prompts = _runtime_prompt_files(ws)
+    if not prompts:
+        return False
+    plan_mtime = plan_path.stat().st_mtime
+    return all(prompt.stat().st_mtime >= plan_mtime for prompt in prompts)
+
+
+def _ensure_plan_before_prompts(ws: Path) -> list[str]:
+    diagnostics: list[str] = []
+    plan_path = _spec_dir(ws) / "cityos_module_plan.json"
+    if not _verified_protocol_ready(ws):
+        return ["Prompt gate skipped: protocol verification is not complete"]
+
+    if not plan_path.is_file():
+        diagnostics.extend(_remove_runtime_prompts(ws))
+        diagnostics.extend(_ensure_cityos_plan(ws))
+        return diagnostics
+
+    stale_prompts = [
+        prompt for prompt in _runtime_prompt_files(ws)
+        if prompt.stat().st_mtime < plan_path.stat().st_mtime
+    ]
+    if stale_prompts:
+        diagnostics.extend(_remove_runtime_prompts(ws))
+    else:
+        diagnostics.append(
+            "Prompt gate: runtime prompts are current with the verified "
+            "CityOS module plan"
+        )
+    return diagnostics
+
+
 def validate_design_ir(ws: Path) -> tuple[bool, list[str], list[str]]:
     """Normalize and validate spec/ir.json for design postflight."""
     from tracefix.pipeline.pipeline.validator import (
@@ -308,10 +481,9 @@ def validate_design_ir(ws: Path) -> tuple[bool, list[str], list[str]]:
     if not ir_path.exists():
         return False, ["missing spec/ir.json"], diagnostics
 
-    try:
-        original = json.loads(ir_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        return False, [f"invalid spec/ir.json: {exc}"], diagnostics
+    original = safe_read_json(ir_path)
+    if not isinstance(original, dict):
+        return False, ["spec/ir.json must decode to a JSON object."], diagnostics
 
     normalized, normalize_diagnostics = normalize_ir_with_diagnostics(original)
     if normalized != original:
@@ -338,7 +510,7 @@ def _scaffold_valid_ir(ws: Path) -> list[str]:
 
     spec = _spec_dir(ws)
     ir_path = spec / "ir.json"
-    ir_data = normalize_ir(json.loads(ir_path.read_text(encoding="utf-8")))
+    ir_data = normalize_ir(safe_read_json(ir_path, {}))
     result = validate_ir(ir_data)
     if not result.valid:
         errors = "; ".join(result.errors)
@@ -408,14 +580,35 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
         )
         return diagnostics
 
-    tla_content = tla_path.read_text(encoding="utf-8")
-    cfg_content = cfg_path.read_text(encoding="utf-8")
+    tla_content = safe_read_text(tla_path)
+    cfg_content = safe_read_text(cfg_path)
     java = resolve_java()
     jar = resolve_jar()
 
     # Step 1: PlusCal to TLA+ translation
     diagnostics.append("TLC fallback: translating PlusCal to TLA+")
     pcal_result = translate_pluscal(tla_content, cfg_content, java_path=java, tla2tools_jar=jar)
+
+    if not pcal_result.success:
+        repaired_content, repair_diagnostics = _normalize_legacy_endeither_syntax(tla_content)
+        if repair_diagnostics and repaired_content != tla_content:
+            diagnostics.append(
+                "TLC fallback: PlusCal translation failed; applying one syntax-only "
+                "repair for legacy either/or/endeither form"
+            )
+            diagnostics.extend(f"TLC fallback: {item}" for item in repair_diagnostics)
+            tla_path.write_text(repaired_content, encoding="utf-8")
+            tla_content = repaired_content
+            pcal_result = translate_pluscal(
+                tla_content,
+                cfg_content,
+                java_path=java,
+                tla2tools_jar=jar,
+            )
+            if pcal_result.success:
+                diagnostics.append(
+                    "TLC fallback: PlusCal translation succeeded after syntax repair"
+                )
 
     if not pcal_result.success:
         diagnostics.append(
@@ -460,7 +653,7 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
     try:
         ir_data: dict = {}
         if ir_path.exists():
-            ir_data = json.loads(ir_path.read_text(encoding="utf-8"))
+            ir_data = safe_read_json(ir_path, {})
         parse_result = parse_pluscal(pcal_result.translated_tla, ir_data)
     except Exception as exc:  # noqa: BLE001
         diagnostics.append(f"TLC fallback: state extraction failed: {exc}")
@@ -493,6 +686,7 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
         f"TLC fallback: extracted {len(parse_result.states)} states; "
         "wrote states.json and summary.json(tlc_passed=true)"
     )
+    diagnostics.extend(_ensure_cityos_plan(ws))
     return diagnostics
 
 
@@ -524,7 +718,7 @@ def classify_design_artifacts(ws: Path, *, timed_out: bool = False) -> tuple[str
     diagnostics.append("PlusCal scaffold artifact present")
     if summary_path.exists():
         try:
-            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            summary = safe_read_json(summary_path, {})
         except (json.JSONDecodeError, OSError):
             summary = {}
         if summary.get("tlc_passed") is True and states_path.exists():
@@ -621,7 +815,7 @@ class DesignWatcher:
         ir_path = spec / "ir.json"
         if ir_path.exists():
             try:
-                raw = ir_path.read_text(encoding="utf-8")
+                raw = safe_read_text(ir_path, default="")
             except OSError:
                 raw = None
             if raw and raw != self._ir_snapshot:
@@ -642,7 +836,7 @@ class DesignWatcher:
         summary = spec / "summary.json"
         if summary.exists():
             try:
-                raw = summary.read_text(encoding="utf-8")
+                raw = safe_read_text(summary, default="")
             except OSError:
                 raw = None
             if raw and raw != self._summary_snapshot:
@@ -778,6 +972,7 @@ async def run_design(
     diagnostics = [*run_diagnostics, *diagnostics]
     repair_disposition = None
     continuation_disposition = None
+    prompt_disposition = None
     if (
         status == "ir_incomplete"
         and not timed_out
@@ -886,6 +1081,26 @@ async def run_design(
                         + post_repair_continuation.get("events", 0)
                     )
 
+    if _verified_protocol_ready(ws) and not timed_out:
+        diagnostics.append("Prompt gate started")
+        diagnostics.extend(_ensure_plan_before_prompts(ws))
+        if not _runtime_prompts_current(ws):
+            diagnostics.append("Prompt generation pass started")
+            prompt_disposition = await run_opencode_agent(
+                "designer",
+                cfg,
+                opencode_cmd=opencode_cmd or ["opencode"],
+                output_dir=root,
+                kickoff=prompt_generation_kickoff(ws_rel),
+                timeout=min(timeout, 900.0),
+                on_event=on_event,
+                env_overrides=env,
+            )
+            diagnostics.append("Prompt generation pass finished")
+            if prompt_disposition["status"] == "timeout":
+                diagnostics.append("Prompt generation pass timed out")
+            diagnostics.extend(_ensure_plan_before_prompts(ws))
+
     result = judge(ws, timed_out=timed_out)
     if result.success:
         result.status = "ready"
@@ -898,20 +1113,21 @@ async def run_design(
         repair_disposition.get("events", 0) if repair_disposition else 0
     ) + (
         continuation_disposition.get("events", 0) if continuation_disposition else 0
+    ) + (
+        prompt_disposition.get("events", 0) if prompt_disposition else 0
     )
     result.stderr_tail = [
         *disposition.get("stderr_tail", []),
         *(continuation_disposition.get("stderr_tail", []) if continuation_disposition else []),
         *(repair_disposition.get("stderr_tail", []) if repair_disposition else []),
+        *(prompt_disposition.get("stderr_tail", []) if prompt_disposition else []),
     ]
     if result.status == "incomplete" and disposition.get("returncode") not in (0, None):
         result.status = "error"
 
     if result.success:
-        from tracefix.runtime.cityos_plan import export_cityos_module_plan
-
         try:
-            export_cityos_module_plan(ws)
+            diagnostics.extend(_ensure_cityos_plan(ws))
         except Exception as e:  # noqa: BLE001 - design should report the export issue cleanly
             result.success = False
             result.status = "cityos_plan_failed"

@@ -169,6 +169,59 @@
             <span>Workspace</span>
             <p id="workspacePathDisplay">Waiting for intermediary plan</p>
           </div>
+          <button id="llmUsageCard" class="usage-card" type="button" aria-expanded="false">
+            <span>LLM Usage</span>
+            <strong id="llmCost">$0.00</strong>
+            <p id="llmTokenSummary">0 tokens</p>
+            <small id="llmModelName">No model</small>
+          </button>
+        </section>
+
+        <section id="llmUsageDetails" class="usage-details hidden" aria-label="LLM usage details">
+          <div class="panel-heading">
+            <h3>LLM Usage Breakdown</h3>
+            <span id="llmUsageSource">No usage metadata yet</span>
+          </div>
+          <div class="usage-detail-grid">
+            <div>
+              <h4>Current Run</h4>
+              <dl>
+                <dt>Input Tokens</dt><dd id="usageInputTokens">0</dd>
+                <dt>Output Tokens</dt><dd id="usageOutputTokens">0</dd>
+                <dt>Total Tokens</dt><dd id="usageTotalTokens">0</dd>
+                <dt>Estimated Cost</dt><dd id="usageCost">$0.00</dd>
+              </dl>
+            </div>
+            <div>
+              <h4>Design Phase</h4>
+              <dl>
+                <dt>Tokens</dt><dd id="usageDesignTokens">0</dd>
+                <dt>Cost</dt><dd id="usageDesignCost">$0.00</dd>
+              </dl>
+            </div>
+            <div>
+              <h4>Repair Phase</h4>
+              <dl>
+                <dt>Tokens</dt><dd id="usageRepairTokens">0</dd>
+                <dt>Cost</dt><dd id="usageRepairCost">$0.00</dd>
+              </dl>
+            </div>
+            <div>
+              <h4>Verification Phase</h4>
+              <dl>
+                <dt>Tokens</dt><dd id="usageVerificationTokens">0</dd>
+                <dt>Cost</dt><dd id="usageVerificationCost">$0.00</dd>
+              </dl>
+            </div>
+            <div>
+              <h4>Session Totals</h4>
+              <dl>
+                <dt>Total Runs</dt><dd id="usageTotalRuns">0</dd>
+                <dt>Total Tokens</dt><dd id="usageSessionTokens">0</dd>
+                <dt>Total Cost</dt><dd id="usageSessionCost">$0.00</dd>
+              </dl>
+            </div>
+          </div>
         </section>
 
         <section class="visual-grid">

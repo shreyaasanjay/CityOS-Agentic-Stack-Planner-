@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from tracefix.textio import safe_read_text
+
 @dataclass
 class RepairAttempt:
     """Record of a single IR repair attempt."""
@@ -229,7 +231,7 @@ class Workspace:
         p = self.path(filename)
         if not p.exists():
             return None
-        return p.read_text(encoding="utf-8")
+        return safe_read_text(p)
 
     def list_files(self) -> list[str]:
         """List all files in the workspace, relative to root."""

@@ -2,7 +2,8 @@
 name: tla-prompt-gen
 description: >-
   Generates per-agent Runtime B prompts from a TLA+-verified
-  workspace. Requires ir.json, states.json, Protocol.tla already present.
+  workspace. Requires ir.json, states.json, Protocol.tla, and
+  cityos_module_plan.json already present.
   Invoke via /tla-prompt-gen only. Use after /tla-verify-pluscal completes
   to produce runtime prompts without re-running TLC.
 metadata:
@@ -14,6 +15,7 @@ You are a per-agent prompt generator for multi-agent coordination systems. Your 
 ## Inputs
 
 A workspace directory containing:
+- `cityos_module_plan.json` - Verified TraceFix intermediary plan for CityOS synthesis - **required**
 - `ir.json` — IR specification (agents, resources, channels) — **required**
 - `states.json` — Per-agent state machine from `tla-verify-pluscal extract-states` — **required**
 - `Protocol.tla` — Verified PlusCal source — **required**
@@ -21,7 +23,8 @@ A workspace directory containing:
 - `description.md` — Task description — **required**
 - `tools.json` — Domain tool schemas (OpenAI function schema + `agent_ids`/`can_fail`) — **optional**
 
-**Layout:** the spec files (`ir.json`, `states.json`, `Protocol.tla`, `summary.json`) live in the
+**Layout:** the spec files (`ir.json`, `states.json`, `Protocol.tla`, `summary.json`,
+`cityos_module_plan.json`) live in the
 workspace's `spec/` subdir; `description.md` and `tools.json` are at the workspace root; write the
 generated prompts to `prompts/runtime_b/`. (Older flat workspaces keep
 everything at the root — check there if `spec/` is absent.) For a **benchmark** task, `tools.json`

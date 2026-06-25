@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from tracefix.textio import safe_read_json, safe_read_text
+
 
 PLAN_VERSION = "0.1"
 
@@ -30,17 +32,11 @@ def _spec_dir(workspace: Path) -> Path:
 
 
 def _read_json(path: Path, default: Any) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return default
+    return safe_read_json(path, default)
 
 
 def _read_text(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError:
-        return ""
+    return safe_read_text(path)
 
 
 def _rel(workspace: Path, path: Path) -> str:
@@ -291,7 +287,7 @@ def build_cityos_module_plan(workspace: Path) -> dict[str, Any]:
             "notes": [
                 "TraceFix generated this intermediary expression from verified workspace artifacts.",
                 "TraceFix does not run production agents or create Docker containers.",
-                *([] if prompts else ["No agent prompts were found; this plan is not production-ready."]),
+                *([] if prompts else ["Runtime prompts are generated after this verified plan."]),
             ],
         },
         "protocol": {
@@ -384,6 +380,13 @@ def build_cityos_module_plan(workspace: Path) -> dict[str, Any]:
 def export_cityos_module_plan(workspace: Path, out: Path | None = None) -> CityOSPlanExportResult:
     workspace = Path(workspace).expanduser().resolve()
     plan = build_cityos_module_plan(workspace)
+    verification = plan.get("verification", {})
+    if verification.get("status") != "verified" or verification.get("production_ready") is not True:
+        status = verification.get("status", "unknown")
+        raise ValueError(
+            "cannot export cityos_module_plan.json before successful protocol "
+            f"verification; current verification status is {status!r}"
+        )
     spec = _spec_dir(workspace)
     plan_path = Path(out).expanduser().resolve() if out else spec / "cityos_module_plan.json"
     if plan_path.suffix.lower() != ".json":

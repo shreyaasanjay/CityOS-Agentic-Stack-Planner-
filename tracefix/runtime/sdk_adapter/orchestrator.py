@@ -34,6 +34,7 @@ from tracefix.runtime.sdk_adapter.types import AgentResult
 from tracefix.runtime.coordination.client import CoordClient
 from tracefix.runtime.workspace_layout import (
     spec_path, snapshot_run_workspace, new_run_stamp, shared_workdir, agent_workdir)
+from tracefix.textio import safe_read_json, safe_read_text
 
 _DEFAULT_BUILTINS = ["Read", "Write", "Edit"]
 
@@ -80,7 +81,8 @@ class SdkRunResult:
 
 
 def _load_json(path: Path) -> dict:
-    return json.loads(Path(path).read_text())
+    data = safe_read_json(path, {})
+    return data if isinstance(data, dict) else {}
 
 
 class SdkOrchestrator:
@@ -144,7 +146,7 @@ class SdkOrchestrator:
 
     def _read_prompt(self, agent_id: str) -> str:
         path = self._prompts_dir() / f"{agent_id}.md"
-        return path.read_text() + _COORD_FOOTER + self._output_footer(agent_id)
+        return safe_read_text(path) + _COORD_FOOTER + self._output_footer(agent_id)
 
     def _output_footer(self, agent_id: str) -> str:
         """Tell the agent where shared vs. private files go.

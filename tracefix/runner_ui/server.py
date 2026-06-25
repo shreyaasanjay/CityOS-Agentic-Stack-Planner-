@@ -24,10 +24,25 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+from tracefix.textio import safe_read_json, safe_read_text
+
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 RUNS: dict[str, "RunState"] = {}
 RUNS_LOCK = threading.Lock()
+
+
+_USAGE_PHASES = ("design", "repair", "verification")
+_MODEL_PRICES: dict[str, tuple[float, float]] = {
+    "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4.1": (2.00, 8.00),
+    "gpt-5-mini": (0.25, 2.00),
+    "gpt-5": (1.25, 10.00),
+    "claude-sonnet": (3.00, 15.00),
+    "claude-sonnet-4": (3.00, 15.00),
+    "claude-opus": (15.00, 75.00),
+    "claude-opus-4": (15.00, 75.00),
+}
 
 
 def _repo_root() -> Path:
@@ -35,6 +50,94 @@ def _repo_root() -> Path:
         if (parent / "pyproject.toml").exists():
             return parent
     return Path.cwd()
+
+
+def _ui_state_dir(root: Path) -> Path:
+    path = root / ".tracefix-ui"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _model_key(model: str) -> str:
+    model = (model or "").strip()
+    if "/" in model:
+        model = model.split("/")[-1]
+    return model.lower()
+
+
+def _display_model(model: str) -> str:
+    model = (model or "").strip() or "unknown"
+    if "/" in model:
+        model = model.split("/")[-1]
+    return model
+
+
+def _estimate_llm_cost(model: str, input_tokens: int, output_tokens: int) -> tuple[float, bool]:
+    key = _model_key(model)
+    prices = _MODEL_PRICES.get(key)
+    if prices is None:
+        for prefix, candidate in _MODEL_PRICES.items():
+            if key.startswith(prefix):
+                prices = candidate
+                break
+    if prices is None:
+        return 0.0, False
+    input_price, output_price = prices
+    return round((input_tokens * input_price + output_tokens * output_price) / 1_000_000, 6), True
+
+
+def _blank_phase() -> dict[str, Any]:
+    return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "estimated_cost_usd": 0.0}
+
+
+def _usage_payload(model: str = "") -> dict[str, Any]:
+    return {
+        "model": _display_model(model),
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "estimated_cost_usd": 0.0,
+        "cost_known": False,
+        "estimated": True,
+        "source": "no_usage_metadata",
+        "phases": {phase: _blank_phase() for phase in _USAGE_PHASES},
+        "session_totals": {"total_runs": 0, "total_tokens": 0, "total_cost_usd": 0.0},
+    }
+
+
+def _load_usage_totals(root: Path) -> dict[str, Any]:
+    path = _ui_state_dir(root) / "llm_usage_totals.json"
+    data = _read_json(path)
+    if not isinstance(data, dict):
+        data = {}
+    return {
+        "total_runs": int(data.get("total_runs") or 0),
+        "total_tokens": int(data.get("total_tokens") or 0),
+        "total_cost_usd": float(data.get("total_cost_usd") or 0.0),
+        "by_model": data.get("by_model") if isinstance(data.get("by_model"), dict) else {},
+    }
+
+
+def _save_usage_totals(root: Path, totals: dict[str, Any]) -> None:
+    path = _ui_state_dir(root) / "llm_usage_totals.json"
+    path.write_text(json.dumps(totals, indent=2) + "\n", encoding="utf-8")
+
+
+def _persist_workspace_usage(workspace: Path | None, usage: dict[str, Any], run_id: str, *, final: bool) -> None:
+    if workspace is None or not workspace.exists():
+        return
+    path = workspace / "llm_usage.json"
+    existing = _read_json(path)
+    if not isinstance(existing, dict):
+        existing = {"runs": []}
+    existing["current_run"] = {"run_id": run_id, **usage}
+    if final:
+        runs = existing.get("runs")
+        if not isinstance(runs, list):
+            runs = []
+        runs.append({"run_id": run_id, "ended_at": datetime.now().isoformat(timespec="seconds"), **usage})
+        existing["runs"] = runs[-50:]
+    path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
 
 
 def _subprocess_python() -> str:
@@ -118,20 +221,14 @@ def _run_diagnostics(root: Path, command: list[str], env: dict[str, str]) -> lis
 
 
 def _read_text(path: Path, limit: int = 180_000) -> str:
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return ""
+    text = safe_read_text(path)
     if len(text) > limit:
         return text[:limit] + "\n\n... truncated in UI ..."
     return text
 
 
 def _read_json(path: Path) -> Any | None:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+    return safe_read_json(path)
 
 
 def _task_title(task_dir: Path) -> str:
@@ -368,6 +465,171 @@ def _open_local_path(path: Path) -> None:
 
 
 @dataclass
+class UsageState:
+    model: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    exact_cost_usd: float | None = None
+    cost_known: bool = False
+    source: str = "no_usage_metadata"
+    active_phase: str = "design"
+    phases: dict[str, dict[str, Any]] = field(default_factory=lambda: {phase: _blank_phase() for phase in _USAGE_PHASES})
+
+    def set_model(self, model: str) -> None:
+        if model:
+            self.model = _display_model(model)
+
+    def set_phase_from_line(self, line: str) -> None:
+        clean = line.lower()
+        if "repair" in clean:
+            self.active_phase = "repair"
+        elif any(marker in clean for marker in ("tlc", "pluscal", "verify", "verification")):
+            self.active_phase = "verification"
+        elif "design" in clean or "ir" in clean or "protocol" in clean:
+            self.active_phase = "design"
+
+    def add_usage(
+        self,
+        *,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+        cost_usd: float | None = None,
+        model: str = "",
+        source: str = "usage_metadata",
+    ) -> bool:
+        input_tokens = max(0, int(input_tokens or 0))
+        output_tokens = max(0, int(output_tokens or 0))
+        if input_tokens == 0 and output_tokens == 0 and cost_usd is None:
+            return False
+        self.set_model(model)
+        self.input_tokens += input_tokens
+        self.output_tokens += output_tokens
+        if cost_usd is not None:
+            try:
+                parsed_cost = float(cost_usd)
+            except (TypeError, ValueError):
+                parsed_cost = 0.0
+            self.exact_cost_usd = (self.exact_cost_usd or 0.0) + parsed_cost
+            self.cost_known = True
+        self.source = source
+
+        phase = self.phases.setdefault(self.active_phase, _blank_phase())
+        phase["input_tokens"] += input_tokens
+        phase["output_tokens"] += output_tokens
+        phase["total_tokens"] = phase["input_tokens"] + phase["output_tokens"]
+        phase_cost, known = _estimate_llm_cost(self.model, phase["input_tokens"], phase["output_tokens"])
+        phase["estimated_cost_usd"] = phase_cost
+        phase["cost_known"] = known
+        return True
+
+    def merge_session_stats(self, session: Any) -> bool:
+        if not isinstance(session, dict):
+            return False
+        stats = session.get("stats")
+        if not isinstance(stats, dict):
+            return False
+        config = session.get("config") if isinstance(session.get("config"), dict) else {}
+        model = str(config.get("model") or self.model or "")
+        input_tokens = int(stats.get("prompt_tokens") or 0)
+        output_tokens = int(stats.get("completion_tokens") or 0)
+        cost = stats.get("estimated_cost_usd")
+        if input_tokens < self.input_tokens or output_tokens < self.output_tokens:
+            return False
+        self.set_model(model)
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        if cost is not None:
+            self.exact_cost_usd = float(cost)
+            self.cost_known = bool(stats.get("cost_known", True))
+        self.source = "session_json"
+        phase = self.phases.setdefault("design", _blank_phase())
+        phase["input_tokens"] = input_tokens
+        phase["output_tokens"] = output_tokens
+        phase["total_tokens"] = input_tokens + output_tokens
+        phase["estimated_cost_usd"] = float(cost or _estimate_llm_cost(self.model, input_tokens, output_tokens)[0])
+        phase["cost_known"] = self.cost_known
+        return True
+
+    def parse_line(self, line: str) -> bool:
+        self.set_phase_from_line(line)
+        parsed = _parse_usage_line(line)
+        if not parsed:
+            return False
+        return self.add_usage(**parsed)
+
+    def snapshot(self, session_totals: dict[str, Any] | None = None) -> dict[str, Any]:
+        total = self.input_tokens + self.output_tokens
+        estimated_cost, price_known = _estimate_llm_cost(self.model, self.input_tokens, self.output_tokens)
+        if self.exact_cost_usd is not None:
+            cost = round(self.exact_cost_usd, 6)
+            estimated = False
+            known = self.cost_known
+        else:
+            cost = estimated_cost
+            estimated = True
+            known = price_known
+        data = _usage_payload(self.model)
+        data.update({
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "total_tokens": total,
+            "estimated_cost_usd": cost,
+            "cost_known": known,
+            "estimated": estimated,
+            "source": self.source,
+            "phases": self.phases,
+        })
+        if session_totals:
+            data["session_totals"] = {
+                "total_runs": int(session_totals.get("total_runs") or 0),
+                "total_tokens": int(session_totals.get("total_tokens") or 0),
+                "total_cost_usd": round(float(session_totals.get("total_cost_usd") or 0.0), 6),
+            }
+        return data
+
+
+def _parse_usage_line(line: str) -> dict[str, Any] | None:
+    stripped = line.strip()
+    try:
+        data = json.loads(stripped)
+    except json.JSONDecodeError:
+        data = None
+    if isinstance(data, dict):
+        input_tokens = data.get("input_tokens") or data.get("prompt_tokens")
+        output_tokens = data.get("output_tokens") or data.get("completion_tokens")
+        if input_tokens is not None or output_tokens is not None:
+            return {
+                "input_tokens": int(input_tokens or 0),
+                "output_tokens": int(output_tokens or 0),
+                "cost_usd": data.get("cost") or data.get("cost_usd") or data.get("estimated_cost_usd"),
+                "model": str(data.get("model") or ""),
+                "source": "json_usage_event",
+            }
+
+    match = re.search(r"([\d,]+)\s+in\s+\+\s+([\d,]+)\s+out", stripped, re.IGNORECASE)
+    if match:
+        return {
+            "input_tokens": int(match.group(1).replace(",", "")),
+            "output_tokens": int(match.group(2).replace(",", "")),
+            "source": "stdout_usage_summary",
+        }
+
+    match = re.search(
+        r"([\d,]+)\s+tok\s+\(([\d,]+)\s+in\s*/\s*([\d,]+)\s+out.*?\$([0-9.]+)",
+        stripped,
+        re.IGNORECASE,
+    )
+    if match:
+        return {
+            "input_tokens": int(match.group(2).replace(",", "")),
+            "output_tokens": int(match.group(3).replace(",", "")),
+            "cost_usd": float(match.group(4)),
+            "source": "stdout_cost_summary",
+        }
+    return None
+
+
+@dataclass
 class RunState:
     id: str
     root: Path
@@ -387,6 +649,8 @@ class RunState:
     workspace: Path | None = None
     error: str = ""
     verification_incomplete: bool = False
+    usage: UsageState = field(default_factory=UsageState)
+    usage_finalized: bool = False
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def publish(self, event: dict[str, Any]) -> None:
@@ -413,6 +677,7 @@ class RunState:
     def snapshot(self) -> dict[str, Any]:
         if self.workspace is None:
             self.workspace = _find_workspace(self.experiment_dir)
+        self.refresh_usage_from_workspace()
         return {
             "id": self.id,
             "mode": self.mode,
@@ -426,9 +691,45 @@ class RunState:
             "envKeys": self.env_keys,
             "experimentDir": str(self.experiment_dir or ""),
             "artifacts": _artifact_snapshot(self.workspace),
+            "usage": self.usage.snapshot(_load_usage_totals(self.root)),
             "error": self.error,
             "verificationIncomplete": self.verification_incomplete,
         }
+
+    def refresh_usage_from_workspace(self) -> bool:
+        if self.workspace is None:
+            return False
+        session = _read_json(self.workspace / "session.json")
+        changed = self.usage.merge_session_stats(session)
+        if changed:
+            _persist_workspace_usage(self.workspace, self.usage.snapshot(_load_usage_totals(self.root)), self.id, final=False)
+        return changed
+
+    def publish_usage(self) -> None:
+        totals = _load_usage_totals(self.root)
+        usage = self.usage.snapshot(totals)
+        _persist_workspace_usage(self.workspace, usage, self.id, final=False)
+        self.publish({"type": "usage", "usage": usage})
+
+    def finalize_usage(self) -> None:
+        if self.usage_finalized:
+            return
+        self.refresh_usage_from_workspace()
+        usage = self.usage.snapshot(_load_usage_totals(self.root))
+        totals = _load_usage_totals(self.root)
+        totals["total_runs"] = int(totals.get("total_runs") or 0) + 1
+        totals["total_tokens"] = int(totals.get("total_tokens") or 0) + int(usage.get("total_tokens") or 0)
+        totals["total_cost_usd"] = round(float(totals.get("total_cost_usd") or 0.0) + float(usage.get("estimated_cost_usd") or 0.0), 6)
+        by_model = totals.get("by_model") if isinstance(totals.get("by_model"), dict) else {}
+        model_key = _display_model(str(usage.get("model") or "unknown"))
+        model_totals = by_model.setdefault(model_key, {"runs": 0, "tokens": 0, "cost_usd": 0.0})
+        model_totals["runs"] = int(model_totals.get("runs") or 0) + 1
+        model_totals["tokens"] = int(model_totals.get("tokens") or 0) + int(usage.get("total_tokens") or 0)
+        model_totals["cost_usd"] = round(float(model_totals.get("cost_usd") or 0.0) + float(usage.get("estimated_cost_usd") or 0.0), 6)
+        totals["by_model"] = by_model
+        _save_usage_totals(self.root, totals)
+        self.usage_finalized = True
+        _persist_workspace_usage(self.workspace, self.usage.snapshot(totals), self.id, final=True)
 
 
 def _env_updates_for_provider(payload: dict[str, Any], *, require_key: bool) -> dict[str, str]:
@@ -666,6 +967,7 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
         provider=provider,
         model=str(payload.get("model", "")),
     )
+    run.usage.set_model(str(payload.get("model", "")))
     if mode == "runtime":
         workspace = Path(str(payload.get("workspacePath", "")).strip())
         run.workspace = (root / workspace).resolve() if not workspace.is_absolute() else workspace
@@ -691,6 +993,7 @@ def _run_plan_export(run: RunState, env: dict[str, str]) -> None:
     del env
     run.status = "running"
     run.publish({"type": "status", "status": "running"})
+    run.publish_usage()
     run.publish({"type": "phase", "line": "Exporting verified intermediary expression"})
     try:
         if run.workspace is None:
@@ -708,6 +1011,7 @@ def _run_plan_export(run: RunState, env: dict[str, str]) -> None:
 def _run_process(run: RunState, env: dict[str, str]) -> None:
     run.status = "running"
     run.publish({"type": "status", "status": "running"})
+    run.publish_usage()
     exit_code = _stream_command(run, env, run.command)
     _finish_run(run, exit_code)
 
@@ -715,6 +1019,7 @@ def _run_process(run: RunState, env: dict[str, str]) -> None:
 def _run_design_then_runtime(run: RunState, env: dict[str, str], payload: dict[str, Any]) -> None:
     run.status = "running"
     run.publish({"type": "status", "status": "running"})
+    run.publish_usage()
     run.publish({"type": "phase", "line": "Design phase started"})
     design_exit = _stream_command(run, env, run.command)
     if design_exit != 0:
@@ -801,6 +1106,10 @@ def _stream_command(run: RunState, env: dict[str, str], command: list[str]) -> i
         })
         if _is_incomplete_design_line(line):
             run.verification_incomplete = True
+        if run.usage.parse_line(line):
+            run.publish_usage()
+        elif run.refresh_usage_from_workspace():
+            run.publish_usage()
 
     exit_code = process.wait()
     run.process = None
@@ -815,7 +1124,9 @@ def _finish_run(run: RunState, exit_code: int) -> None:
     )
     if run.workspace is None:
         run.workspace = _find_workspace(run.experiment_dir)
+    run.finalize_usage()
     run.publish({"type": "artifacts", "artifacts": _artifact_snapshot(run.workspace)})
+    run.publish_usage()
     run.publish({"type": "status", "status": run.status, "exitCode": exit_code})
 
 
@@ -987,7 +1298,7 @@ class RunnerHandler(BaseHTTPRequestHandler):
                 self.wfile.write(f"event: tracefix\n".encode("utf-8"))
                 self.wfile.write(f"data: {data}\n\n".encode("utf-8"))
                 self.wfile.flush()
-                if event.get("type") == "status" and event.get("status") in {"completed", "failed"}:
+                if event.get("type") == "status" and event.get("status") in {"completed", "failed", "verification_incomplete"}:
                     break
         except (BrokenPipeError, ConnectionResetError):
             pass

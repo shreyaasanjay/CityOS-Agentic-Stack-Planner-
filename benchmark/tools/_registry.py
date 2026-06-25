@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 from typing import Any
+
+from tracefix.textio import safe_read_json
 
 from ._base import ToolConfig, ToolResult
 
@@ -46,8 +47,7 @@ class ToolRegistry:
         if not schema_path.exists():
             raise FileNotFoundError(f"No schema file: {schema_path}")
 
-        with open(schema_path) as f:
-            raw_schemas = json.load(f)
+        raw_schemas = safe_read_json(schema_path, [])
 
         sim_tools: dict[str, Any] = self._sim.make_tools()
 

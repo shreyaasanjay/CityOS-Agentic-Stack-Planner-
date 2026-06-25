@@ -33,6 +33,24 @@ VALID_IR = {
 }
 
 
+def test_pluscal_lint_rejects_unsupported_endeither():
+    from tracefix.pipeline.tools import _lint_pluscal_label_structure
+
+    tla = "\n".join([
+        "x:",
+        "  either",
+        "    { skip; }",
+        "  or",
+        "    { skip; }",
+        "  endeither",
+    ])
+
+    result = _lint_pluscal_label_structure(tla)
+    assert result is not None
+    assert "Unsupported PlusCal branch terminator `endeither`" in result
+    assert "either { ... } or { ... };" in result
+
+
 @pytest.fixture
 def ws(tmp_path):
     """Create a workspace in a temp directory."""

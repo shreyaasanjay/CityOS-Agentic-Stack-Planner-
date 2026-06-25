@@ -14,6 +14,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from tracefix.textio import safe_read_text
+
 from .toolchain import (
     JAR_MISSING_HINT,
     JAVA_MISSING_HINT,
@@ -114,8 +116,7 @@ def translate_pluscal(
 
         # Read back the translated file
         try:
-            with open(spec_path, "r") as f:
-                translated = f.read()
+            translated = safe_read_text(spec_path)
         except OSError:
             return PlusCaLResult(
                 success=False,

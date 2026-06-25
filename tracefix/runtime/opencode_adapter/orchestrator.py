@@ -38,6 +38,7 @@ from tracefix.runtime.workspace_layout import (
     spec_path, snapshot_run_workspace, new_run_stamp, shared_workdir, agent_workdir)
 from tracefix.runtime.opencode_adapter.config_gen import agent_key, build_agent_config, domain_wiring
 from tracefix.runtime.opencode_adapter.driver import run_opencode_agent
+from tracefix.textio import safe_read_json, safe_read_text
 
 # OpenCode namespaces MCP tools ``<mcpServer>_<tool>``; our mcp server key is "tracefix".
 _COORD_FOOTER = """
@@ -84,7 +85,8 @@ class OpencodeRunResult:
 
 
 def _load_json(path: Path) -> dict:
-    return json.loads(Path(path).read_text())
+    data = safe_read_json(path, {})
+    return data if isinstance(data, dict) else {}
 
 
 def _subprocess_python() -> str:
@@ -148,7 +150,7 @@ class OpencodeOrchestrator:
 
     def _read_prompt(self, agent_id: str) -> str:
         path = self._prompts_dir() / f"{agent_id}.md"
-        return path.read_text() + _COORD_FOOTER + self._output_footer(agent_id)
+        return safe_read_text(path) + _COORD_FOOTER + self._output_footer(agent_id)
 
     def _output_footer(self, agent_id: str) -> str:
         shared = shared_workdir(self.run_dir).resolve()

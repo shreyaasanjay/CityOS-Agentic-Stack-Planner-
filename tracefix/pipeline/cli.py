@@ -51,13 +51,14 @@ from tracefix.pipeline.tool_client import ToolClient
 from tracefix.pipeline.tools import TOOL_SCHEMAS
 from tracefix.pipeline.workspace import Workspace
 from tracefix.pipeline.pipeline.llm_client import LLMConfig
+from tracefix.textio import safe_read_text
 
 
 def _load_pluscal_rules() -> str:
     """Load the compact PlusCal rules that are seeded into every workspace."""
     rules_path = Path(__file__).resolve().with_name("PLUSCAL_RULES.md")
     try:
-        return rules_path.read_text(encoding="utf-8").strip() + "\n"
+        return safe_read_text(rules_path).strip() + "\n"
     except OSError:
         return ""
 

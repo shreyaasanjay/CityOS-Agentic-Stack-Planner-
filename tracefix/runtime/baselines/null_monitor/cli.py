@@ -10,6 +10,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from tracefix.textio import safe_read_json
+
 
 def _print_cost_summary(result, model: str) -> None:
     """Print per-agent and total token usage with estimated cost."""
@@ -196,8 +198,7 @@ def _save_visualization(rt, result, output_dir: Path, *, open_browser: bool = Fa
     from tracefix.runtime.monitoring.visualize import save_html
 
     ir_path = rt.workspace / "ir.json"
-    with open(ir_path) as f:
-        ir = json.load(f)
+    ir = safe_read_json(ir_path, {})
 
     output_path = (output_dir / "run_trace.html").resolve()
     title = f"[B2] Task {rt.task_id} | {rt.model}"

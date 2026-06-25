@@ -11,8 +11,9 @@ Usage:
 """
 
 import copy
-import json
 from pathlib import Path
+
+from tracefix.textio import safe_read_json, safe_read_text
 
 
 def _wrap_list(val):
@@ -136,10 +137,8 @@ def load_task(task_dir: str | Path) -> dict:
     if not states_path.exists():
         raise FileNotFoundError(f"Missing states.json in {task_dir}")
 
-    with open(ir_path) as f:
-        ir = json.load(f)
-    with open(states_path) as f:
-        extracted = json.load(f)
+    ir = safe_read_json(ir_path, {})
+    extracted = safe_read_json(states_path, {})
 
     result = normalize_extracted_states(ir, extracted)
 
@@ -150,7 +149,7 @@ def load_task(task_dir: str | Path) -> dict:
         for agent in result["agents"]:
             prompt_path = prompts_dir / f"{agent['id']}.md"
             if prompt_path.exists():
-                prompts[agent["id"]] = prompt_path.read_text()
+                prompts[agent["id"]] = safe_read_text(prompt_path)
         if prompts:
             result["prompts"] = prompts
 

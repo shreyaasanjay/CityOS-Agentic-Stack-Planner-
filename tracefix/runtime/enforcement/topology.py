@@ -1,10 +1,10 @@
 """IR parsing and topology computation (pure functions, no I/O except load_ir)."""
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from tracefix.pipeline.pipeline.validator import ValidationResult, validate_ir
+from tracefix.textio import safe_read_json
 
 
 def _normalize_list(val) -> list[str]:
@@ -90,8 +90,7 @@ class Topology:
 def load_ir(path: str | Path) -> dict:
     """Read IR JSON from file, validate, and return the dict. Raises ValueError on invalid IR."""
     path = Path(path)
-    with open(path) as f:
-        ir = json.load(f)
+    ir = safe_read_json(path, {})
     result: ValidationResult = validate_ir(ir)
     if not result.valid:
         raise ValueError(f"Invalid IR: {'; '.join(result.errors)}")

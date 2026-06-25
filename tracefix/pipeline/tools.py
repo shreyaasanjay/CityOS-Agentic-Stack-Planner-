@@ -14,6 +14,7 @@ import re as _re
 from typing import Callable
 
 from tracefix.pipeline.workspace import Workspace
+from tracefix.textio import safe_read_text
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +527,16 @@ def _format_source_context(lines: list[str], line_num: int, radius: int = 3) -> 
 def _lint_pluscal_label_structure(tla_content: str) -> str | None:
     """Catch empty/stacked labels before pcal.trans emits a cryptic error."""
     lines = tla_content.splitlines()
+    endeither_issues = _scan_unsupported_endeither(lines)
+    if endeither_issues:
+        line_num, message = endeither_issues[0]
+        return (
+            f"{message}\n"
+            "Read PLUSCAL_RULES.md before editing.\n\n"
+            "Source context:\n"
+            + _format_source_context(lines, line_num)
+        )
+
     pending_label: tuple[int, str] | None = None
 
     for line_num, line in enumerate(lines, start=1):
@@ -736,6 +747,26 @@ def _scan_goto_missing_semicolon(lines: list[str]) -> list[tuple[int, str]]:
     return issues
 
 
+def _scan_unsupported_endeither(lines: list[str]) -> list[tuple[int, str]]:
+    """Flag Pascal-style either/or/endeither blocks.
+
+    The PlusCal form used by TraceFix is `either { ... } or { ... };`.
+    `endeither` is not accepted by pcal.trans and usually produces
+    `Expected ";" but found "endeither"` at the closing line.
+    """
+    issues: list[tuple[int, str]] = []
+    for line_num, line in enumerate(lines, start=1):
+        if line.strip() == "endeither":
+            issues.append((
+                line_num,
+                "Unsupported PlusCal branch terminator `endeither`. TraceFix "
+                "uses brace-form PlusCal choices: `either { ... } or { ... };`. "
+                "Rewrite this block by changing `either` to `either {`, each "
+                "standalone `or` to `} or {`, and `endeither` to `};`.",
+            ))
+    return issues
+
+
 def _scan_label_after_unterminated_brace(lines: list[str]) -> list[tuple[int, str]]:
     """Flag a label immediately following a bare `}` with no `;` terminator.
 
@@ -788,6 +819,7 @@ def _lint_pluscal_all(tla_content: str) -> str | None:
     all_issues += _scan_skip_with_true_antipattern(lines)
     all_issues += _scan_brace_balance(lines)
     all_issues += _scan_goto_missing_semicolon(lines)
+    all_issues += _scan_unsupported_endeither(lines)
     all_issues += _scan_label_after_unterminated_brace(lines)
 
     if not all_issues:
@@ -1089,7 +1121,7 @@ def load_benchmark(ws: Workspace, *, task_id: str) -> str:
     # Copy tools.json (per-agent domain tool schemas)
     tools_path = desc_dir / "tools.json"
     if tools_path.exists():
-        tools_content = tools_path.read_text(encoding="utf-8")
+        tools_content = safe_read_text(tools_path)
         ws.write_file("tools.json", tools_content)
         try:
             tools_data = json.loads(tools_content)
@@ -1100,7 +1132,7 @@ def load_benchmark(ws: Workspace, *, task_id: str) -> str:
     # Copy metadata.json (canonical agent/resource IDs)
     metadata_path = desc_dir / "metadata.json"
     if metadata_path.exists():
-        metadata_content = metadata_path.read_text(encoding="utf-8")
+        metadata_content = safe_read_text(metadata_path)
         ws.write_file("metadata.json", metadata_content)
         extras.append("metadata.json: canonical naming source")
 

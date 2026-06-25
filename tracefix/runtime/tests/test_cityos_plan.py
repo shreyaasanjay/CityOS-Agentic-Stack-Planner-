@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from tracefix.runtime.cityos_plan import export_cityos_module_plan
 
 
@@ -58,3 +60,27 @@ def test_export_cityos_module_plan_creates_verified_overview(tmp_path):
     )
     assert "Docker containers" in plan["cityos_synthesis_handoff"]["tracefix_should_not_create"]
     assert not (workspace / "Dockerfile").exists()
+
+
+def test_export_cityos_module_plan_refuses_unverified_workspace(tmp_path):
+    workspace = tmp_path / "workspace"
+    (workspace / "spec").mkdir(parents=True)
+    (workspace / "spec" / "ir.json").write_text(json.dumps({
+        "agents": [{"id": "WRITER"}, {"id": "EDITOR"}],
+        "resources": [],
+        "channels": [
+            {
+                "id": "writer_to_editor",
+                "from": "WRITER",
+                "to": "EDITOR",
+                "labels": ["submit"],
+            },
+        ],
+    }))
+    (workspace / "spec" / "Protocol.tla").write_text("---- MODULE Protocol ----\n")
+    (workspace / "spec" / "summary.json").write_text(json.dumps({"tlc_passed": False}))
+
+    with pytest.raises(ValueError, match="before successful protocol verification"):
+        export_cityos_module_plan(workspace)
+
+    assert not (workspace / "spec" / "cityos_module_plan.json").exists()
