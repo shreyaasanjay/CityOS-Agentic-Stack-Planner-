@@ -1,0 +1,83 @@
+{
+  "agents": [
+    {
+      "id": "DEVELOPER_A"
+    },
+    {
+      "id": "DEVELOPER_B"
+    },
+    {
+      "id": "DEVELOPER_C"
+    }
+  ],
+  "resources": [
+    {
+      "id": "AUTH_MODULE",
+      "type": "Lock"
+    },
+    {
+      "id": "DATABASE_MODULE",
+      "type": "Lock"
+    },
+    {
+      "id": "API_MODULE",
+      "type": "Lock"
+    }
+  ],
+  "channels": [
+    {
+      "id": "A_to_B",
+      "from": "DEVELOPER_A",
+      "to": "DEVELOPER_B",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "id": "A_to_C",
+      "from": "DEVELOPER_A",
+      "to": "DEVELOPER_C",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "id": "B_to_A",
+      "from": "DEVELOPER_B",
+      "to": "DEVELOPER_A",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "id": "B_to_C",
+      "from": "DEVELOPER_B",
+      "to": "DEVELOPER_C",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "id": "C_to_A",
+      "from": "DEVELOPER_C",
+      "to": "DEVELOPER_A",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "id": "C_to_B",
+      "from": "DEVELOPER_C",
+      "to": "DEVELOPER_B",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    }
+  ]
+}

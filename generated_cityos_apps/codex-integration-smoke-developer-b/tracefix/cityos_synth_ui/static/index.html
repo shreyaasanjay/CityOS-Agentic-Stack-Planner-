@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TraceFix CityOS Synthesizer</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="sidebar">
+        <div class="brand">
+          <div class="mark">TF</div>
+          <div>
+            <h1>CityOS Synthesizer</h1>
+            <p>Package verified TraceFix workspaces into CityOS apps</p>
+          </div>
+        </div>
+
+        <form id="synthForm" class="form">
+          <section class="panel">
+            <h2>TraceFix Workspace</h2>
+            <label>
+              Recent verified workspaces
+              <select id="workspaceSelect"></select>
+            </label>
+            <label>
+              Workspace path
+              <input id="workspacePath" autocomplete="off" placeholder="workspace/my_verified_run" />
+            </label>
+          </section>
+
+          <section class="panel">
+            <h2>CityOS Target</h2>
+            <label>
+              CityOS root
+              <input id="cityosRoot" autocomplete="off" placeholder="C:\Users\shrey\cityos" />
+            </label>
+            <label>
+              Apps directory
+              <input id="appsDir" autocomplete="off" placeholder="C:\Users\shrey\cityos\apps" />
+            </label>
+            <label>
+              Package prefix
+              <input id="packageName" autocomplete="off" placeholder="tracefix-my-workflow" />
+            </label>
+            <label class="check-row">
+              <input id="overwrite" type="checkbox" />
+              Overwrite previously synthesized TraceFix app folders
+            </label>
+          </section>
+
+          <section class="panel">
+            <h2>Actions</h2>
+            <button id="synthesize" class="primary" type="submit">Synthesize CityOS Apps</button>
+            <button id="refresh" class="secondary" type="button">Refresh Workspaces</button>
+          </section>
+        </form>
+      </section>
+
+      <section class="content">
+        <header class="hero">
+          <div>
+            <p id="statusText" class="eyebrow">Idle</p>
+            <h2>TraceFix to CityOS package builder</h2>
+          </div>
+          <div id="statusBadge" class="badge idle">Idle</div>
+        </header>
+
+        <section class="metrics">
+          <div>
+            <span>Apps</span>
+            <strong id="appCount">0</strong>
+          </div>
+          <div>
+            <span>Agents</span>
+            <strong id="agentCount">0</strong>
+          </div>
+          <div class="wide">
+            <span>Manifest</span>
+            <p id="manifestPath">No synthesis yet</p>
+          </div>
+        </section>
+
+        <section class="grid">
+          <div class="panel output-panel">
+            <div class="heading">
+              <h3>Generated Apps</h3>
+              <span id="appsDirLabel"></span>
+            </div>
+            <div id="appsList" class="apps-list"></div>
+          </div>
+
+          <div class="panel output-panel">
+            <div class="heading">
+              <h3>Log</h3>
+            </div>
+            <pre id="log" class="log"></pre>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

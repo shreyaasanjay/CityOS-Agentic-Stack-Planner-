@@ -1,0 +1,75 @@
+{
+  "required": true,
+  "monitor_rules": [
+    "validate_agent_state_transitions",
+    "validate_allowed_communication_edges",
+    "validate_channel_message_labels",
+    "validate_resource_acquire_release_constraints",
+    "validate_protocol_completion"
+  ],
+  "observed_channels": [
+    {
+      "channel": "A_to_B",
+      "from": "DEVELOPER_A",
+      "to": "DEVELOPER_B",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "channel": "A_to_C",
+      "from": "DEVELOPER_A",
+      "to": "DEVELOPER_C",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "channel": "B_to_A",
+      "from": "DEVELOPER_B",
+      "to": "DEVELOPER_A",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "channel": "B_to_C",
+      "from": "DEVELOPER_B",
+      "to": "DEVELOPER_C",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "channel": "C_to_A",
+      "from": "DEVELOPER_C",
+      "to": "DEVELOPER_A",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    },
+    {
+      "channel": "C_to_B",
+      "from": "DEVELOPER_C",
+      "to": "DEVELOPER_B",
+      "labels": [
+        "pass",
+        "fail"
+      ]
+    }
+  ],
+  "source_artifacts": [
+    "spec/states.json",
+    "spec/Protocol.tla",
+    "spec/ir.json",
+    "spec/summary.json"
+  ],
+  "notes": [
+    "CityOS Synthesizer should create the runtime monitor as its own CityOS app/container."
+  ]
+}

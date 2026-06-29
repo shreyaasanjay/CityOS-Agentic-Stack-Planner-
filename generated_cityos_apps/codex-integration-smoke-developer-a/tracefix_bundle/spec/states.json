@@ -1,0 +1,468 @@
+{
+  "states": [
+    {
+      "id": "A_design",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_acquire_auth"
+        }
+      ],
+      "task": "design_implement_authentication()"
+    },
+    {
+      "id": "A_acquire_auth",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_commit_auth",
+          "acquire": "AUTH_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "A_commit_auth",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_release_auth"
+        }
+      ],
+      "task": "commit_to_module(\"AUTH_MODULE\")"
+    },
+    {
+      "id": "A_release_auth",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_acquire_db",
+          "release": "AUTH_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "A_acquire_db",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_commit_db",
+          "acquire": "DATABASE_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "A_commit_db",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_release_db"
+        }
+      ],
+      "task": "commit_to_module(\"DATABASE_MODULE\")"
+    },
+    {
+      "id": "A_release_db",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_test",
+          "release": "DATABASE_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "A_test",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_decide"
+        }
+      ],
+      "task": "run_local_tests()"
+    },
+    {
+      "id": "A_decide",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_notify"
+        },
+        {
+          "next_state": "A_notify"
+        }
+      ]
+    },
+    {
+      "id": "A_notify",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_rcv_B",
+          "send": [
+            {
+              "channel": "A_to_B",
+              "label": "pass"
+            },
+            {
+              "channel": "A_to_C",
+              "label": "pass"
+            }
+          ]
+        },
+        {
+          "next_state": "A_rcv_B",
+          "send": [
+            {
+              "channel": "A_to_B",
+              "label": "fail"
+            },
+            {
+              "channel": "A_to_C",
+              "label": "fail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "A_rcv_B",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_rcv_C",
+          "receive": {
+            "channel": "B_to_A"
+          }
+        }
+      ]
+    },
+    {
+      "id": "A_rcv_C",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "A_done",
+          "receive": {
+            "channel": "C_to_A"
+          }
+        }
+      ]
+    },
+    {
+      "id": "A_done",
+      "agent": "DEVELOPER_A",
+      "actions": []
+    },
+    {
+      "id": "B_design",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_acquire_db"
+        }
+      ],
+      "task": "design_implement_api_endpoints()"
+    },
+    {
+      "id": "B_acquire_db",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_commit_db",
+          "acquire": "DATABASE_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "B_commit_db",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_release_db"
+        }
+      ],
+      "task": "commit_to_module(\"DATABASE_MODULE\")"
+    },
+    {
+      "id": "B_release_db",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_acquire_api",
+          "release": "DATABASE_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "B_acquire_api",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_commit_api",
+          "acquire": "API_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "B_commit_api",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_release_api"
+        }
+      ],
+      "task": "commit_to_module(\"API_MODULE\")"
+    },
+    {
+      "id": "B_release_api",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_test",
+          "release": "API_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "B_test",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_decide"
+        }
+      ],
+      "task": "run_local_tests()"
+    },
+    {
+      "id": "B_decide",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_notify"
+        },
+        {
+          "next_state": "B_notify"
+        }
+      ]
+    },
+    {
+      "id": "B_notify",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_rcv_A",
+          "send": [
+            {
+              "channel": "B_to_A",
+              "label": "pass"
+            },
+            {
+              "channel": "B_to_C",
+              "label": "pass"
+            }
+          ]
+        },
+        {
+          "next_state": "B_rcv_A",
+          "send": [
+            {
+              "channel": "B_to_A",
+              "label": "fail"
+            },
+            {
+              "channel": "B_to_C",
+              "label": "fail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "B_rcv_A",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_rcv_C",
+          "receive": {
+            "channel": "A_to_B"
+          }
+        }
+      ]
+    },
+    {
+      "id": "B_rcv_C",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "B_done",
+          "receive": {
+            "channel": "C_to_B"
+          }
+        }
+      ]
+    },
+    {
+      "id": "B_done",
+      "agent": "DEVELOPER_B",
+      "actions": []
+    },
+    {
+      "id": "C_design",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_acquire_auth"
+        }
+      ],
+      "task": "design_implement_auth_middleware()"
+    },
+    {
+      "id": "C_acquire_auth",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_commit_auth",
+          "acquire": "AUTH_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "C_commit_auth",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_release_auth"
+        }
+      ],
+      "task": "commit_to_module(\"AUTH_MODULE\")"
+    },
+    {
+      "id": "C_release_auth",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_acquire_api",
+          "release": "AUTH_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "C_acquire_api",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_commit_api",
+          "acquire": "API_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "C_commit_api",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_release_api"
+        }
+      ],
+      "task": "commit_to_module(\"API_MODULE\")"
+    },
+    {
+      "id": "C_release_api",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_test",
+          "release": "API_MODULE"
+        }
+      ]
+    },
+    {
+      "id": "C_test",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_decide"
+        }
+      ],
+      "task": "run_local_tests()"
+    },
+    {
+      "id": "C_decide",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_notify"
+        },
+        {
+          "next_state": "C_notify"
+        }
+      ]
+    },
+    {
+      "id": "C_notify",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_rcv_A",
+          "send": [
+            {
+              "channel": "C_to_A",
+              "label": "pass"
+            },
+            {
+              "channel": "C_to_B",
+              "label": "pass"
+            }
+          ]
+        },
+        {
+          "next_state": "C_rcv_A",
+          "send": [
+            {
+              "channel": "C_to_A",
+              "label": "fail"
+            },
+            {
+              "channel": "C_to_B",
+              "label": "fail"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C_rcv_A",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_rcv_B",
+          "receive": {
+            "channel": "A_to_C"
+          }
+        }
+      ]
+    },
+    {
+      "id": "C_rcv_B",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "C_done",
+          "receive": {
+            "channel": "B_to_C"
+          }
+        }
+      ]
+    },
+    {
+      "id": "C_done",
+      "agent": "DEVELOPER_C",
+      "actions": []
+    }
+  ],
+  "initial_states": {
+    "DEVELOPER_A": "A_design",
+    "DEVELOPER_B": "B_design",
+    "DEVELOPER_C": "C_design"
+  }
+}

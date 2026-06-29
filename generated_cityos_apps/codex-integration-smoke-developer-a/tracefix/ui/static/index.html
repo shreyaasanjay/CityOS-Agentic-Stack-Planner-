@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TraceFix Studio</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Benchmarks">
+        <div class="brand-row">
+          <div class="brand-mark" aria-hidden="true">TF</div>
+          <div>
+            <h1>TraceFix Studio</h1>
+            <p id="repoLabel">Loading repo</p>
+          </div>
+        </div>
+
+        <label class="search-box">
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M10.75 18.5a7.75 7.75 0 1 1 5.02-1.84l3.78 3.79-1.41 1.41-3.79-3.78a7.71 7.71 0 0 1-3.6.42Zm0-2a5.75 5.75 0 1 0 0-11.5 5.75 5.75 0 0 0 0 11.5Z" />
+          </svg>
+          <input id="taskSearch" type="search" placeholder="Search tasks" autocomplete="off" />
+        </label>
+
+        <div class="filter-row" role="group" aria-label="Difficulty">
+          <button class="segmented active" data-difficulty="All" type="button">All</button>
+          <button class="segmented" data-difficulty="Easy" type="button">Easy</button>
+          <button class="segmented" data-difficulty="Medium" type="button">Med</button>
+          <button class="segmented" data-difficulty="Hard" type="button">Hard</button>
+        </div>
+
+        <div class="task-list" id="taskList" role="list"></div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="taskMeta">Benchmark</p>
+            <h2 id="taskTitle">Loading task</h2>
+          </div>
+          <div class="status-pills" id="artifactPills"></div>
+        </header>
+
+        <section class="summary-band" aria-label="Overview">
+          <div class="metric">
+            <span class="metric-label">Agents</span>
+            <strong id="agentCount">0</strong>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Resources</span>
+            <strong id="resourceCount">0</strong>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Tools</span>
+            <strong id="toolCount">0</strong>
+          </div>
+          <div class="metric wide">
+            <span class="metric-label">Goal</span>
+            <p id="goalText">Loading</p>
+          </div>
+        </section>
+
+        <section class="content-grid">
+          <div class="graph-panel">
+            <div class="panel-title-row">
+              <div>
+                <h3>Coordination Topology</h3>
+                <p id="topologySource">Loading</p>
+              </div>
+              <div class="graph-legend">
+                <span><i class="legend-dot agent"></i>Agent</span>
+                <span><i class="legend-dot resource"></i>Resource</span>
+                <span><i class="legend-line"></i>Channel</span>
+              </div>
+            </div>
+            <svg id="topologyGraph" class="topology-graph" role="img" aria-label="Task topology"></svg>
+          </div>
+
+          <div class="side-stack">
+            <div class="section-panel">
+              <div class="panel-title-row compact">
+                <h3>Tools</h3>
+                <span id="toolSummary" class="subtle"></span>
+              </div>
+              <div id="toolList" class="tool-list"></div>
+            </div>
+
+            <div class="section-panel">
+              <div class="panel-title-row compact">
+                <h3>Commands</h3>
+                <span id="runtimeStatus" class="subtle"></span>
+              </div>
+              <div class="command-tabs" role="tablist" aria-label="Commands">
+                <button class="tab-button active" data-command="pipeline" type="button">Pipeline</button>
+                <button class="tab-button" data-command="monitoring" type="button">Monitor</button>
+                <button class="tab-button" data-command="enforcement" type="button">Enforce</button>
+              </div>
+              <div class="command-row">
+                <code id="commandText"></code>
+                <button class="icon-button" id="copyCommand" type="button" title="Copy command" aria-label="Copy command">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1Zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm0 16H8V7h11v14Z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="artifact-panel">
+          <div class="panel-title-row">
+            <div>
+              <h3>Artifacts</h3>
+              <p>IR, protocol, and state-machine data when fixture files exist in the repo.</p>
+            </div>
+            <div class="artifact-tabs" role="tablist" aria-label="Artifacts">
+              <button class="tab-button active" data-artifact="ir" type="button">IR</button>
+              <button class="tab-button" data-artifact="protocol" type="button">Protocol</button>
+              <button class="tab-button" data-artifact="states" type="button">States</button>
+              <button class="tab-button" data-artifact="description" type="button">Task</button>
+            </div>
+          </div>
+          <pre id="artifactViewer" class="artifact-viewer"></pre>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>
+

@@ -1,0 +1,1132 @@
+{
+  "artifact_type": "tracefix_verified_intermediary_expression",
+  "version": "0.1",
+  "application": {
+    "name": "benchmark_task_1e_shared_codebase_codex_check_20260624_221804",
+    "description": "# Shared Codebase Development \u2014 3 Agents\n\n\n\nThree developers work in parallel on independent features in a shared codebase. The codebase contains 3 modules (auth, database, api). Multiple developers may need to modify the same module, but only one developer can modify a module at a time.\n\n\n\n## Agents\n\n- **DEVELOPER_A**: Building user authentication. Needs to modify **AUTH_MODULE** and **DATABASE_MODULE**.\n\n- **DEVELOPER_B**: Building REST API endpoints. Needs to modify **DATABASE_MODULE** and **API_MODULE**.\n\n- **DEVELOPER_C**: Building API auth middleware. Needs to modify **API_MODULE** and **AUTH_MODULE**.\n\n\n\n## Shared Resources\n\n- **AUTH_MODULE**: Authentication module\n\n- **DATABASE_MODULE**: Database module\n\n- **API_MODULE**: API module\n\n\n\n## Workflow\n\n\n\nEach developer first designs and implements their feature locally. When ready, they commit their changes to the required modules, then run local tests. If tests fail, the developer reports the failure and finishes.\n\n\n\n## Goal\n\nAll three developers complete their work (design, implement, commit, test) without conflicts over shared modules.",
+    "goals": [
+      {
+        "id": "user_intent",
+        "description": "# Shared Codebase Development \u2014 3 Agents\n\n\n\nThree developers work in parallel on independent features in a shared codebase. The codebase contains 3 modules (auth, database, api). Multiple developers may need to modify the same module, but only one developer can modify a module at a time.\n\n\n\n## Agents\n\n- **DEVELOPER_A**: Building user authentication. Needs to modify **AUTH_MODULE** and **DATABASE_MODULE**.\n\n- **DEVELOPER_B**: Building REST API endpoints. Needs to modify **DATABASE_MODULE** and **API_MODULE**.\n\n- **DEVELOPER_C**: Building API auth middleware. Needs to modify **API_MODULE** and **AUTH_MODULE**.\n\n\n\n## Shared Resources\n\n- **AUTH_MODULE**: Authentication module\n\n- **DATABASE_MODULE**: Database module\n\n- **API_MODULE**: API module\n\n\n\n## Workflow\n\n\n\nEach developer first designs and implements their feature locally. When ready, they commit their changes to the required modules, then run local tests. If tests fail, the developer reports the failure and finishes.\n\n\n\n## Goal\n\nAll three developers complete their work (design, implement, commit, test) without conflicts over shared modules."
+      },
+      {
+        "id": "verified_coordination_blueprint",
+        "description": "Preserve the TraceFix-verified protocol and topology."
+      },
+      {
+        "id": "resource_safety",
+        "description": "Honor verified resource constraints and ownership rules."
+      },
+      {
+        "id": "communication_safety",
+        "description": "Allow only verified agent communication paths."
+      }
+    ]
+  },
+  "goals": [
+    {
+      "id": "user_intent",
+      "description": "# Shared Codebase Development \u2014 3 Agents\n\n\n\nThree developers work in parallel on independent features in a shared codebase. The codebase contains 3 modules (auth, database, api). Multiple developers may need to modify the same module, but only one developer can modify a module at a time.\n\n\n\n## Agents\n\n- **DEVELOPER_A**: Building user authentication. Needs to modify **AUTH_MODULE** and **DATABASE_MODULE**.\n\n- **DEVELOPER_B**: Building REST API endpoints. Needs to modify **DATABASE_MODULE** and **API_MODULE**.\n\n- **DEVELOPER_C**: Building API auth middleware. Needs to modify **API_MODULE** and **AUTH_MODULE**.\n\n\n\n## Shared Resources\n\n- **AUTH_MODULE**: Authentication module\n\n- **DATABASE_MODULE**: Database module\n\n- **API_MODULE**: API module\n\n\n\n## Workflow\n\n\n\nEach developer first designs and implements their feature locally. When ready, they commit their changes to the required modules, then run local tests. If tests fail, the developer reports the failure and finishes.\n\n\n\n## Goal\n\nAll three developers complete their work (design, implement, commit, test) without conflicts over shared modules."
+    },
+    {
+      "id": "verified_coordination_blueprint",
+      "description": "Preserve the TraceFix-verified protocol and topology."
+    },
+    {
+      "id": "resource_safety",
+      "description": "Honor verified resource constraints and ownership rules."
+    },
+    {
+      "id": "communication_safety",
+      "description": "Allow only verified agent communication paths."
+    }
+  ],
+  "tracefix": {
+    "workspace_path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\benchmark_task_1e_shared_codebase_codex_check_20260624_221804",
+    "verification_status": "verified",
+    "generated_at": "2026-06-25T02:24:33.664717+00:00",
+    "notes": [
+      "TraceFix generated this intermediary expression from verified workspace artifacts.",
+      "TraceFix does not run production agents or create Docker containers."
+    ]
+  },
+  "protocol": {
+    "topology": {
+      "agents": [
+        {
+          "id": "DEVELOPER_A"
+        },
+        {
+          "id": "DEVELOPER_B"
+        },
+        {
+          "id": "DEVELOPER_C"
+        }
+      ],
+      "resources": [
+        {
+          "id": "AUTH_MODULE",
+          "type": "Lock"
+        },
+        {
+          "id": "DATABASE_MODULE",
+          "type": "Lock"
+        },
+        {
+          "id": "API_MODULE",
+          "type": "Lock"
+        }
+      ],
+      "channels": [
+        {
+          "id": "A_to_B",
+          "from": "DEVELOPER_A",
+          "to": "DEVELOPER_B",
+          "labels": [
+            "pass",
+            "fail"
+          ]
+        },
+        {
+          "id": "A_to_C",
+          "from": "DEVELOPER_A",
+          "to": "DEVELOPER_C",
+          "labels": [
+            "pass",
+            "fail"
+          ]
+        },
+        {
+          "id": "B_to_A",
+          "from": "DEVELOPER_B",
+          "to": "DEVELOPER_A",
+          "labels": [
+            "pass",
+            "fail"
+          ]
+        },
+        {
+          "id": "B_to_C",
+          "from": "DEVELOPER_B",
+          "to": "DEVELOPER_C",
+          "labels": [
+            "pass",
+            "fail"
+          ]
+        },
+        {
+          "id": "C_to_A",
+          "from": "DEVELOPER_C",
+          "to": "DEVELOPER_A",
+          "labels": [
+            "pass",
+            "fail"
+          ]
+        },
+        {
+          "id": "C_to_B",
+          "from": "DEVELOPER_C",
+          "to": "DEVELOPER_B",
+          "labels": [
+            "pass",
+            "fail"
+          ]
+        }
+      ]
+    },
+    "allowed_transitions": [
+      {
+        "id": "A_design",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_acquire_auth"
+          }
+        ],
+        "task": "design_implement_authentication()"
+      },
+      {
+        "id": "A_acquire_auth",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_commit_auth",
+            "acquire": "AUTH_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "A_commit_auth",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_release_auth"
+          }
+        ],
+        "task": "commit_to_module(\"AUTH_MODULE\")"
+      },
+      {
+        "id": "A_release_auth",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_acquire_db",
+            "release": "AUTH_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "A_acquire_db",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_commit_db",
+            "acquire": "DATABASE_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "A_commit_db",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_release_db"
+          }
+        ],
+        "task": "commit_to_module(\"DATABASE_MODULE\")"
+      },
+      {
+        "id": "A_release_db",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_test",
+            "release": "DATABASE_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "A_test",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_decide"
+          }
+        ],
+        "task": "run_local_tests()"
+      },
+      {
+        "id": "A_decide",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_notify"
+          },
+          {
+            "next_state": "A_notify"
+          }
+        ]
+      },
+      {
+        "id": "A_notify",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_rcv_B",
+            "send": [
+              {
+                "channel": "A_to_B",
+                "label": "pass"
+              },
+              {
+                "channel": "A_to_C",
+                "label": "pass"
+              }
+            ]
+          },
+          {
+            "next_state": "A_rcv_B",
+            "send": [
+              {
+                "channel": "A_to_B",
+                "label": "fail"
+              },
+              {
+                "channel": "A_to_C",
+                "label": "fail"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "A_rcv_B",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_rcv_C",
+            "receive": {
+              "channel": "B_to_A"
+            }
+          }
+        ]
+      },
+      {
+        "id": "A_rcv_C",
+        "agent": "DEVELOPER_A",
+        "actions": [
+          {
+            "next_state": "A_done",
+            "receive": {
+              "channel": "C_to_A"
+            }
+          }
+        ]
+      },
+      {
+        "id": "A_done",
+        "agent": "DEVELOPER_A",
+        "actions": []
+      },
+      {
+        "id": "B_design",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_acquire_db"
+          }
+        ],
+        "task": "design_implement_api_endpoints()"
+      },
+      {
+        "id": "B_acquire_db",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_commit_db",
+            "acquire": "DATABASE_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "B_commit_db",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_release_db"
+          }
+        ],
+        "task": "commit_to_module(\"DATABASE_MODULE\")"
+      },
+      {
+        "id": "B_release_db",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_acquire_api",
+            "release": "DATABASE_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "B_acquire_api",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_commit_api",
+            "acquire": "API_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "B_commit_api",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_release_api"
+          }
+        ],
+        "task": "commit_to_module(\"API_MODULE\")"
+      },
+      {
+        "id": "B_release_api",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_test",
+            "release": "API_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "B_test",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_decide"
+          }
+        ],
+        "task": "run_local_tests()"
+      },
+      {
+        "id": "B_decide",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_notify"
+          },
+          {
+            "next_state": "B_notify"
+          }
+        ]
+      },
+      {
+        "id": "B_notify",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_rcv_A",
+            "send": [
+              {
+                "channel": "B_to_A",
+                "label": "pass"
+              },
+              {
+                "channel": "B_to_C",
+                "label": "pass"
+              }
+            ]
+          },
+          {
+            "next_state": "B_rcv_A",
+            "send": [
+              {
+                "channel": "B_to_A",
+                "label": "fail"
+              },
+              {
+                "channel": "B_to_C",
+                "label": "fail"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "B_rcv_A",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_rcv_C",
+            "receive": {
+              "channel": "A_to_B"
+            }
+          }
+        ]
+      },
+      {
+        "id": "B_rcv_C",
+        "agent": "DEVELOPER_B",
+        "actions": [
+          {
+            "next_state": "B_done",
+            "receive": {
+              "channel": "C_to_B"
+            }
+          }
+        ]
+      },
+      {
+        "id": "B_done",
+        "agent": "DEVELOPER_B",
+        "actions": []
+      },
+      {
+        "id": "C_design",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_acquire_auth"
+          }
+        ],
+        "task": "design_implement_auth_middleware()"
+      },
+      {
+        "id": "C_acquire_auth",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_commit_auth",
+            "acquire": "AUTH_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "C_commit_auth",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_release_auth"
+          }
+        ],
+        "task": "commit_to_module(\"AUTH_MODULE\")"
+      },
+      {
+        "id": "C_release_auth",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_acquire_api",
+            "release": "AUTH_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "C_acquire_api",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_commit_api",
+            "acquire": "API_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "C_commit_api",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_release_api"
+          }
+        ],
+        "task": "commit_to_module(\"API_MODULE\")"
+      },
+      {
+        "id": "C_release_api",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_test",
+            "release": "API_MODULE"
+          }
+        ]
+      },
+      {
+        "id": "C_test",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_decide"
+          }
+        ],
+        "task": "run_local_tests()"
+      },
+      {
+        "id": "C_decide",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_notify"
+          },
+          {
+            "next_state": "C_notify"
+          }
+        ]
+      },
+      {
+        "id": "C_notify",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_rcv_A",
+            "send": [
+              {
+                "channel": "C_to_A",
+                "label": "pass"
+              },
+              {
+                "channel": "C_to_B",
+                "label": "pass"
+              }
+            ]
+          },
+          {
+            "next_state": "C_rcv_A",
+            "send": [
+              {
+                "channel": "C_to_A",
+                "label": "fail"
+              },
+              {
+                "channel": "C_to_B",
+                "label": "fail"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "C_rcv_A",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_rcv_B",
+            "receive": {
+              "channel": "A_to_C"
+            }
+          }
+        ]
+      },
+      {
+        "id": "C_rcv_B",
+        "agent": "DEVELOPER_C",
+        "actions": [
+          {
+            "next_state": "C_done",
+            "receive": {
+              "channel": "B_to_C"
+            }
+          }
+        ]
+      },
+      {
+        "id": "C_done",
+        "agent": "DEVELOPER_C",
+        "actions": []
+      }
+    ],
+    "allowed_communication_edges": [
+      {
+        "channel": "A_to_B",
+        "from": "DEVELOPER_A",
+        "to": "DEVELOPER_B",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "A_to_C",
+        "from": "DEVELOPER_A",
+        "to": "DEVELOPER_C",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "B_to_A",
+        "from": "DEVELOPER_B",
+        "to": "DEVELOPER_A",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "B_to_C",
+        "from": "DEVELOPER_B",
+        "to": "DEVELOPER_C",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "C_to_A",
+        "from": "DEVELOPER_C",
+        "to": "DEVELOPER_A",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "C_to_B",
+        "from": "DEVELOPER_C",
+        "to": "DEVELOPER_B",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      }
+    ],
+    "state_machine_path": "spec/states.json",
+    "tla_path": "spec/Protocol.tla",
+    "ir_path": "spec/ir.json",
+    "summary_path": "spec/summary.json",
+    "tlc_config_path": "spec/Protocol.cfg",
+    "translated_tla_path": "spec/Protocol_translated.tla"
+  },
+  "topology": {
+    "agents": [
+      {
+        "id": "DEVELOPER_A"
+      },
+      {
+        "id": "DEVELOPER_B"
+      },
+      {
+        "id": "DEVELOPER_C"
+      }
+    ],
+    "resources": [
+      {
+        "id": "AUTH_MODULE",
+        "type": "Lock"
+      },
+      {
+        "id": "DATABASE_MODULE",
+        "type": "Lock"
+      },
+      {
+        "id": "API_MODULE",
+        "type": "Lock"
+      }
+    ],
+    "channels": [
+      {
+        "id": "A_to_B",
+        "from": "DEVELOPER_A",
+        "to": "DEVELOPER_B",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "id": "A_to_C",
+        "from": "DEVELOPER_A",
+        "to": "DEVELOPER_C",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "id": "B_to_A",
+        "from": "DEVELOPER_B",
+        "to": "DEVELOPER_A",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "id": "B_to_C",
+        "from": "DEVELOPER_B",
+        "to": "DEVELOPER_C",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "id": "C_to_A",
+        "from": "DEVELOPER_C",
+        "to": "DEVELOPER_A",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "id": "C_to_B",
+        "from": "DEVELOPER_C",
+        "to": "DEVELOPER_B",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      }
+    ]
+  },
+  "agents": [
+    {
+      "name": "DEVELOPER_A",
+      "role": "DEVELOPER_A",
+      "prompt_path": "prompts/runtime_b/DEVELOPER_A.md",
+      "inputs": [
+        "B_to_A",
+        "C_to_A"
+      ],
+      "outputs": [
+        "A_to_B",
+        "A_to_C"
+      ],
+      "tools": [],
+      "required_context": [],
+      "concordfs_channels": [
+        {
+          "channel": "B_to_A",
+          "direction": "inbound",
+          "path": "messages/DEVELOPER_A/inbox/*.json"
+        },
+        {
+          "channel": "C_to_A",
+          "direction": "inbound",
+          "path": "messages/DEVELOPER_A/inbox/*.json"
+        },
+        {
+          "channel": "A_to_B",
+          "direction": "outbound",
+          "path": "messages/DEVELOPER_A/outbox/*.json"
+        },
+        {
+          "channel": "A_to_C",
+          "direction": "outbound",
+          "path": "messages/DEVELOPER_A/outbox/*.json"
+        }
+      ],
+      "resources": [
+        {
+          "id": "AUTH_MODULE",
+          "type": "Lock"
+        },
+        {
+          "id": "DATABASE_MODULE",
+          "type": "Lock"
+        },
+        {
+          "id": "API_MODULE",
+          "type": "Lock"
+        }
+      ],
+      "notes": [
+        "CityOS Synthesizer should turn this agent into one CityOS app/container."
+      ]
+    },
+    {
+      "name": "DEVELOPER_B",
+      "role": "DEVELOPER_B",
+      "prompt_path": "prompts/runtime_b/DEVELOPER_B.md",
+      "inputs": [
+        "A_to_B",
+        "C_to_B"
+      ],
+      "outputs": [
+        "B_to_A",
+        "B_to_C"
+      ],
+      "tools": [],
+      "required_context": [],
+      "concordfs_channels": [
+        {
+          "channel": "A_to_B",
+          "direction": "inbound",
+          "path": "messages/DEVELOPER_B/inbox/*.json"
+        },
+        {
+          "channel": "C_to_B",
+          "direction": "inbound",
+          "path": "messages/DEVELOPER_B/inbox/*.json"
+        },
+        {
+          "channel": "B_to_A",
+          "direction": "outbound",
+          "path": "messages/DEVELOPER_B/outbox/*.json"
+        },
+        {
+          "channel": "B_to_C",
+          "direction": "outbound",
+          "path": "messages/DEVELOPER_B/outbox/*.json"
+        }
+      ],
+      "resources": [
+        {
+          "id": "AUTH_MODULE",
+          "type": "Lock"
+        },
+        {
+          "id": "DATABASE_MODULE",
+          "type": "Lock"
+        },
+        {
+          "id": "API_MODULE",
+          "type": "Lock"
+        }
+      ],
+      "notes": [
+        "CityOS Synthesizer should turn this agent into one CityOS app/container."
+      ]
+    },
+    {
+      "name": "DEVELOPER_C",
+      "role": "DEVELOPER_C",
+      "prompt_path": "prompts/runtime_b/DEVELOPER_C.md",
+      "inputs": [
+        "A_to_C",
+        "B_to_C"
+      ],
+      "outputs": [
+        "C_to_A",
+        "C_to_B"
+      ],
+      "tools": [],
+      "required_context": [],
+      "concordfs_channels": [
+        {
+          "channel": "A_to_C",
+          "direction": "inbound",
+          "path": "messages/DEVELOPER_C/inbox/*.json"
+        },
+        {
+          "channel": "B_to_C",
+          "direction": "inbound",
+          "path": "messages/DEVELOPER_C/inbox/*.json"
+        },
+        {
+          "channel": "C_to_A",
+          "direction": "outbound",
+          "path": "messages/DEVELOPER_C/outbox/*.json"
+        },
+        {
+          "channel": "C_to_B",
+          "direction": "outbound",
+          "path": "messages/DEVELOPER_C/outbox/*.json"
+        }
+      ],
+      "resources": [
+        {
+          "id": "AUTH_MODULE",
+          "type": "Lock"
+        },
+        {
+          "id": "DATABASE_MODULE",
+          "type": "Lock"
+        },
+        {
+          "id": "API_MODULE",
+          "type": "Lock"
+        }
+      ],
+      "notes": [
+        "CityOS Synthesizer should turn this agent into one CityOS app/container."
+      ]
+    }
+  ],
+  "communication_requirements": [
+    {
+      "channel": "A_to_B",
+      "from": "DEVELOPER_A",
+      "to": "DEVELOPER_B",
+      "labels": [
+        "pass",
+        "fail"
+      ],
+      "substrate": "ConcordFS",
+      "message_format": "json"
+    },
+    {
+      "channel": "A_to_C",
+      "from": "DEVELOPER_A",
+      "to": "DEVELOPER_C",
+      "labels": [
+        "pass",
+        "fail"
+      ],
+      "substrate": "ConcordFS",
+      "message_format": "json"
+    },
+    {
+      "channel": "B_to_A",
+      "from": "DEVELOPER_B",
+      "to": "DEVELOPER_A",
+      "labels": [
+        "pass",
+        "fail"
+      ],
+      "substrate": "ConcordFS",
+      "message_format": "json"
+    },
+    {
+      "channel": "B_to_C",
+      "from": "DEVELOPER_B",
+      "to": "DEVELOPER_C",
+      "labels": [
+        "pass",
+        "fail"
+      ],
+      "substrate": "ConcordFS",
+      "message_format": "json"
+    },
+    {
+      "channel": "C_to_A",
+      "from": "DEVELOPER_C",
+      "to": "DEVELOPER_A",
+      "labels": [
+        "pass",
+        "fail"
+      ],
+      "substrate": "ConcordFS",
+      "message_format": "json"
+    },
+    {
+      "channel": "C_to_B",
+      "from": "DEVELOPER_C",
+      "to": "DEVELOPER_B",
+      "labels": [
+        "pass",
+        "fail"
+      ],
+      "substrate": "ConcordFS",
+      "message_format": "json"
+    }
+  ],
+  "runtime_monitor": {
+    "required": true,
+    "monitor_rules": [
+      "validate_agent_state_transitions",
+      "validate_allowed_communication_edges",
+      "validate_channel_message_labels",
+      "validate_resource_acquire_release_constraints",
+      "validate_protocol_completion"
+    ],
+    "observed_channels": [
+      {
+        "channel": "A_to_B",
+        "from": "DEVELOPER_A",
+        "to": "DEVELOPER_B",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "A_to_C",
+        "from": "DEVELOPER_A",
+        "to": "DEVELOPER_C",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "B_to_A",
+        "from": "DEVELOPER_B",
+        "to": "DEVELOPER_A",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "B_to_C",
+        "from": "DEVELOPER_B",
+        "to": "DEVELOPER_C",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "C_to_A",
+        "from": "DEVELOPER_C",
+        "to": "DEVELOPER_A",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      },
+      {
+        "channel": "C_to_B",
+        "from": "DEVELOPER_C",
+        "to": "DEVELOPER_B",
+        "labels": [
+          "pass",
+          "fail"
+        ]
+      }
+    ],
+    "source_artifacts": [
+      "spec/states.json",
+      "spec/Protocol.tla",
+      "spec/ir.json",
+      "spec/summary.json"
+    ],
+    "notes": [
+      "CityOS Synthesizer should create the runtime monitor as its own CityOS app/container."
+    ]
+  },
+  "required_external_context": {
+    "sensor_context": [],
+    "resource_permissions": [
+      {
+        "id": "AUTH_MODULE",
+        "type": "Lock"
+      },
+      {
+        "id": "DATABASE_MODULE",
+        "type": "Lock"
+      },
+      {
+        "id": "API_MODULE",
+        "type": "Lock"
+      }
+    ],
+    "notes": [
+      "TraceFix cannot infer real CityOS sensor/privacy permissions unless they are declared upstream."
+    ]
+  },
+  "resource_requirements": [
+    {
+      "id": "AUTH_MODULE",
+      "type": "Lock"
+    },
+    {
+      "id": "DATABASE_MODULE",
+      "type": "Lock"
+    },
+    {
+      "id": "API_MODULE",
+      "type": "Lock"
+    }
+  ],
+  "verification": {
+    "status": "verified",
+    "summary": {
+      "task": "benchmark_task_1e_shared_codebase_codex_check",
+      "total_repairs": 0,
+      "tlc_passed": true,
+      "safety_only": true,
+      "channel_bound": 3,
+      "repairs": []
+    },
+    "states_available": true,
+    "tlc_passed": true,
+    "tlc_error_path": "spec/tlc_error.md",
+    "protocol_path": "spec/Protocol.tla",
+    "protocol_available": true,
+    "production_ready": true
+  },
+  "source_artifacts": {
+    "state_machine_path": "spec/states.json",
+    "tla_path": "spec/Protocol.tla",
+    "ir_path": "spec/ir.json",
+    "summary_path": "spec/summary.json",
+    "tlc_config_path": "spec/Protocol.cfg",
+    "translated_tla_path": "spec/Protocol_translated.tla"
+  },
+  "cityos_synthesis_handoff": {
+    "synthesizer_should_create": [
+      "one Dockerized CityOS app per agent",
+      "one Dockerized CityOS app for the runtime monitor",
+      "ConcordFS channel declarations",
+      "CityOS manifests",
+      "permission/resource declarations"
+    ],
+    "tracefix_should_not_create": [
+      "production runner",
+      "Docker containers",
+      "CityOS runtime services"
+    ],
+    "runtime_owner": "CityOS Runtime OS",
+    "synthesis_owner": "CityOS Synthesizer"
+  },
+  "assumptions": [
+    "Agent names are inferred from spec/ir.json, falling back to prompt filenames.",
+    "Prompt paths are inferred from prompts/runtime_b/*.md, falling back to prompts/*.md.",
+    "External sensor context is left empty unless declared in existing workspace artifacts.",
+    "ConcordFS paths are declarations for CityOS/ConcordFS, not a TraceFix runtime dependency."
+  ]
+}

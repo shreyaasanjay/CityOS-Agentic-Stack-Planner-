@@ -1,0 +1,38 @@
+{
+  "artifact_type": "tracefix_cityos_synthesis_manifest",
+  "version": "0.1",
+  "generated_at": "2026-06-29T17:42:30.804521+00:00",
+  "workspace": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\benchmark_task_1e_shared_codebase_codex_check_20260624_221804",
+  "plan_path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\benchmark_task_1e_shared_codebase_codex_check_20260624_221804\\spec\\cityos_module_plan.json",
+  "apps_dir": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps",
+  "apps": [
+    {
+      "name": "codex-integration-smoke-developer-a",
+      "kind": "agent",
+      "agent": "DEVELOPER_A",
+      "path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps\\codex-integration-smoke-developer-a",
+      "build_command": "just build codex-integration-smoke-developer-a"
+    },
+    {
+      "name": "codex-integration-smoke-developer-b",
+      "kind": "agent",
+      "agent": "DEVELOPER_B",
+      "path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps\\codex-integration-smoke-developer-b",
+      "build_command": "just build codex-integration-smoke-developer-b"
+    },
+    {
+      "name": "codex-integration-smoke-developer-c",
+      "kind": "agent",
+      "agent": "DEVELOPER_C",
+      "path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps\\codex-integration-smoke-developer-c",
+      "build_command": "just build codex-integration-smoke-developer-c"
+    },
+    {
+      "name": "codex-integration-smoke-monitor",
+      "kind": "monitor",
+      "agent": null,
+      "path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps\\codex-integration-smoke-monitor",
+      "build_command": "just build codex-integration-smoke-monitor"
+    }
+  ]
+}
