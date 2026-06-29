@@ -37,9 +37,10 @@ tracefix-coord = "tracefix.runtime.coord_mcp.server:main"
 tracefix-domain = "tracefix.runtime.domain_mcp.server:main"
 tracefix-ui = "tracefix.ui.server:main"
 tracefix-runner = "tracefix.runner_ui.server:main"
+tracefix-cityos-synth = "tracefix.cityos_synth_ui.server:main"
 
 [tool.setuptools.packages.find]
 include = ["tracefix*", "benchmark*"]
 
 [tool.setuptools.package-data]
-tracefix = ["ui/static/*", "runner_ui/static/*", "pipeline/PLUSCAL_RULES.md"]
+tracefix = ["ui/static/*", "runner_ui/static/*", "cityos_synth_ui/static/*", "pipeline/PLUSCAL_RULES.md"]
