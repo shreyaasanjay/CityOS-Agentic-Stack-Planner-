@@ -19,6 +19,7 @@ import asyncio
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -139,6 +140,12 @@ def ir_repair_kickoff(workspace_rel: str, errors: list[str]) -> str:
     error_text = "\n".join(f"- {error}" for error in errors) or "- unknown IR validation failure"
     return (
         f"Repair ONLY `{workspace_rel}/spec/ir.json`.\n\n"
+        f"First read `{workspace_rel}/description.md`; it is the source of "
+        "truth for the application task, agent names, shared resources, and "
+        "coordination requirements. If the current IR still looks like a "
+        "generic init stub such as AGENT_A/AGENT_B with empty resources or "
+        "channels, replace that stub with a task-faithful IR derived from "
+        "`description.md`.\n\n"
         f"Current IR validation errors:\n{error_text}\n\n"
         "Rules:\n"
         "- Do not remove agents.\n"
@@ -324,6 +331,97 @@ def _channel_diagnostics(before: dict | None, after: dict | None) -> list[str]:
             f"labels=[{label_text}]"
         )
     return diagnostics
+
+
+def _ir_counts(ir: dict | None) -> dict[str, int]:
+    if not isinstance(ir, dict):
+        return {"agents": 0, "resources": 0, "channels": 0}
+    return {
+        "agents": len(ir.get("agents", [])) if isinstance(ir.get("agents"), list) else 0,
+        "resources": len(ir.get("resources", [])) if isinstance(ir.get("resources"), list) else 0,
+        "channels": len(ir.get("channels", [])) if isinstance(ir.get("channels"), list) else 0,
+    }
+
+
+def _looks_like_init_stub(ir: dict | None) -> bool:
+    if not isinstance(ir, dict):
+        return False
+    counts = _ir_counts(ir)
+    agents = _agent_ids(ir)
+    return (
+        counts["channels"] == 0
+        and counts["resources"] == 0
+        and agents in (["AGENT_A", "AGENT_B"], ["agent_a", "agent_b"])
+    )
+
+
+def _workspace_stage_diagnostics(ws: Path, label: str) -> list[str]:
+    spec = _spec_dir(ws)
+    desc_path = ws / "description.md"
+    ir_path = spec / "ir.json"
+    diagnostics = [f"{label}: workspace={ws}"]
+
+    if desc_path.is_file():
+        description = safe_read_text(desc_path, default="")
+        preview = " ".join(description.split())[:500]
+        diagnostics.append(
+            f"{label}: description.md size={desc_path.stat().st_size} preview={preview!r}"
+        )
+    else:
+        diagnostics.append(f"{label}: description.md missing at {desc_path}")
+
+    if ir_path.is_file():
+        ir = _load_ir(ws)
+        counts = _ir_counts(ir)
+        diagnostics.append(
+            f"{label}: ir.json path={ir_path} size={ir_path.stat().st_size} "
+            f"agents={counts['agents']} resources={counts['resources']} "
+            f"channels={counts['channels']}"
+        )
+    else:
+        diagnostics.append(f"{label}: ir.json missing at {ir_path}")
+
+    return diagnostics
+
+
+def _opencode_provider_diagnostics(ws: Path, disposition: dict) -> list[str]:
+    haystack = "\n".join(str(line) for line in disposition.get("stderr_tail", []))
+    log_path = ws / ".design" / "data" / "opencode" / "log" / "opencode.log"
+    if log_path.is_file():
+        try:
+            haystack += "\n" + safe_read_text(log_path, default="")[-12000:]
+        except OSError:
+            pass
+    lowered = haystack.lower()
+    auth_markers = [
+        "missing authentication header",
+        "unauthorized",
+        "invalid api key",
+        "authentication",
+        "api key",
+    ]
+    model_markers = [
+        "providermodelnotfounderror",
+        "model not found",
+        "unsupported model",
+        "model is not supported",
+    ]
+    if any(marker in lowered for marker in auth_markers):
+        return [
+            "OpenCode/provider authentication error detected; design model "
+            "did not complete a usable IR update.",
+            "Check the selected provider API key in the UI or environment "
+            "before treating this as an IR topology failure.",
+        ]
+    if any(marker in lowered for marker in model_markers):
+        return [
+            "OpenCode/provider model error detected; design model did not "
+            "complete a usable IR update.",
+            "Check that the selected model is installed/available in the "
+            "OpenCode provider catalog before treating this as an IR topology "
+            "failure.",
+        ]
+    return []
 
 
 def _normalize_legacy_endeither_syntax(tla_content: str) -> tuple[str, list[str]]:
@@ -525,6 +623,44 @@ def _scaffold_valid_ir(ws: Path) -> list[str]:
     ]
 
 
+def _format_command(cmd: list[str]) -> str:
+    return subprocess.list2cmdline([str(part) for part in cmd])
+
+
+def _write_tlc_stage_error(ws: Path, title: str, body: str) -> None:
+    spec = _spec_dir(ws)
+    spec.mkdir(parents=True, exist_ok=True)
+    (spec / "tlc_error.md").write_text(
+        f"# {title}\n\n{body.rstrip()}\n",
+        encoding="utf-8",
+    )
+
+
+def _verification_needed_after_scaffold(ws: Path) -> tuple[bool, list[str]]:
+    valid_ir, ir_errors, diagnostics = validate_design_ir(ws)
+    spec = _spec_dir(ws)
+    if not valid_ir:
+        return False, [*diagnostics, *ir_errors]
+    if not (spec / "Protocol.tla").is_file():
+        return False, [*diagnostics, "Post-scaffold verification skipped: Protocol.tla missing"]
+    if not (spec / "Protocol.cfg").is_file():
+        return False, [*diagnostics, "Post-scaffold verification skipped: Protocol.cfg missing"]
+
+    summary = {}
+    if (spec / "summary.json").is_file():
+        try:
+            summary = safe_read_json(spec / "summary.json", {})
+        except (json.JSONDecodeError, OSError):
+            summary = {}
+    if summary.get("tlc_passed") in (True, False):
+        return False, [*diagnostics, "Post-scaffold verification already has summary.json"]
+    if (spec / "states.json").is_file():
+        return False, [*diagnostics, "Post-scaffold verification already has states.json"]
+    if (spec / "tlc_error.md").is_file():
+        return False, [*diagnostics, "Post-scaffold verification already has tlc_error.md"]
+    return True, [*diagnostics, "Post-scaffold verification required"]
+
+
 def _run_tlc_and_extract(ws: Path) -> list[str]:
     """Python-level TLC verification + state extraction fallback.
 
@@ -584,10 +720,26 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
     cfg_content = safe_read_text(cfg_path)
     java = resolve_java()
     jar = resolve_jar()
+    pcal_command = [java, "-cp", jar, "pcal.trans", "Protocol.tla"]
+    tlc_command = [
+        java,
+        "-Xmx4g",
+        "-cp",
+        jar,
+        "tlc2.TLC",
+        "-config",
+        "Protocol.cfg",
+        "-workers",
+        "auto",
+        "Protocol.tla",
+    ]
 
     # Step 1: PlusCal to TLA+ translation
-    diagnostics.append("TLC fallback: translating PlusCal to TLA+")
+    diagnostics.append("[TRACEFIX PLUSCAL START]")
+    diagnostics.append(f"[TRACEFIX PLUSCAL COMMAND] {_format_command(pcal_command)}")
+    pcal_start = time.time()
     pcal_result = translate_pluscal(tla_content, cfg_content, java_path=java, tla2tools_jar=jar)
+    pcal_duration = time.time() - pcal_start
 
     if not pcal_result.success:
         repaired_content, repair_diagnostics = _normalize_legacy_endeither_syntax(tla_content)
@@ -609,33 +761,52 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
                 diagnostics.append(
                     "TLC fallback: PlusCal translation succeeded after syntax repair"
                 )
+    pcal_duration = time.time() - pcal_start
 
     if not pcal_result.success:
+        diagnostics.append(
+            f"[TRACEFIX PLUSCAL END] result=fail duration={pcal_duration:.2f}s"
+        )
         diagnostics.append(
             f"TLC fallback: PlusCal translation failed: {pcal_result.error_message[:120]}"
         )
         (spec / "tlc_error.md").write_text(
-            f"# PlusCal Translation Error\n\n```\n{pcal_result.error_message}\n```\n\n"
+            f"# PlusCal Translation Error\n\n"
+            f"## Command\n\n```\n{_format_command(pcal_command)}\n```\n\n"
+            f"## Output\n\n```\n{pcal_result.error_message}\n```\n\n"
             f"**Artifacts**: {_artifact_inventory()}\n"
             f"**Expected**: {spec / 'states.json'}\n",
             encoding="utf-8",
         )
         return diagnostics
 
+    diagnostics.append(
+        f"[TRACEFIX PLUSCAL END] result=pass duration={pcal_duration:.2f}s"
+    )
     (spec / "Protocol_translated.tla").write_text(pcal_result.translated_tla, encoding="utf-8")
     diagnostics.append(
         "TLC fallback: PlusCal translation succeeded; wrote Protocol_translated.tla"
     )
 
     # Step 2: Run TLC on translated spec
-    diagnostics.append("TLC fallback: running TLC model checker")
+    diagnostics.append("[TRACEFIX TLC START]")
+    diagnostics.append(f"[TRACEFIX TLC COMMAND] {_format_command(tlc_command)}")
+    tlc_start = time.time()
     tlc_result = run_tlc(pcal_result.translated_tla, cfg_content, java_path=java, tla2tools_jar=jar)
+    tlc_duration = time.time() - tlc_start
     (spec / "tlc_output.log").write_text(tlc_result.raw_output, encoding="utf-8")
 
     if not tlc_result.success:
+        diagnostics.append(
+            f"[TRACEFIX TLC END] result=fail duration={tlc_duration:.2f}s"
+        )
         trace = parse_trace(tlc_result.raw_output)
         error_md = format_tlc_error(tlc_result, trace)
-        (spec / "tlc_error.md").write_text(error_md, encoding="utf-8")
+        (spec / "tlc_error.md").write_text(
+            f"## Command\n\n```\n{_format_command(tlc_command)}\n```\n\n"
+            f"{error_md}",
+            encoding="utf-8",
+        )
         (spec / "summary.json").write_text(
             json.dumps({"tlc_passed": False, "total_repairs": 0}, indent=2) + "\n",
             encoding="utf-8",
@@ -646,6 +817,9 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
         )
         return diagnostics
 
+    diagnostics.append(
+        f"[TRACEFIX TLC END] result=pass duration={tlc_duration:.2f}s"
+    )
     diagnostics.append("TLC fallback: TLC passed; wrote tlc_output.log")
 
     # Step 3: Extract per-agent states
@@ -966,8 +1140,11 @@ async def run_design(
     timed_out = disposition["status"] == "timeout"
     run_diagnostics = [
         f"Workspace initialized: {ws_rel}",
+        f"Model requested: {model or '(opencode default)'}",
         "OpenCode design attempt finished",
     ]
+    run_diagnostics.extend(_workspace_stage_diagnostics(ws, "after initial design"))
+    run_diagnostics.extend(_opencode_provider_diagnostics(ws, disposition))
     status, ir_errors, diagnostics = classify_design_artifacts(ws, timed_out=timed_out)
     diagnostics = [*run_diagnostics, *diagnostics]
     repair_disposition = None
@@ -1031,6 +1208,8 @@ async def run_design(
         )
         diagnostics.append("IR repair pass finished")
         diagnostics.extend(_channel_diagnostics(ir_before_repair, _load_ir(ws)))
+        diagnostics.extend(_workspace_stage_diagnostics(ws, "after IR repair"))
+        diagnostics.extend(_opencode_provider_diagnostics(ws, repair_disposition))
         status, ir_errors, repair_diagnostics = classify_design_artifacts(
             ws,
             timed_out=repair_disposition["status"] == "timeout",
@@ -1081,6 +1260,28 @@ async def run_design(
                         + post_repair_continuation.get("events", 0)
                     )
 
+    needs_verify, verify_gate_diagnostics = _verification_needed_after_scaffold(ws)
+    diagnostics.extend(verify_gate_diagnostics)
+    if needs_verify:
+        diagnostics.append(
+            "Post-scaffold verification gate started: IR and scaffold artifacts "
+            "are present, so PlusCal/TLC must run"
+        )
+        try:
+            diagnostics.extend(_run_tlc_and_extract(ws))
+        except Exception as exc:  # noqa: BLE001
+            diagnostics.append(f"Post-scaffold verification gate exception: {exc}")
+            _write_tlc_stage_error(
+                ws,
+                "PlusCal/TLC Stage Exception",
+                "TraceFix reached a valid IR plus Protocol.tla/Protocol.cfg, "
+                "but the deterministic verification gate raised before it could "
+                "complete.\n\n"
+                f"Exception:\n\n```\n{exc}\n```",
+            )
+        status, ir_errors, gate_diagnostics = classify_design_artifacts(ws)
+        diagnostics.extend(gate_diagnostics)
+
     if _verified_protocol_ready(ws) and not timed_out:
         diagnostics.append("Prompt gate started")
         diagnostics.extend(_ensure_plan_before_prompts(ws))
@@ -1124,6 +1325,16 @@ async def run_design(
     ]
     if result.status == "incomplete" and disposition.get("returncode") not in (0, None):
         result.status = "error"
+    if _looks_like_init_stub(_load_ir(ws)) and any(
+        "provider authentication error detected" in item
+        or "provider model error detected" in item
+        for item in diagnostics
+    ):
+        result.status = "error"
+        result.ir_errors = [
+            "OpenCode/provider startup failed before TraceFix could replace "
+            "the initial IR stub."
+        ]
 
     if result.success:
         try:
