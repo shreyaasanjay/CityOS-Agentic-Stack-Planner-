@@ -2,7 +2,7 @@ $ErrorActionPreference = "Continue"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $StateDir = Join-Path $RepoRoot ".tracefix-ui"
 
-foreach ($Name in @("viewer", "runner")) {
+foreach ($Name in @("viewer", "runner", "cityos-synth")) {
   $PidFile = Join-Path $StateDir "$Name.pid"
   if (Test-Path $PidFile) {
     $ProcessId = (Get-Content $PidFile -Raw).Trim()
@@ -13,4 +13,3 @@ foreach ($Name in @("viewer", "runner")) {
     Remove-Item $PidFile -ErrorAction SilentlyContinue
   }
 }
-
