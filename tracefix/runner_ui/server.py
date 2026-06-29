@@ -28,7 +28,7 @@ from tracefix.textio import safe_read_json, safe_read_text
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-UI_BUILD = "tracefix-runner-ui-20260629-og-ui-v3-synth"
+UI_BUILD = "tracefix-runner-ui-20260629-og-ui-v4-workspace-synth"
 RUNS: dict[str, "RunState"] = {}
 RUNS_LOCK = threading.Lock()
 
@@ -502,17 +502,14 @@ def _default_cityos_root() -> Path | None:
     return candidate.resolve() if candidate.exists() else None
 
 
-def _synth_apps_dir(payload: dict[str, Any]) -> Path:
+def _synth_apps_dir(payload: dict[str, Any], workspace: Path) -> Path:
     raw_apps = str(payload.get("appsDir") or "").strip()
     if raw_apps:
         return Path(raw_apps).expanduser().resolve()
     raw_cityos = str(payload.get("cityosRoot") or "").strip()
     if raw_cityos:
         return (Path(raw_cityos).expanduser() / "apps").resolve()
-    default_root = _default_cityos_root()
-    if default_root is not None:
-        return (default_root / "apps").resolve()
-    raise ValueError("CityOS root or apps directory is required")
+    return (workspace / "output" / "cityos_synthesis").resolve()
 
 
 def _synth_file_requirements(workspace: Path) -> list[dict[str, Any]]:
@@ -585,6 +582,7 @@ def _synth_workspace_summary(workspace: Path) -> dict[str, Any]:
         "resources": topology.get("resources", []) if isinstance(topology, dict) else [],
         "requirements": requirements,
         "missingRequired": missing_required,
+        "outputDir": str((workspace / "output" / "cityos_synthesis").resolve()),
         "ready": not missing_required and verification.get("production_ready") is True,
     }
 
@@ -604,7 +602,16 @@ def _run_cityos_synthesis(root: Path, payload: dict[str, Any]) -> dict[str, Any]
     workspace = _workspace_from_payload(root, payload)
     if not workspace.exists():
         raise FileNotFoundError(f"Workspace does not exist: {workspace}")
-    apps_dir = _synth_apps_dir(payload)
+    summary = _synth_workspace_summary(workspace)
+    missing = summary.get("missingRequired") or []
+    if missing:
+        details = "; ".join(
+            f"{item.get('path')} (created by: {item.get('createdBy')})"
+            for item in missing
+            if isinstance(item, dict)
+        )
+        raise FileNotFoundError(f"Workspace is missing required synthesis artifacts: {details}")
+    apps_dir = _synth_apps_dir(payload, workspace)
     package_name = str(payload.get("packageName") or "").strip() or None
     overwrite = bool(payload.get("overwrite"))
     result = synthesize_cityos_apps(
@@ -618,6 +625,7 @@ def _run_cityos_synthesis(root: Path, payload: dict[str, Any]) -> dict[str, Any]
         "planPath": str(result.plan_path),
         "appsDir": str(result.apps_dir),
         "manifestPath": str(result.manifest_path),
+        "outputDir": str(result.apps_dir),
         "apps": [
             {
                 "name": app.name,

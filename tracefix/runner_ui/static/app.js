@@ -93,8 +93,7 @@ const els = {
   synthPanel: document.querySelector("#synthPanel"),
   synthWorkspaceSelect: document.querySelector("#synthWorkspaceSelect"),
   synthWorkspacePath: document.querySelector("#synthWorkspacePath"),
-  synthCityosRoot: document.querySelector("#synthCityosRoot"),
-  synthAppsDir: document.querySelector("#synthAppsDir"),
+  synthOutputDir: document.querySelector("#synthOutputDir"),
   synthPackageName: document.querySelector("#synthPackageName"),
   synthOverwrite: document.querySelector("#synthOverwrite"),
   synthRefresh: document.querySelector("#synthRefresh"),
@@ -338,8 +337,6 @@ async function loadUiInfo() {
 async function loadSynthConfig() {
   try {
     const data = await getJson("/api/synth/config");
-    if (data.cityosRoot && !els.synthCityosRoot.value) els.synthCityosRoot.value = data.cityosRoot;
-    if (data.appsDir && !els.synthAppsDir.value) els.synthAppsDir.value = data.appsDir;
     state.synth.workspaces = data.workspaces || [];
     renderSynthWorkspaceOptions();
     const current = els.synthWorkspacePath.value || state.artifacts.workspace || state.synth.workspaces[0]?.path || "";
@@ -399,6 +396,7 @@ function renderSynthSummary(summary) {
     : `Not ready: ${summary.verificationStatus || "missing artifacts"}`;
   els.synthWorkspaceDisplay.textContent = summary.path;
   els.synthPlanDisplay.textContent = summary.hasPlan ? summary.planPath : "Missing spec/cityos_module_plan.json";
+  els.synthOutputDir.value = summary.outputDir || "";
   els.synthAgentsDisplay.textContent = String((summary.agents || []).length);
   els.synthChannelsDisplay.textContent = String((summary.channels || []).length);
   els.synthResourcesDisplay.textContent = String((summary.resources || []).length);
@@ -426,9 +424,7 @@ async function synthesizeCityOSArtifacts() {
   els.synthOutput.textContent = "Calling synthesize_cityos_apps(...) through the active runner backend...\n";
   try {
     const result = await postJson("/api/synth/synthesize", {
-      workspacePath,
-      cityosRoot: els.synthCityosRoot.value,
-      appsDir: els.synthAppsDir.value,
+      workspace: workspacePath,
       packageName: els.synthPackageName.value,
       overwrite: els.synthOverwrite.checked,
     });

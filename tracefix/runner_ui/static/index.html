@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TraceFix Intermediary Planner</title>
-    <link rel="stylesheet" href="/static/styles.css?v=tracefix-runner-ui-20260629-og-ui-v3-synth" />
+    <link rel="stylesheet" href="/static/styles.css?v=tracefix-runner-ui-20260629-og-ui-v4-workspace-synth" />
   </head>
   <body>
     <main class="runner-shell">
@@ -172,15 +172,11 @@
           </section>
 
           <section class="sidebar-section">
-            <h2>CityOS Output</h2>
+            <h2>Synthesis Output</h2>
             <div class="section-body">
               <label>
-                CityOS root
-                <input id="synthCityosRoot" autocomplete="off" placeholder="C:\Users\razer\TraceFix-CityOS\GitHub\cityos" />
-              </label>
-              <label>
-                Apps directory
-                <input id="synthAppsDir" autocomplete="off" placeholder="CityOS apps directory" />
+                Output directory
+                <input id="synthOutputDir" autocomplete="off" readonly placeholder="workspace/<run_id>/output/cityos_synthesis" />
               </label>
               <label>
                 Package prefix
@@ -343,6 +339,6 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=tracefix-runner-ui-20260629-og-ui-v3-synth" type="module"></script>
+    <script src="/static/app.js?v=tracefix-runner-ui-20260629-og-ui-v4-workspace-synth" type="module"></script>
   </body>
 </html>
