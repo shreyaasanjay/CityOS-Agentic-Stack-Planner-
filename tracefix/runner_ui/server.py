@@ -24,11 +24,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+from tracefix.runner_ui.tellme_bridge import TellMeBridge
 from tracefix.textio import safe_read_json, safe_read_text
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-UI_BUILD = "tracefix-runner-ui-20260630-og-ui-v5-cityos-app-cards"
+UI_BUILD = "tracefix-unified-ui-20260630-tellme-v1"
 RUNS: dict[str, "RunState"] = {}
 RUNS_LOCK = threading.Lock()
 
@@ -44,6 +45,56 @@ _MODEL_PRICES: dict[str, tuple[float, float]] = {
     "claude-opus": (15.00, 75.00),
     "claude-opus-4": (15.00, 75.00),
 }
+
+
+def _clean_key(value: Any) -> str:
+    return (str(value) if value is not None else "").strip()
+
+
+def _api_envelope(
+    *,
+    ok: bool,
+    data: Any = None,
+    errors: list[str] | None = None,
+    warnings: list[str] | None = None,
+    artifact_paths: list[str] | None = None,
+    run_id: str | None = None,
+    mode: str | None = None,
+    model: str | None = None,
+    api_key_detected: bool | None = None,
+) -> dict[str, Any]:
+    payload = {
+        "ok": ok,
+        "data": data,
+        "errors": errors or [],
+        "warnings": warnings or [],
+        "artifact_paths": artifact_paths or [],
+        "run_id": run_id,
+    }
+    if mode is not None:
+        payload["mode"] = mode
+    if model is not None:
+        payload["model"] = model
+    if api_key_detected is not None:
+        payload["api_key_detected"] = api_key_detected
+    return payload
+
+
+def _tellme_bridge(root: Path) -> TellMeBridge:
+    return TellMeBridge(root)
+
+
+def _tracefix_current(root: Path) -> dict[str, Any]:
+    current = _tellme_bridge(root).current() or {}
+    tracefix = current.get("tracefix") if isinstance(current.get("tracefix"), dict) else {}
+    run_id = str(tracefix.get("run_id") or "")
+    run = RUNS.get(run_id) if run_id else None
+    if run is None:
+        return {"run_id": run_id, **tracefix}
+    snapshot = run.snapshot()
+    if run.workspace is not None:
+        _tellme_bridge(root).record_tracefix_workspace(run.id, str(run.workspace))
+    return snapshot
 
 
 def _repo_root() -> Path:
@@ -1321,6 +1372,8 @@ def _finish_run(run: RunState, exit_code: int) -> None:
     )
     if run.workspace is None:
         run.workspace = _find_workspace(run.experiment_dir)
+    if run.workspace is not None:
+        _tellme_bridge(run.root).record_tracefix_workspace(run.id, str(run.workspace))
     run.finalize_usage()
     run.publish({"type": "artifacts", "artifacts": _artifact_snapshot(run.workspace)})
     run.publish_usage()
@@ -1350,6 +1403,80 @@ class RunnerHandler(BaseHTTPRequestHandler):
                 self._send_error(404, "Not Found")
                 return
             self._send_file(STATIC_DIR / safe_name)
+            return
+        if path == "/api/health":
+            self._send_json(_api_envelope(
+                ok=True,
+                data={
+                    "service": "tracefix-unified-ui",
+                    "status": "healthy",
+                    "port": self.server.server_port,
+                    "repo_root": str(self.root.resolve()),
+                    "ui_build": UI_BUILD,
+                },
+            ))
+            return
+        if path == "/api/tellme/current":
+            bridge = _tellme_bridge(self.root)
+            current = bridge.current()
+            data = current.get("tellme") if current else None
+            config = bridge.llm_config()
+            self._send_json(_api_envelope(
+                ok=data is not None,
+                data=data,
+                errors=[] if data is not None else ["No TeLLMe run is available yet."],
+                warnings=list(data.get("warnings") or []) if isinstance(data, dict) else [],
+                artifact_paths=bridge.artifact_paths(data) if isinstance(data, dict) else [],
+                run_id=str(current.get("run_id")) if current else None,
+                mode=str(data.get("mode") or "deterministic") if isinstance(data, dict) else config["mode"],
+                model=str(data.get("model") or config["model"]) if isinstance(data, dict) else config["model"],
+                api_key_detected=config["api_key_detected"],
+            ))
+            return
+        if path == "/api/tellme/config":
+            config = _tellme_bridge(self.root).llm_config()
+            self._send_json(_api_envelope(
+                ok=True,
+                data=config,
+                mode=config["mode"],
+                model=config["model"],
+                api_key_detected=config["api_key_detected"],
+            ))
+            return
+        if path == "/api/tracefix/current":
+            data = _tracefix_current(self.root)
+            run_id = str(data.get("id") or data.get("run_id") or "")
+            workspace = str(
+                data.get("workspace")
+                or ((data.get("artifacts") or {}).get("workspace") if isinstance(data.get("artifacts"), dict) else "")
+                or ""
+            )
+            artifact_paths = []
+            if workspace:
+                artifact_paths = (_artifact_snapshot(Path(workspace)).get("files") or [])
+            self._send_json(_api_envelope(
+                ok=bool(run_id),
+                data=data,
+                errors=[] if run_id else ["No TraceFix run has been started from TeLLMe."],
+                artifact_paths=artifact_paths,
+                run_id=run_id or None,
+            ))
+            return
+        if path == "/api/cityos/current":
+            current = _tellme_bridge(self.root).current() or {}
+            tracefix = current.get("tracefix") if isinstance(current.get("tracefix"), dict) else {}
+            cityos = current.get("cityos") if isinstance(current.get("cityos"), dict) else {}
+            workspace_raw = str(tracefix.get("workspace") or "")
+            summary = None
+            if workspace_raw and Path(workspace_raw).exists():
+                summary = _synth_workspace_summary(Path(workspace_raw))
+            data = {"result": cityos, "workspace": summary}
+            self._send_json(_api_envelope(
+                ok=bool(summary or cityos),
+                data=data,
+                errors=[] if summary or cityos else ["No verified TraceFix workspace is available for synthesis."],
+                run_id=str(current.get("run_id") or "") or None,
+            ))
             return
         if path == "/api/ui-info":
             self._send_json({
@@ -1418,6 +1545,117 @@ class RunnerHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/tellme/query":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_json(_api_envelope(ok=False, errors=["Invalid JSON request body."]), status=400)
+                return
+            bridge = _tellme_bridge(self.root)
+            config = bridge.llm_config()
+            requested_mode = str(payload.get("mode") or payload.get("backend_mode") or "deterministic")
+            requested_model = str(payload.get("model") or payload.get("llm_model") or config["model"])
+            request_api_key = _clean_key(payload.get("api_key"))
+            env_api_key = _clean_key(os.getenv("TELLME_API_KEY") or os.getenv("OPENAI_API_KEY") or "")
+            effective_api_key = request_api_key or env_api_key
+            api_key_detected = bool(effective_api_key)
+            if requested_mode == "llm" and not effective_api_key:
+                self._send_json(_api_envelope(
+                    ok=False,
+                    errors=["LLM mode selected, but no API key was provided. Paste an API key in the TeLLMe panel or set OPENAI_API_KEY/TELLME_API_KEY."],
+                    mode=requested_mode,
+                    model=requested_model,
+                    api_key_detected=False,
+                ), status=400)
+                return
+            try:
+                data = bridge.process_query(
+                    query=str(payload.get("query") or payload.get("user_query") or ""),
+                    space_id=str(payload.get("space_id") or "").strip() or None,
+                    timestamp=str(payload.get("timestamp") or "").strip() or None,
+                    backend_mode=requested_mode,
+                    llm_model=requested_model,
+                    request_api_key=effective_api_key or None,
+                )
+            except Exception as exc:  # noqa: BLE001 - API must surface TeLLMe failures
+                self._send_json(
+                    _api_envelope(
+                        ok=False,
+                        errors=[str(exc)],
+                        mode=requested_mode,
+                        model=requested_model,
+                        api_key_detected=api_key_detected,
+                    ),
+                    status=400,
+                )
+                return
+            self._send_json(_api_envelope(
+                ok=True,
+                data=data,
+                warnings=list(data.get("warnings") or []),
+                artifact_paths=bridge.artifact_paths(data),
+                run_id=str(data.get("query_id") or ""),
+                mode=str(data.get("mode") or requested_mode),
+                model=str(data.get("model") or requested_model),
+                api_key_detected=api_key_detected,
+            ), status=201)
+            return
+        if parsed.path == "/api/tracefix/from-tellme":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_json(_api_envelope(ok=False, errors=["Invalid JSON request body."]), status=400)
+                return
+            try:
+                bridge = _tellme_bridge(self.root)
+                task_text = bridge.tracefix_task_text()
+                run_payload = dict(payload)
+                run_payload.update({
+                    "mode": "design",
+                    "taskMode": "custom",
+                    "customTask": task_text,
+                })
+                run = _start_run(self.root, run_payload)
+                bridge.record_tracefix_run(run.id)
+            except Exception as exc:  # noqa: BLE001 - API must surface handoff failures
+                self._send_json(
+                    _api_envelope(ok=False, errors=[f"{type(exc).__name__}: {exc}"]),
+                    status=400,
+                )
+                return
+            self._send_json(_api_envelope(
+                ok=True,
+                data=run.snapshot(),
+                run_id=run.id,
+            ), status=201)
+            return
+        if parsed.path == "/api/cityos/synthesize":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_json(_api_envelope(ok=False, errors=["Invalid JSON request body."]), status=400)
+                return
+            try:
+                current = _tellme_bridge(self.root).current() or {}
+                tracefix = current.get("tracefix") if isinstance(current.get("tracefix"), dict) else {}
+                synth_payload = dict(payload)
+                if not synth_payload.get("workspace") and not synth_payload.get("workspacePath"):
+                    synth_payload["workspace"] = tracefix.get("workspace")
+                result = _run_cityos_synthesis(self.root, synth_payload)
+                _tellme_bridge(self.root).record_cityos_result(result)
+            except Exception as exc:  # noqa: BLE001 - API must surface synthesis failures
+                self._send_json(
+                    _api_envelope(ok=False, errors=[f"{type(exc).__name__}: {exc}"]),
+                    status=400,
+                )
+                return
+            self._send_json(_api_envelope(
+                ok=True,
+                data=result,
+                artifact_paths=[
+                    str(result.get("manifestPath") or ""),
+                    *[str(app.get("path") or "") for app in result.get("apps") or []],
+                ],
+                run_id=str(current.get("run_id") or "") or None,
+            ))
+            return
         if parsed.path == "/api/runs":
             payload = self._read_json_body()
             if payload is None:
@@ -1591,6 +1829,12 @@ def run_server(host: str = "127.0.0.1", port: int = 8788, root: Path | None = No
     print(f"TraceFix JAVA_HOME: {startup_env.get('JAVA_HOME', '')}")
     print(f"TraceFix PATH beginning: {_path_beginning(startup_env.get('PATH', ''))}")
     print(f"TraceFix final Java selected by toolchain: {_selected_java_for_env(startup_env)}")
+    _openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    _tellme_key = (os.getenv("TELLME_API_KEY") or "").strip()
+    print(f"TeLLMe OPENAI_API_KEY detected: {bool(_openai_key)}", flush=True)
+    print(f"TeLLMe TELLME_API_KEY detected: {bool(_tellme_key)}", flush=True)
+    print(f"TeLLMe TELLME_MODEL: {os.getenv('TELLME_MODEL') or '(not set, using default)'}", flush=True)
+    del _openai_key, _tellme_key
     try:
         server.serve_forever()
     except KeyboardInterrupt:

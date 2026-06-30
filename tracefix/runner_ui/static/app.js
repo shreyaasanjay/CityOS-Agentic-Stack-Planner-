@@ -1,5 +1,5 @@
 const state = {
-  workflow: "planner",
+  workflow: "tellme",
   tasks: [],
   runMode: "design",
   taskMode: "benchmark",
@@ -12,6 +12,13 @@ const state = {
   activeView: "log",
   usage: null,
   usageDetailsOpen: false,
+  tellme: {
+    current: null,
+    runId: null,
+    apiKeyDetected: false,
+    envKeyDetected: false,
+    model: "gpt-4.1-mini",
+  },
   synth: {
     workspaces: [],
     selected: null,
@@ -20,6 +27,30 @@ const state = {
 };
 
 const els = {
+  tellmeForm: document.querySelector("#tellmeForm"),
+  tellmeMode: document.querySelector("#tellmeMode"),
+  tellmeModel: document.querySelector("#tellmeModel"),
+  tellmeApiKey: document.querySelector("#tellmeApiKey"),
+  tellmeKeyRow: document.querySelector("#tellmeKeyRow"),
+  tellmeKeyStatus: document.querySelector("#tellmeKeyStatus"),
+  tellmeQuery: document.querySelector("#tellmeQuery"),
+  tellmeSpaceId: document.querySelector("#tellmeSpaceId"),
+  tellmeTimestamp: document.querySelector("#tellmeTimestamp"),
+  tellmeProcess: document.querySelector("#tellmeProcess"),
+  tellmeToTracefix: document.querySelector("#tellmeToTracefix"),
+  tellmePanel: document.querySelector("#tellmePanel"),
+  tellmeRoute: document.querySelector("#tellmeRoute"),
+  tellmeRationale: document.querySelector("#tellmeRationale"),
+  tellmePrivacy: document.querySelector("#tellmePrivacy"),
+  tellmePrivacyScope: document.querySelector("#tellmePrivacyScope"),
+  tellmeTaskCount: document.querySelector("#tellmeTaskCount"),
+  tellmeHarnessCount: document.querySelector("#tellmeHarnessCount"),
+  tellmeRunStatus: document.querySelector("#tellmeRunStatus"),
+  tellmeRunId: document.querySelector("#tellmeRunId"),
+  tellmeMessages: document.querySelector("#tellmeMessages"),
+  tellmeIntent: document.querySelector("#tellmeIntent"),
+  tellmeTaskSpec: document.querySelector("#tellmeTaskSpec"),
+  tellmeAnswer: document.querySelector("#tellmeAnswer"),
   form: document.querySelector("#runForm"),
   provider: document.querySelector("#provider"),
   providerFields: document.querySelector("#providerFields"),
@@ -157,8 +188,9 @@ function showToast(text) {
 
 async function getJson(url) {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return response.json();
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || data.errors?.join("; ") || `Request failed: ${response.status}`);
+  return data;
 }
 
 async function postJson(url, payload) {
@@ -168,7 +200,7 @@ async function postJson(url, payload) {
     body: JSON.stringify(payload),
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || `Request failed: ${response.status}`);
+  if (!response.ok) throw new Error(data.error || data.errors?.join("; ") || `Request failed: ${response.status}`);
   return data;
 }
 
@@ -180,8 +212,26 @@ function bindEvents() {
         item.classList.toggle("active", item === button);
       });
       updateWorkflow();
+      if (state.workflow === "tellme") await loadTellMeCurrent();
       if (state.workflow === "synth") await loadSynthConfig();
     });
+  });
+
+  els.tellmeForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await processTellMeQuery();
+  });
+
+  els.tellmeMode.addEventListener("change", () => {
+    updateTellMeModeFields();
+  });
+
+  els.tellmeApiKey.addEventListener("input", () => {
+    updateTellMeModeFields();
+  });
+
+  els.tellmeToTracefix.addEventListener("click", async () => {
+    await startTraceFixFromTellMe();
   });
 
   els.provider.addEventListener("change", () => {
@@ -283,14 +333,23 @@ function bindEvents() {
 }
 
 function updateWorkflow() {
+  const isTellMe = state.workflow === "tellme";
+  const isPlanner = state.workflow === "planner";
   const isSynth = state.workflow === "synth";
-  els.runForm.classList.toggle("hidden", isSynth);
+  els.tellmeForm.classList.toggle("hidden", !isTellMe);
+  els.tellmePanel.classList.toggle("hidden", !isTellMe);
+  els.runForm.classList.toggle("hidden", !isPlanner);
   els.synthControls.classList.toggle("hidden", !isSynth);
   els.synthPanel.classList.toggle("hidden", !isSynth);
   document.querySelectorAll(".planner-only").forEach((section) => {
-    section.classList.toggle("hidden", isSynth);
+    section.classList.toggle("hidden", !isPlanner);
   });
-  if (isSynth) {
+  if (isTellMe) {
+    els.runTitle.textContent = "TeLLMe Intent Planner";
+    els.runMeta.textContent = "Privacy-bounded natural-language entrypoint";
+    els.statusBadge.textContent = state.tellme.current ? "Task ready" : "Idle";
+    els.statusBadge.className = `status-badge ${state.tellme.current ? "completed" : "idle"}`;
+  } else if (isSynth) {
     els.runTitle.textContent = "CityOS Synthesizer";
     els.runMeta.textContent = "Generate CityOS app artifacts from a verified TraceFix plan";
     els.statusBadge.textContent = "Synthesis";
@@ -337,6 +396,181 @@ async function loadUiInfo() {
   } catch (error) {
     els.uiBuildStamp.textContent = "UI build info unavailable";
     els.uiBuildStamp.title = error.message;
+  }
+}
+
+async function loadTellMeConfig() {
+  try {
+    const response = await getJson("/api/tellme/config");
+    const envDetected = response.api_key_detected === true
+      || response.data?.openai_api_key_detected === true
+      || response.data?.tellme_api_key_detected === true;
+    state.tellme.envKeyDetected = envDetected;
+    state.tellme.apiKeyDetected = envDetected;
+    state.tellme.model = response.model || response.data?.model || "gpt-4.1-mini";
+    els.tellmeModel.value = state.tellme.model;
+  } catch {
+    state.tellme.envKeyDetected = false;
+    state.tellme.apiKeyDetected = false;
+  }
+  updateTellMeModeFields();
+}
+
+function updateTellMeModeFields() {
+  const isLlm = els.tellmeMode.value === "llm";
+  els.tellmeModel.disabled = !isLlm;
+  els.tellmeKeyRow.classList.toggle("hidden", !isLlm);
+
+  const typedKey = (els.tellmeApiKey.value || "").trim();
+  let statusText, statusClass;
+  if (typedKey) {
+    statusText = "API key ready";
+    statusClass = "detected";
+  } else if (state.tellme.envKeyDetected) {
+    statusText = "Environment API key detected";
+    statusClass = "detected";
+  } else {
+    statusText = "No API key detected";
+    statusClass = "missing";
+  }
+  els.tellmeKeyStatus.textContent = statusText;
+  els.tellmeKeyStatus.className = `api-key-status ${statusClass}`;
+}
+
+async function loadTellMeCurrent() {
+  try {
+    const response = await getJson("/api/tellme/current");
+    if (response.api_key_detected === true) {
+      state.tellme.envKeyDetected = true;
+      state.tellme.apiKeyDetected = true;
+    }
+    if (response.model) state.tellme.model = response.model;
+    if (response.ok && response.data) {
+      state.tellme.current = response.data;
+      state.tellme.runId = response.run_id;
+      renderTellMe(response.data, response.errors, response.warnings);
+    } else {
+      renderTellMe(null, response.errors, response.warnings);
+    }
+  } catch (error) {
+    renderTellMe(null, [error.message], []);
+  }
+  updateTellMeModeFields();
+}
+
+async function processTellMeQuery() {
+  const query = els.tellmeQuery.value.trim();
+  if (!query) {
+    showToast("Enter a smart-room request");
+    return;
+  }
+  els.tellmeProcess.disabled = true;
+  els.tellmeRunStatus.textContent = "Processing";
+  els.tellmeMessages.innerHTML = `<div class="message-card info">TeLLMe is analyzing route, privacy, and task decomposition...</div>`;
+  try {
+    const isLlm = els.tellmeMode.value === "llm";
+    const response = await postJson("/api/tellme/query", {
+      query,
+      space_id: els.tellmeSpaceId.value.trim() || "smart_room_1",
+      timestamp: els.tellmeTimestamp.value.trim() || null,
+      mode: els.tellmeMode.value,
+      model: els.tellmeModel.value.trim() || state.tellme.model,
+      api_key: isLlm ? (els.tellmeApiKey.value.trim() || null) : null,
+    });
+    state.tellme.apiKeyDetected = response.api_key_detected === true;
+    state.tellme.model = response.model || state.tellme.model;
+    state.tellme.current = response.data;
+    state.tellme.runId = response.run_id;
+    renderTellMe(response.data, response.errors, response.warnings);
+    showToast("TeLLMe task spec generated");
+  } catch (error) {
+    renderTellMe(null, [error.message], []);
+  } finally {
+    els.tellmeProcess.disabled = false;
+    updateTellMeModeFields();
+  }
+}
+
+function renderTellMe(data, errors = [], warnings = []) {
+  const route = data?.route_decision || {};
+  const privacy = data?.privacy_guardrail || {};
+  const spec = data?.tracefix_task_spec || {};
+  const harnesses = Array.isArray(spec.candidate_harnesses) ? spec.candidate_harnesses : [];
+  els.tellmeRoute.textContent = route.route || "Awaiting request";
+  els.tellmeRationale.textContent = route.rationale || "TeLLMe will classify the request before TraceFix design.";
+  els.tellmePrivacy.textContent = privacy.status || "Not evaluated";
+  els.tellmePrivacy.className = privacy.status === "passed" ? "status-text pass" : privacy.status === "blocked" ? "status-text fail" : "";
+  els.tellmePrivacyScope.textContent = privacy.privacy_scope || "CityOS structured context only";
+  els.tellmeTaskCount.textContent = data ? "1" : "0";
+  els.tellmeHarnessCount.textContent = `${harnesses.length} candidate harness${harnesses.length === 1 ? "" : "es"}`;
+  els.tellmeRunStatus.textContent = data?.status || "Idle";
+  els.tellmeRunId.textContent = data?.query_id || "No run yet";
+  els.tellmeIntent.textContent = data ? JSON.stringify(data.intent_decomposition || data.execution_brief || {}, null, 2) : "No intent decomposition yet.";
+  els.tellmeTaskSpec.textContent = data ? JSON.stringify(spec, null, 2) : "No TraceFix task spec yet.";
+  els.tellmeAnswer.textContent = data ? JSON.stringify(data.answer_packet || {}, null, 2) : "No answer packet yet.";
+  els.tellmeToTracefix.disabled = !data || !Object.keys(spec).length || data.status === "not_answerable";
+
+  const messages = [
+    ...(errors || []).map((text) => ({ kind: "error", text })),
+    ...(warnings || []).map((text) => ({ kind: "warning", text })),
+  ];
+  if (data && !messages.length) {
+    messages.push({
+      kind: privacy.status === "blocked" ? "error" : "success",
+      text: privacy.status === "blocked"
+        ? "Privacy guardrail blocked this request before TraceFix."
+        : "Typed TeLLMe task is ready for TraceFix verification.",
+    });
+  }
+  els.tellmeMessages.innerHTML = messages
+    .map((item) => `<div class="message-card ${item.kind}">${escapeHtml(item.text)}</div>`)
+    .join("");
+}
+
+function traceFixProviderPayload() {
+  return {
+    provider: els.provider.value,
+    model: normalizeModelForPayload(els.provider.value, els.model.value),
+    openaiKey: els.openaiKey.value,
+    anthropicKey: els.anthropicKey.value,
+    openrouterKey: els.openrouterKey.value,
+    ollamaUrl: els.ollamaUrl.value,
+    opencodeBin: els.opencodeBin.value,
+    timeout: Number(els.timeout.value || 1800),
+    verbose: true,
+  };
+}
+
+async function startTraceFixFromTellMe() {
+  resetRunUi();
+  try {
+    const response = await postJson("/api/tracefix/from-tellme", traceFixProviderPayload());
+    const run = response.data;
+    state.runId = run.id;
+    state.taskMode = "custom";
+    state.runMode = "design";
+    state.workflow = "planner";
+    document.querySelectorAll("[data-workflow]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.workflow === "planner");
+    });
+    document.querySelectorAll("[data-task-mode]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.taskMode === "custom");
+    });
+    els.benchmarkField.classList.add("hidden");
+    els.customTaskField.classList.remove("hidden");
+    els.customTask.value = "Loaded automatically from the current TeLLMe task spec.";
+    updateWorkflow();
+    els.startRun.disabled = true;
+    els.stopRun.disabled = false;
+    els.runTitle.textContent = "Designing TeLLMe application";
+    els.runMeta.textContent = `${els.provider.value} / ${els.model.value}`;
+    setStatus("running");
+    connectEvents(run.id);
+  } catch (error) {
+    setStatus("failed");
+    appendTimeline("error", error.message);
+    renderOutput();
+    showToast(error.message);
   }
 }
 
@@ -1129,6 +1363,8 @@ async function init() {
   updateModelSuggestions();
   updateModeFields();
   updateWorkflow();
+  await loadTellMeConfig();
+  await loadTellMeCurrent();
   await loadModelOptions();
   await loadTasks();
   renderUsage();

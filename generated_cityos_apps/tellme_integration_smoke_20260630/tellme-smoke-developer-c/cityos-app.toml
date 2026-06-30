@@ -1,0 +1,21 @@
+TarFile = "cityos-tellme-smoke-developer-c.tar"
+ImageName = "cityos-tellme-smoke-developer-c"
+ApiLevel = 2
+Trusted = true
+Persistent = true
+StandbyPolicy = "none"
+
+InputStreams = []
+
+ExtraEnv = [
+    "TRACEFIX_APP_KIND=agent",
+    "TRACEFIX_AGENT_ID=DEVELOPER_C",
+    "TRACEFIX_BUNDLE_DIR=/app/tellme-smoke-developer-c/tracefix_bundle",
+    "TRACEFIX_AUTORUN=0",
+    "TRACEFIX_MODEL=",
+    "TRACEFIX_OPENCODE_BIN=opencode",
+    "TRACEFIX_TIMEOUT=600",
+]
+
+[OutputStreams.tracefix-events]
+AllowedReaders = []

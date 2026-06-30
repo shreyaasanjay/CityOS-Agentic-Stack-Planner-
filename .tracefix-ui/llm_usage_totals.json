@@ -1,10 +1,15 @@
 {
-  "total_runs": 7,
+  "total_runs": 8,
   "total_tokens": 0,
   "total_cost_usd": 0.0,
   "by_model": {
     "glm-5.2": {
       "runs": 7,
+      "tokens": 0,
+      "cost_usd": 0.0
+    },
+    "gpt-4.1-mini": {
+      "runs": 1,
       "tokens": 0,
       "cost_usd": 0.0
     }

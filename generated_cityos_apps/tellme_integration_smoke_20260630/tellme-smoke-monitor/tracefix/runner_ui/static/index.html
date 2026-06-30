@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TeLLMe / TraceFix / CityOS</title>
+    <link rel="stylesheet" href="/static/styles.css?v=tracefix-unified-ui-20260630-tellme-v1" />
+  </head>
+  <body>
+    <main class="runner-shell">
+      <section class="control-panel">
+        <div class="brand-row">
+          <div class="brand-mark">TF</div>
+          <div>
+            <h1>Smart Room Application Planner</h1>
+            <p>TeLLMe intent to verified TraceFix plan to CityOS artifacts</p>
+            <p id="uiBuildStamp" class="build-stamp">UI build loading...</p>
+          </div>
+        </div>
+
+        <div class="workflow-switch" role="group" aria-label="Workflow">
+          <button class="mode-button active" type="button" data-workflow="tellme">TeLLMe</button>
+          <button class="mode-button" type="button" data-workflow="planner">TraceFix</button>
+          <button class="mode-button" type="button" data-workflow="synth">CityOS Synthesizer</button>
+        </div>
+
+        <form id="tellmeForm" class="run-form">
+          <section class="sidebar-section">
+            <h2>Smart-Room Request</h2>
+            <div class="section-body">
+              <label>
+                Natural-language intent
+                <textarea id="tellmeQuery" rows="8" placeholder="Turn off the lights in the conference room after 7 PM unless someone is still present."></textarea>
+              </label>
+              <label>
+                Space ID
+                <input id="tellmeSpaceId" value="smart_room_1" autocomplete="off" />
+              </label>
+              <label>
+                Timestamp <span class="optional-label">optional</span>
+                <input id="tellmeTimestamp" autocomplete="off" placeholder="2026-06-30T19:00:00Z" />
+              </label>
+            </div>
+          </section>
+
+          <section class="sidebar-section action-section">
+            <h2>Actions</h2>
+            <div class="section-body">
+              <button id="tellmeProcess" class="primary-button" type="submit">Process Intent</button>
+              <button id="tellmeToTracefix" class="secondary-button" type="button" disabled>Continue To TraceFix</button>
+            </div>
+          </section>
+        </form>
+
+        <form id="runForm" class="run-form hidden">
+          <div class="task-mode run-mode" role="group" aria-label="Run mode">
+            <button class="mode-button" type="button" data-run-mode="design">Generate Plan</button>
+            <button class="mode-button" type="button" data-run-mode="plan">Intermediary Plan</button>
+          </div>
+
+          <details class="sidebar-section" id="configurationSection">
+            <summary>Configuration</summary>
+            <div class="section-body">
+              <div id="providerFields" class="field-row">
+                <label>
+                  Provider
+                  <select id="provider" name="provider">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="ollama">Ollama</option>
+                  </select>
+                </label>
+                <label>
+                  Model
+                  <input id="model" name="model" value="gpt-5-mini" autocomplete="off" list="modelSuggestions" />
+                  <datalist id="modelSuggestions"></datalist>
+                </label>
+              </div>
+
+              <div id="keyFields" class="keys-grid">
+                <label data-key-field="openai">
+                  API key
+                  <input id="openaiKey" type="password" autocomplete="off" />
+                </label>
+                <label data-key-field="anthropic">
+                  API key
+                  <input id="anthropicKey" type="password" autocomplete="off" />
+                </label>
+                <label data-key-field="openrouter">
+                  API key
+                  <input id="openrouterKey" type="password" autocomplete="off" />
+                </label>
+                <label data-key-field="ollama">
+                  Ollama URL
+                  <input id="ollamaUrl" value="http://localhost:11434/v1" autocomplete="off" />
+                </label>
+              </div>
+            </div>
+          </details>
+
+          <section id="taskSourceFields" class="sidebar-section task-source-fields">
+            <h2>Task</h2>
+            <div class="section-body">
+              <div class="task-mode" role="group" aria-label="Task source">
+                <button class="mode-button active" type="button" data-task-mode="benchmark">Benchmark</button>
+                <button class="mode-button" type="button" data-task-mode="custom">Custom</button>
+              </div>
+
+              <label id="benchmarkField">
+                Task selection
+                <select id="taskId"></select>
+              </label>
+
+              <label id="customTaskField" class="hidden">
+                Task intent
+                <textarea id="customTask" rows="7" placeholder="Describe the multi-agent coordination task"></textarea>
+              </label>
+            </div>
+          </section>
+
+          <section id="workspaceSection" class="sidebar-section">
+            <h2>Workspace</h2>
+            <div class="section-body">
+              <div id="runtimeFields" class="runtime-fields">
+                <label id="runtimeWorkspaceField">
+                  Workspace path
+                  <input id="workspacePathInput" autocomplete="off" placeholder="workspace/my_task_20260617_142000" />
+                </label>
+                <div id="legacyRuntimeOptions" class="field-row hidden">
+                  <label>
+                    Harness
+                    <select id="harness">
+                      <option value="opencode">OpenCode</option>
+                      <option value="monitoring">Monitoring</option>
+                    </select>
+                  </label>
+                  <label>
+                    Task label
+                    <input id="runtimeTask" autocomplete="off" placeholder="optional" />
+                  </label>
+                </div>
+              </div>
+              <div class="button-stack">
+                <button id="openWorkspace" class="secondary-button" type="button">Open Folder</button>
+                <button id="openSpecFolder" class="secondary-button" type="button">Open Spec</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="sidebar-section action-section">
+            <h2>Actions</h2>
+            <div class="section-body">
+              <button id="startRun" class="primary-button" type="submit">Generate Verified Plan</button>
+              <button id="stopRun" class="secondary-button" type="button" disabled>Stop</button>
+            </div>
+          </section>
+
+          <details class="sidebar-section debug-section">
+            <summary>Advanced / Developer</summary>
+            <div class="section-body">
+              <button id="openTlcError" class="secondary-button" type="button">Open TLC Error</button>
+              <button class="secondary-button legacy" type="button" data-run-mode="runtime">Legacy Local Debug</button>
+              <div id="tracefixRunFields" class="tracefix-run-fields hidden">
+                <label>
+                  OpenCode command
+                  <input id="opencodeBin" autocomplete="off" value="opencode" />
+                </label>
+                <label>
+                  Timeout seconds
+                  <input id="timeout" type="number" min="30" max="7200" value="1800" />
+                </label>
+                <input id="live" type="hidden" value="" />
+              </div>
+            </div>
+          </details>
+
+          <div class="hidden">
+            <input id="maxTurns" type="number" value="20" />
+            <input id="maxTokens" type="number" value="32768" />
+            <input id="temperature" type="number" value="0.3" />
+            <input id="noSummarize" type="checkbox" checked />
+            <input id="batchLint" type="checkbox" />
+          </div>
+        </form>
+
+        <section id="synthControls" class="run-form hidden">
+          <section class="sidebar-section">
+            <h2>Workspace</h2>
+            <div class="section-body">
+              <label>
+                Recent verified workspace
+                <select id="synthWorkspaceSelect"></select>
+              </label>
+              <label>
+                Workspace path
+                <input id="synthWorkspacePath" autocomplete="off" placeholder="workspace/my_verified_task" />
+              </label>
+              <button id="synthRefresh" class="secondary-button" type="button">Refresh Readiness</button>
+            </div>
+          </section>
+
+          <section class="sidebar-section">
+            <h2>Synthesis Output</h2>
+            <div class="section-body">
+              <label>
+                Output directory
+                <input id="synthOutputDir" autocomplete="off" readonly placeholder="workspace/<run_id>/output/cityos_synthesis" />
+              </label>
+              <label>
+                Package prefix
+                <input id="synthPackageName" autocomplete="off" placeholder="optional package name" />
+              </label>
+              <label class="check-row">
+                <input id="synthOverwrite" type="checkbox" />
+                Overwrite generated TraceFix apps
+              </label>
+            </div>
+          </section>
+
+          <section class="sidebar-section action-section">
+            <h2>Actions</h2>
+            <div class="section-body">
+              <button id="synthGenerate" class="primary-button" type="button">Generate CityOS Artifacts</button>
+            </div>
+          </section>
+        </section>
+      </section>
+
+      <section class="run-panel">
+        <header class="run-header">
+          <div>
+            <p id="runMeta" class="eyebrow">Idle</p>
+            <h2 id="runTitle">No plan generated</h2>
+          </div>
+          <div id="statusBadge" class="status-badge idle">Idle</div>
+        </header>
+
+        <section class="metric-strip planner-only hidden">
+          <div>
+            <span>Artifacts</span>
+            <strong id="artifactCount">0</strong>
+          </div>
+          <div class="wide">
+            <span>Workspace</span>
+            <p id="workspacePathDisplay">Waiting for intermediary plan</p>
+          </div>
+          <button id="llmUsageCard" class="usage-card" type="button" aria-expanded="false">
+            <span>LLM Usage</span>
+            <strong id="llmCost">$0.00</strong>
+            <p id="llmTokenSummary">0 tokens</p>
+            <small id="llmModelName">No model</small>
+          </button>
+        </section>
+
+        <section id="tellmePanel" class="tellme-panel">
+          <div class="tellme-summary-grid">
+            <article class="tellme-card">
+              <span>Route Decision</span>
+              <strong id="tellmeRoute">Awaiting request</strong>
+              <p id="tellmeRationale">TeLLMe will classify the request before TraceFix design.</p>
+            </article>
+            <article class="tellme-card">
+              <span>Privacy Guardrail</span>
+              <strong id="tellmePrivacy">Not evaluated</strong>
+              <p id="tellmePrivacyScope">CityOS structured context only</p>
+            </article>
+            <article class="tellme-card">
+              <span>Generated Tasks</span>
+              <strong id="tellmeTaskCount">0</strong>
+              <p id="tellmeHarnessCount">0 candidate harnesses</p>
+            </article>
+            <article class="tellme-card">
+              <span>Run</span>
+              <strong id="tellmeRunStatus">Idle</strong>
+              <p id="tellmeRunId">No run yet</p>
+            </article>
+          </div>
+
+          <div id="tellmeMessages" class="message-stack"></div>
+
+          <div class="tellme-detail-grid">
+            <section class="tellme-detail-card">
+              <div class="panel-heading">
+                <h3>Intent Decomposition</h3>
+                <span>Validated planning context</span>
+              </div>
+              <pre id="tellmeIntent" class="output-view"></pre>
+            </section>
+            <section class="tellme-detail-card">
+              <div class="panel-heading">
+                <h3>TraceFix Task Spec</h3>
+                <span>Automatic handoff</span>
+              </div>
+              <pre id="tellmeTaskSpec" class="output-view"></pre>
+            </section>
+            <section class="tellme-detail-card">
+              <div class="panel-heading">
+                <h3>Answer Packet</h3>
+                <span>TeLLMe result</span>
+              </div>
+              <pre id="tellmeAnswer" class="output-view"></pre>
+            </section>
+          </div>
+        </section>
+
+        <section id="llmUsageDetails" class="usage-details hidden" aria-label="LLM usage details">
+          <div class="panel-heading">
+            <h3>LLM Usage Breakdown</h3>
+            <span id="llmUsageSource">No usage metadata yet</span>
+          </div>
+          <div class="usage-detail-grid">
+            <div>
+              <h4>Current Run</h4>
+              <dl>
+                <dt>Input Tokens</dt><dd id="usageInputTokens">0</dd>
+                <dt>Output Tokens</dt><dd id="usageOutputTokens">0</dd>
+                <dt>Total Tokens</dt><dd id="usageTotalTokens">0</dd>
+                <dt>Estimated Cost</dt><dd id="usageCost">$0.00</dd>
+              </dl>
+            </div>
+            <div>
+              <h4>Design Phase</h4>
+              <dl>
+                <dt>Tokens</dt><dd id="usageDesignTokens">0</dd>
+                <dt>Cost</dt><dd id="usageDesignCost">$0.00</dd>
+              </dl>
+            </div>
+            <div>
+              <h4>Repair Phase</h4>
+              <dl>
+                <dt>Tokens</dt><dd id="usageRepairTokens">0</dd>
+                <dt>Cost</dt><dd id="usageRepairCost">$0.00</dd>
+              </dl>
+            </div>
+            <div>
+              <h4>Verification Phase</h4>
+              <dl>
+                <dt>Tokens</dt><dd id="usageVerificationTokens">0</dd>
+                <dt>Cost</dt><dd id="usageVerificationCost">$0.00</dd>
+              </dl>
+            </div>
+            <div>
+              <h4>Session Totals</h4>
+              <dl>
+                <dt>Total Runs</dt><dd id="usageTotalRuns">0</dd>
+                <dt>Total Tokens</dt><dd id="usageSessionTokens">0</dd>
+                <dt>Total Cost</dt><dd id="usageSessionCost">$0.00</dd>
+              </dl>
+            </div>
+          </div>
+        </section>
+
+        <section id="synthPanel" class="synth-panel hidden">
+          <div class="panel-heading">
+            <h3>CityOS Synthesizer</h3>
+            <span id="synthStatus">Select a verified workspace</span>
+          </div>
+          <div class="synth-grid">
+            <section>
+              <h4>Readiness</h4>
+              <div id="synthChecklist" class="checklist"></div>
+            </section>
+            <section>
+              <h4>Discovered Plan</h4>
+              <dl class="synth-facts">
+                <dt>Workspace</dt><dd id="synthWorkspaceDisplay">None selected</dd>
+                <dt>Plan</dt><dd id="synthPlanDisplay">Unavailable</dd>
+                <dt>Agents</dt><dd id="synthAgentsDisplay">0</dd>
+                <dt>Channels</dt><dd id="synthChannelsDisplay">0</dd>
+                <dt>Resources</dt><dd id="synthResourcesDisplay">0</dd>
+              </dl>
+            </section>
+          </div>
+          <div class="panel-heading synth-output-heading">
+            <h3>Synthesis Output</h3>
+            <span id="synthOutputStatus">Idle</span>
+          </div>
+          <section class="synth-result-strip" aria-label="CityOS synthesis results">
+            <div>
+              <span>Apps</span>
+              <strong id="synthAppCount">0</strong>
+            </div>
+            <div>
+              <span>Manifest</span>
+              <p id="synthManifestPath">No synthesis yet</p>
+            </div>
+            <div>
+              <span>Apps Directory</span>
+              <p id="synthAppsDirLabel">No output yet</p>
+            </div>
+          </section>
+          <section class="synth-apps-panel">
+            <div class="panel-heading">
+              <h3>Generated Apps</h3>
+              <span id="synthAppsStatus">No apps generated</span>
+            </div>
+            <div id="synthAppsList" class="synth-apps-list"></div>
+          </section>
+          <details class="synth-build-panel">
+            <summary>Advanced / Debug Build Commands</summary>
+            <pre id="synthBuildCommands" class="output-view synth-command-output"></pre>
+          </details>
+          <section class="synth-log-panel">
+            <div class="panel-heading">
+              <h3>Generation Log</h3>
+              <span>Backend response</span>
+            </div>
+            <pre id="synthOutput" class="output-view synth-output"></pre>
+          </section>
+        </section>
+
+        <section class="visual-grid planner-only">
+          <div class="graph-panel">
+            <div class="panel-heading">
+              <h3>Verified Architecture</h3>
+              <span id="graphStatus">Waiting for IR</span>
+            </div>
+            <svg id="topologyGraph" class="topology-graph"></svg>
+          </div>
+
+          <div class="timeline-panel">
+            <div class="panel-heading">
+              <h3>Verification Timeline</h3>
+              <button class="icon-button" id="refreshArtifacts" type="button" title="Refresh artifacts" aria-label="Refresh artifacts">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M17.7 6.3A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.76-4.24L13 11h8V3l-3.3 3.3Z" />
+                </svg>
+              </button>
+            </div>
+            <div id="timeline" class="timeline"></div>
+          </div>
+        </section>
+
+        <section class="output-panel planner-only">
+          <div class="panel-heading">
+            <h3>Output</h3>
+            <div class="tabs">
+              <button class="tab active" type="button" data-view="log">Log</button>
+              <button class="tab" type="button" data-view="ir">IR</button>
+              <button class="tab" type="button" data-view="plan">Intermediary Plan</button>
+              <button class="tab" type="button" data-view="protocol">Protocol</button>
+              <button class="tab" type="button" data-view="states">States</button>
+              <button class="tab" type="button" data-view="error">TLC Error</button>
+            </div>
+          </div>
+          <pre id="outputView" class="output-view"></pre>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js?v=tracefix-unified-ui-20260630-tellme-v1" type="module"></script>
+  </body>
+</html>

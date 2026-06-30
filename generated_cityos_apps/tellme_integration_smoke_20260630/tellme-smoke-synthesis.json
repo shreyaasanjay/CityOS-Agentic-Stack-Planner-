@@ -1,0 +1,38 @@
+{
+  "artifact_type": "tracefix_cityos_synthesis_manifest",
+  "version": "0.1",
+  "generated_at": "2026-06-30T15:25:05.901022+00:00",
+  "workspace": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\benchmark_task_1e_shared_codebase_20260629_143758",
+  "plan_path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\benchmark_task_1e_shared_codebase_20260629_143758\\spec\\cityos_module_plan.json",
+  "apps_dir": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps\\tellme_integration_smoke_20260630",
+  "apps": [
+    {
+      "name": "tellme-smoke-developer-a",
+      "kind": "agent",
+      "agent": "DEVELOPER_A",
+      "path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps\\tellme_integration_smoke_20260630\\tellme-smoke-developer-a",
+      "build_command": "just build tellme-smoke-developer-a"
+    },
+    {
+      "name": "tellme-smoke-developer-b",
+      "kind": "agent",
+      "agent": "DEVELOPER_B",
+      "path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps\\tellme_integration_smoke_20260630\\tellme-smoke-developer-b",
+      "build_command": "just build tellme-smoke-developer-b"
+    },
+    {
+      "name": "tellme-smoke-developer-c",
+      "kind": "agent",
+      "agent": "DEVELOPER_C",
+      "path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps\\tellme_integration_smoke_20260630\\tellme-smoke-developer-c",
+      "build_command": "just build tellme-smoke-developer-c"
+    },
+    {
+      "name": "tellme-smoke-monitor",
+      "kind": "monitor",
+      "agent": null,
+      "path": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\generated_cityos_apps\\tellme_integration_smoke_20260630\\tellme-smoke-monitor",
+      "build_command": "just build tellme-smoke-monitor"
+    }
+  ]
+}

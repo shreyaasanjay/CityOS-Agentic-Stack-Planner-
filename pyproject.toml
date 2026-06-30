@@ -17,6 +17,7 @@ authors = [
 ]
 dependencies = [
     "jsonschema",
+    "pydantic>=2,<3",
     "tree-sitter>=0.23,<0.26",
     "tree-sitter-tlaplus==1.5.0",
     "python-dotenv",
@@ -40,7 +41,8 @@ tracefix-runner = "tracefix.runner_ui.server:main"
 tracefix-cityos-synth = "tracefix.cityos_synth_ui.server:main"
 
 [tool.setuptools.packages.find]
-include = ["tracefix*", "benchmark*"]
+include = ["tracefix*", "benchmark*", "tellme_harness*", "cityos_mock_data*"]
 
 [tool.setuptools.package-data]
 tracefix = ["ui/static/*", "runner_ui/static/*", "cityos_synth_ui/static/*", "pipeline/PLUSCAL_RULES.md"]
+cityos_mock_data = ["*.json"]
