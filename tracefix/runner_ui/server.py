@@ -29,7 +29,9 @@ from tracefix.textio import safe_read_json, safe_read_text
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-UI_BUILD = "tracefix-unified-ui-20260630-tellme-v1"
+
+UI_BUILD = "tracefix-unified-ui-20260630-tellme-v1-cityos"
+
 RUNS: dict[str, "RunState"] = {}
 RUNS_LOCK = threading.Lock()
 
@@ -638,13 +640,26 @@ def _synth_workspace_summary(workspace: Path) -> dict[str, Any]:
     }
 
 
-def _synth_workspace_options(root: Path) -> list[dict[str, Any]]:
+def _workspace_matches_benchmark(workspace: Path, benchmark: str | None) -> bool:
+    if not benchmark:
+        return True
+    normalized = re.sub(r"[^a-z0-9]+", "", benchmark.lower())
+    if not normalized:
+        return True
+    tokens = [token for token in re.split(r"[^a-z0-9]+", workspace.name.lower()) if token]
+    return normalized in tokens
+
+
+def _synth_workspace_options(root: Path, benchmark: str | None = None) -> list[dict[str, Any]]:
     workspace_root = root / "workspace"
     if not workspace_root.exists():
         return []
     workspaces = [path for path in workspace_root.iterdir() if path.is_dir()]
+    if benchmark:
+        workspaces = [path for path in workspaces if _workspace_matches_benchmark(path, benchmark)]
     workspaces.sort(key=lambda path: path.stat().st_mtime, reverse=True)
-    return [_synth_workspace_summary(path) for path in workspaces[:80]]
+    selected = workspaces if benchmark else workspaces[:80]
+    return [_synth_workspace_summary(path) for path in selected]
 
 
 def _run_cityos_synthesis(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1492,16 +1507,24 @@ class RunnerHandler(BaseHTTPRequestHandler):
             self._send_json({"tasks": _task_options(self.root)})
             return
         if path == "/api/synth/config":
+            query = parse_qs(parsed.query)
+            benchmark = (query.get("benchmark") or [""])[0].strip()
             cityos_root = _default_cityos_root()
             self._send_json({
                 "repoRoot": str(self.root.resolve()),
+                "benchmark": benchmark,
                 "cityosRoot": str(cityos_root) if cityos_root is not None else "",
                 "appsDir": str((cityos_root / "apps").resolve()) if cityos_root is not None else "",
-                "workspaces": _synth_workspace_options(self.root),
+                "workspaces": _synth_workspace_options(self.root, benchmark),
             })
             return
         if path == "/api/synth/workspaces":
-            self._send_json({"workspaces": _synth_workspace_options(self.root)})
+            query = parse_qs(parsed.query)
+            benchmark = (query.get("benchmark") or [""])[0].strip()
+            self._send_json({
+                "benchmark": benchmark,
+                "workspaces": _synth_workspace_options(self.root, benchmark),
+            })
             return
         if path == "/api/synth/workspace":
             query = parse_qs(parsed.query)

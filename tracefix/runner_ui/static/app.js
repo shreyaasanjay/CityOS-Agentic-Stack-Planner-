@@ -122,6 +122,7 @@ const els = {
   runForm: document.querySelector("#runForm"),
   synthControls: document.querySelector("#synthControls"),
   synthPanel: document.querySelector("#synthPanel"),
+  synthBenchmarkSelect: document.querySelector("#synthBenchmarkSelect"),
   synthWorkspaceSelect: document.querySelector("#synthWorkspaceSelect"),
   synthWorkspacePath: document.querySelector("#synthWorkspacePath"),
   synthOutputDir: document.querySelector("#synthOutputDir"),
@@ -309,6 +310,22 @@ function bindEvents() {
   els.synthWorkspaceSelect.addEventListener("change", async () => {
     els.synthWorkspacePath.value = els.synthWorkspaceSelect.value;
     await loadSynthWorkspace(els.synthWorkspacePath.value);
+  });
+
+  els.synthBenchmarkSelect.addEventListener("change", async () => {
+    if (els.synthBenchmarkSelect.value) {
+      els.taskId.value = els.synthBenchmarkSelect.value;
+    }
+    await loadSynthConfig({ preferCurrent: false });
+  });
+
+  els.taskId.addEventListener("change", async () => {
+    if (els.synthBenchmarkSelect.value !== els.taskId.value) {
+      els.synthBenchmarkSelect.value = els.taskId.value;
+    }
+    if (state.workflow === "synth") {
+      await loadSynthConfig({ preferCurrent: false });
+    }
   });
 
   els.synthRefresh.addEventListener("click", async () => {
@@ -574,12 +591,18 @@ async function startTraceFixFromTellMe() {
   }
 }
 
-async function loadSynthConfig() {
+async function loadSynthConfig(options = {}) {
   try {
-    const data = await getJson("/api/synth/config");
+    const benchmark = els.synthBenchmarkSelect.value;
+    const query = benchmark ? `?benchmark=${encodeURIComponent(benchmark)}` : "";
+    const data = await getJson(`/api/synth/config${query}`);
     state.synth.workspaces = data.workspaces || [];
     renderSynthWorkspaceOptions();
-    const current = els.synthWorkspacePath.value || state.artifacts.workspace || state.synth.workspaces[0]?.path || "";
+    const workspacePaths = new Set(state.synth.workspaces.map((workspace) => workspace.path));
+    let current = options.preferCurrent === false ? "" : (els.synthWorkspacePath.value || state.artifacts.workspace || "");
+    if (!current || (benchmark && !workspacePaths.has(current))) {
+      current = state.synth.workspaces[0]?.path || current;
+    }
     if (current) {
       els.synthWorkspacePath.value = current;
       els.synthWorkspaceSelect.value = current;
@@ -598,7 +621,11 @@ function renderSynthWorkspaceOptions() {
     ? state.synth.workspaces
         .map((workspace) => {
           const readiness = workspace.ready ? "ready" : workspace.hasPlan ? workspace.verificationStatus : "missing plan";
-          return `<option value="${escapeHtml(workspace.path)}">${escapeHtml(workspace.name)} - ${escapeHtml(readiness)}</option>`;
+          const modified = workspace.lastModified
+            ? new Date(workspace.lastModified * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+            : "";
+          const label = [workspace.name, readiness, modified].filter(Boolean).join(" - ");
+          return `<option value="${escapeHtml(workspace.path)}">${escapeHtml(label)}</option>`;
         })
         .join("")
     : `<option value="">No workspaces found</option>`;
@@ -792,10 +819,14 @@ function updateModeFields() {
 async function loadTasks() {
   const data = await getJson("/api/tasks");
   state.tasks = data.tasks || [];
-  els.taskId.innerHTML = state.tasks
+  const taskOptions = state.tasks
     .map((task) => `<option value="${escapeHtml(task.id)}">${escapeHtml(task.id)} - ${escapeHtml(task.title)}</option>`)
     .join("");
-  els.taskId.value = state.tasks.find((task) => task.id === "3E") ? "3E" : state.tasks[0]?.id || "";
+  els.taskId.innerHTML = taskOptions;
+  els.synthBenchmarkSelect.innerHTML = `<option value="">All workspaces</option>${taskOptions}`;
+  const defaultTask = state.tasks.find((task) => task.id === "3E") ? "3E" : state.tasks[0]?.id || "";
+  els.taskId.value = defaultTask;
+  els.synthBenchmarkSelect.value = defaultTask;
 }
 
 async function startRun() {
