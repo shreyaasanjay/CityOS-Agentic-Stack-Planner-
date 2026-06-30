@@ -28,7 +28,7 @@ from tracefix.textio import safe_read_json, safe_read_text
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-UI_BUILD = "tracefix-runner-ui-20260629-og-ui-v4-workspace-synth"
+UI_BUILD = "tracefix-runner-ui-20260630-og-ui-v5-cityos-app-cards"
 RUNS: dict[str, "RunState"] = {}
 RUNS_LOCK = threading.Lock()
 

@@ -601,9 +601,125 @@ textarea:focus {
   margin-top: 16px;
 }
 
-.synth-output {
-  min-height: 260px;
+.synth-result-strip {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1px;
+  overflow: hidden;
   margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--line);
+}
+
+.synth-result-strip > div {
+  min-width: 0;
+  min-height: 74px;
+  padding: 12px;
+  background: var(--panel-soft);
+}
+
+.synth-result-strip span,
+.synth-app-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.synth-result-strip strong {
+  display: block;
+  margin-top: 6px;
+  color: #72c29f;
+  font-size: 26px;
+}
+
+.synth-result-strip p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.synth-apps-panel,
+.synth-build-panel,
+.synth-log-panel {
+  margin-top: 14px;
+}
+
+.synth-apps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.synth-app-card,
+.synth-empty {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.synth-app-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.56fr);
+  gap: 12px;
+  padding: 12px;
+}
+
+.synth-app-card h4 {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.synth-app-card p {
+  margin: 7px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.synth-app-meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.synth-app-meta small {
+  color: #99e0bf;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.synth-app-meta code {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 8px;
+  border: 1px solid #222b30;
+  border-radius: 8px;
+  color: #dce7e1;
+  background: #121519;
+  font-size: 12px;
+}
+
+.synth-empty {
+  padding: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.synth-command-output {
+  min-height: 130px;
+  margin-top: 0;
+}
+
+.synth-output {
+  min-height: 180px;
+  margin-top: 0;
 }
 
 .panel-heading {
@@ -792,6 +908,11 @@ textarea:focus {
   }
 
   .synth-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .synth-result-strip,
+  .synth-app-card {
     grid-template-columns: 1fr;
   }
 

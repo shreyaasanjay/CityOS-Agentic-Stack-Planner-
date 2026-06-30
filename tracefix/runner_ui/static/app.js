@@ -106,6 +106,12 @@ const els = {
   synthChannelsDisplay: document.querySelector("#synthChannelsDisplay"),
   synthResourcesDisplay: document.querySelector("#synthResourcesDisplay"),
   synthOutputStatus: document.querySelector("#synthOutputStatus"),
+  synthAppCount: document.querySelector("#synthAppCount"),
+  synthManifestPath: document.querySelector("#synthManifestPath"),
+  synthAppsDirLabel: document.querySelector("#synthAppsDirLabel"),
+  synthAppsStatus: document.querySelector("#synthAppsStatus"),
+  synthAppsList: document.querySelector("#synthAppsList"),
+  synthBuildCommands: document.querySelector("#synthBuildCommands"),
   synthOutput: document.querySelector("#synthOutput"),
 };
 
@@ -421,6 +427,7 @@ async function synthesizeCityOSArtifacts() {
   }
   els.synthGenerate.disabled = true;
   els.synthOutputStatus.textContent = "Generating...";
+  renderSynthArtifacts(null);
   els.synthOutput.textContent = "Calling synthesize_cityos_apps(...) through the active runner backend...\n";
   try {
     const result = await postJson("/api/synth/synthesize", {
@@ -432,6 +439,7 @@ async function synthesizeCityOSArtifacts() {
     state.synth.selected = result.summary;
     renderSynthSummary(result.summary);
     els.synthOutputStatus.textContent = "Generated";
+    renderSynthArtifacts(result);
     els.synthOutput.textContent = renderSynthResult(result);
     showToast("CityOS artifacts generated");
   } catch (error) {
@@ -441,6 +449,59 @@ async function synthesizeCityOSArtifacts() {
   } finally {
     els.synthGenerate.disabled = false;
   }
+}
+
+function renderSynthArtifacts(result) {
+  const apps = result?.apps || [];
+  els.synthAppCount.textContent = String(apps.length);
+  els.synthManifestPath.textContent = result?.manifestPath || "No synthesis yet";
+  els.synthAppsDirLabel.textContent = result?.appsDir || "No output yet";
+  els.synthAppsStatus.textContent = apps.length
+    ? `${apps.length} app${apps.length === 1 ? "" : "s"} ready for CityOS`
+    : "No apps generated";
+
+  if (!apps.length) {
+    els.synthAppsList.innerHTML = `<div class="synth-empty">Generate CityOS artifacts to see app containers, prompts, and build commands here.</div>`;
+    els.synthBuildCommands.textContent = "No build commands yet.";
+    return;
+  }
+
+  els.synthAppsList.innerHTML = apps.map((app) => {
+    const agentLabel = app.agent ? `Agent ${app.agent}` : "TraceFix runtime";
+    return `
+      <article class="synth-app-card">
+        <div class="synth-app-main">
+          <span>${escapeHtml(app.kind || "app")}</span>
+          <h4>${escapeHtml(app.name)}</h4>
+          <p>${escapeHtml(app.path)}</p>
+        </div>
+        <div class="synth-app-meta">
+          <small>${escapeHtml(agentLabel)}</small>
+          <code>${escapeHtml(app.buildCommand || `just build ${app.name}`)}</code>
+          <code>${escapeHtml(dockerBuildCommand(app))}</code>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  const commands = [];
+  commands.push("# From your CityOS root:");
+  apps.forEach((app) => commands.push(app.buildCommand || `just build ${app.name}`));
+  commands.push("");
+  commands.push("# Direct Docker builds:");
+  apps.forEach((app) => commands.push(dockerBuildCommand(app)));
+  els.synthBuildCommands.textContent = commands.join("\n");
+}
+
+function dockerBuildCommand(app) {
+  const imageName = `cityos-${String(app.name || "tracefix-app").toLowerCase()}:latest`;
+  return `docker build -t ${imageName} ${shellQuote(app.path || ".")}`;
+}
+
+function shellQuote(value) {
+  const text = String(value || ".");
+  if (/^[A-Za-z0-9_./:\\-]+$/.test(text)) return text;
+  return `"${text.replaceAll('"', '\\"')}"`;
 }
 
 function renderSynthResult(result) {
@@ -1071,6 +1132,7 @@ async function init() {
   await loadModelOptions();
   await loadTasks();
   renderUsage();
+  renderSynthArtifacts(null);
   renderOutput();
 }
 
