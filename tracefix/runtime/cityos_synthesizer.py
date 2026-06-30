@@ -80,10 +80,32 @@ def _load_or_export_plan(workspace: Path) -> tuple[Path, dict[str, Any]]:
         raise ValueError(f"invalid CityOS module plan: {plan_path}")
     verification = plan.get("verification", {})
     if verification.get("production_ready") is not True:
-        raise ValueError(
-            "cannot synthesize CityOS apps before successful TraceFix "
-            f"verification; current status is {verification.get('status', 'unknown')!r}"
-        )
+        # Plan may be stale — written before TLC passed (e.g. during an intermediate
+        # attempt). Re-export from current workspace artifacts if summary.json shows
+        # tlc_passed: True, which means verification has since completed.
+        spec = _spec_dir(workspace)
+        summary = safe_read_json(spec / "summary.json", {})
+        tlc_passed = isinstance(summary, dict) and summary.get("tlc_passed") is True
+        if tlc_passed:
+            export_cityos_module_plan(workspace)
+            plan = safe_read_json(plan_path, {})
+            if not isinstance(plan, dict):
+                raise ValueError(f"invalid CityOS module plan after re-export: {plan_path}")
+            verification = plan.get("verification", {})
+        if verification.get("production_ready") is not True:
+            status = verification.get("status", "unknown")
+            missing = [
+                name for name in ("ir.json", "states.json", "Protocol.tla", "Protocol.cfg")
+                if not (spec / name).exists()
+            ]
+            raise ValueError(
+                "cannot synthesize CityOS apps before successful TraceFix "
+                f"verification; current status is {status!r}. "
+                f"workspace: {workspace}; "
+                f"cityos_module_plan.json exists: {plan_path.exists()}; "
+                f"tlc_passed (summary.json): {tlc_passed}; "
+                f"missing spec files: {missing or 'none'}"
+            )
     return plan_path, plan
 
 

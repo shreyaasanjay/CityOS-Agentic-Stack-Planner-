@@ -600,6 +600,17 @@ async function loadSynthConfig(options = {}) {
     renderSynthWorkspaceOptions();
     const workspacePaths = new Set(state.synth.workspaces.map((workspace) => workspace.path));
     let current = options.preferCurrent === false ? "" : (els.synthWorkspacePath.value || state.artifacts.workspace || "");
+    if (!current) {
+      // Try to restore the last verified TraceFix workspace from the server's
+      // cross-stage handoff (current.json), so the CityOS tab auto-selects after
+      // a TraceFix run even if the user reloaded the page.
+      try {
+        const cityosCurrent = await getJson("/api/cityos/current");
+        current = cityosCurrent?.data?.workspace?.path || "";
+      } catch (_) {
+        // Non-fatal — fall through to first available workspace.
+      }
+    }
     if (!current || (benchmark && !workspacePaths.has(current))) {
       current = state.synth.workspaces[0]?.path || current;
     }

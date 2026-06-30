@@ -434,6 +434,7 @@ def _find_workspace(experiment_dir: Path | None) -> Path | None:
     return candidates[0]
 
 
+
 def _spec_file(workspace: Path, name: str) -> Path:
     spec = workspace / "spec"
     return (spec / name) if spec.is_dir() else (workspace / name)
@@ -636,7 +637,10 @@ def _synth_workspace_summary(workspace: Path) -> dict[str, Any]:
         "requirements": requirements,
         "missingRequired": missing_required,
         "outputDir": str((workspace / "output" / "cityos_synthesis").resolve()),
-        "ready": not missing_required and verification.get("production_ready") is True,
+        "ready": not missing_required and (
+            verification.get("production_ready") is True
+            or (isinstance(summary, dict) and summary.get("tlc_passed") is True)
+        ),
     }
 
 
