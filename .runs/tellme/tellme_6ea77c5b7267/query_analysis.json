@@ -1,0 +1,34 @@
+{
+  "answer_type": "boolean",
+  "confidence": 0.8,
+  "context_requirements": [
+    "occupancy",
+    "cross_modal_context"
+  ],
+  "estimated_tool_calls": 4,
+  "intent": "occupancy_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_6ea77c5b7267",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_explicit_multi_agent": true,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": true,
+  "requires_multi_timestamp_reasoning": false,
+  "requires_policy_review": false,
+  "risk_flags": [
+    "modality_disagreement"
+  ],
+  "space_scope": "single_space",
+  "time_scope": "unspecified",
+  "trigger_terms_found": [
+    "attendance record",
+    "attendance records",
+    "attendance_term: attendance",
+    "verification_term: compare",
+    "verification_term: discrepancies",
+    "verification_term: discrepancy",
+    "verification_term: reconcile"
+  ],
+  "user_query": "Perform a comprehensive attendance verification and discrepancy analysis for an active conference meeting. Evaluate observed occupancy information, compare it with expected attendance records and attendance updates, reconcile conflicting evidence sources, identify missing or insufficient evidence, determine the most reliable attendance assessment, and generate a final validated report containing confidence scores, evidence references, limitations, unresolved discrepancies, and a recommendation on whether attendance can be considered verified."
+}

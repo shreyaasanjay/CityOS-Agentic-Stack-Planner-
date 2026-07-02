@@ -1,0 +1,29 @@
+{
+  "candidate_id": "cand_db38d2f31f683ec6_20260701_170454",
+  "source_workspace": "workspace\\benchmark_task_1e_plan_order_codex_check_20260624_223349",
+  "source_task_text": "Conference room occupancy query from benchmark_task_1e_plan_order_codex_check",
+  "created_at": "2026-07-01T17:04:54.465760+00:00",
+  "last_seen_at": "2026-07-01T17:04:54.473933+00:00",
+  "agents_count": 3,
+  "channels_count": 3,
+  "resources_count": 3,
+  "normalized_topology_hash": "db38d2f31f683ec6",
+  "tlc_passed": true,
+  "pluscal_passed": true,
+  "used_opencode_fallback": true,
+  "matched_existing_template": false,
+  "suggested_pattern_name": "ring_3",
+  "promotion_status": "candidate",
+  "usage_count": 3,
+  "observed_workspaces": [
+    "workspace\\benchmark_task_1e_plan_order_codex_check_20260624_223349",
+    "workspace\\benchmark_task_1e_prompt_gate_codex_check_20260624_224657",
+    "workspace\\benchmark_task_1e_shared_codebase_20260624_145443"
+  ],
+  "observed_tasks": [
+    "Conference room occupancy query from benchmark_task_1e_plan_order_codex_check",
+    "Conference room occupancy query from benchmark_task_1e_prompt_gate_codex_chec",
+    "Conference room occupancy query from benchmark_task_1e_shared_codebase_202606"
+  ],
+  "notes": ""
+}

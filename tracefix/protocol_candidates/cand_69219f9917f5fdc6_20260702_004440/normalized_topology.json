@@ -1,0 +1,28 @@
+{
+  "agents": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "edges": [
+    {
+      "from": "C",
+      "to": "D"
+    },
+    {
+      "from": "A",
+      "to": "D"
+    },
+    {
+      "from": "B",
+      "to": "D"
+    }
+  ],
+  "resources": [],
+  "shape": "star",
+  "agent_count": 4,
+  "channel_count": 3,
+  "resource_count": 0,
+  "topology_hash": "69219f9917f5fdc6"
+}

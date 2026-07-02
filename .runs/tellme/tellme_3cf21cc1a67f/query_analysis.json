@@ -1,0 +1,21 @@
+{
+  "answer_type": "count",
+  "confidence": 0.92,
+  "context_requirements": [
+    "occupancy"
+  ],
+  "estimated_tool_calls": 1,
+  "intent": "occupancy_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_3cf21cc1a67f",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": false,
+  "requires_multi_timestamp_reasoning": false,
+  "requires_policy_review": false,
+  "risk_flags": [],
+  "space_scope": "single_space",
+  "time_scope": "unspecified",
+  "user_query": "Determine the number of people physically present in the conference room. Do not count reflections, photographs, posters, or individuals appearing on electronic displays."
+}

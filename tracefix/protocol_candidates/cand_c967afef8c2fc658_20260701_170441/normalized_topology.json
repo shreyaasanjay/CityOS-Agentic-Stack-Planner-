@@ -1,0 +1,12 @@
+{
+  "agents": [
+    "A"
+  ],
+  "edges": [],
+  "resources": [],
+  "shape": "single",
+  "agent_count": 1,
+  "channel_count": 0,
+  "resource_count": 0,
+  "topology_hash": "c967afef8c2fc658"
+}

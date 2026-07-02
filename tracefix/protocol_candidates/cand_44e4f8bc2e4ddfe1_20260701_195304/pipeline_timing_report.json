@@ -1,0 +1,255 @@
+{
+  "schema_version": "0.1",
+  "run_kind": "tracefix_design",
+  "run_id": "fan_in_decision_manual_validation_20260701_155302",
+  "run_dir": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\fan_in_decision_manual_validation_20260701_155302",
+  "started_at": "2026-07-01T19:53:02.995104+00:00",
+  "finished_at": null,
+  "complete": false,
+  "total_wall_clock_ms": 1670.88,
+  "stages": [
+    {
+      "stage": "workspace_initialization",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:53:02.995492+00:00",
+      "finished_at": "2026-07-01T19:53:02.998028+00:00",
+      "duration_ms": 2.54,
+      "success": true,
+      "error": null,
+      "workspace": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\fan_in_decision_manual_validation_20260701_155302"
+    },
+    {
+      "stage": "single_agent_fast_path",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:53:03.001205+00:00",
+      "finished_at": "2026-07-01T19:53:03.001260+00:00",
+      "duration_ms": 0.04,
+      "success": true,
+      "error": null,
+      "fast_path": {
+        "considered": true,
+        "used": false,
+        "reason": "multi-source signal detected: Reconcile",
+        "structured_input": false,
+        "agent_id": null,
+        "ir_generation_duration_ms": 0.0,
+        "fallback_to_opencode": true,
+        "error": null
+      },
+      "aggregate": true
+    },
+    {
+      "stage": "pluscal_translation",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:53:03.012611+00:00",
+      "finished_at": "2026-07-01T19:53:03.268943+00:00",
+      "duration_ms": 256.32,
+      "success": true,
+      "error": null
+    },
+    {
+      "stage": "tlc_verification",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:53:03.271223+00:00",
+      "finished_at": "2026-07-01T19:53:04.642218+00:00",
+      "duration_ms": 1369.51,
+      "success": true,
+      "error": null
+    },
+    {
+      "stage": "state_extraction",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:53:04.643941+00:00",
+      "finished_at": "2026-07-01T19:53:04.648590+00:00",
+      "duration_ms": 4.65,
+      "success": true,
+      "error": null
+    },
+    {
+      "stage": "coordination_pattern_template",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:53:03.002859+00:00",
+      "finished_at": "2026-07-01T19:53:04.654860+00:00",
+      "duration_ms": 1651.98,
+      "success": true,
+      "error": null,
+      "coord_template": {
+        "considered": true,
+        "used": true,
+        "pattern_id": "fan_in_decision",
+        "confidence": 0.98,
+        "reason": "matched pattern 'fan_in_decision' with confidence 0.98",
+        "fallback_reason": "",
+        "fallback_to_opencode": false,
+        "error": null,
+        "tellme_route": "",
+        "user_query_excerpt": "",
+        "candidate_harnesses": [],
+        "pattern_scores": {
+          "fan_in_decision": 0.98,
+          "sequential_handoff": 0.0,
+          "verifier_approver": 0.0,
+          "producer_consumer": 0.0,
+          "attendance_verification": 0.0
+        },
+        "evidence_sources_detected": [
+          "observed room occupancy",
+          "expected attendance records",
+          "badge check-in status",
+          "calendar participation updates"
+        ],
+        "evidence_source_count": 4,
+        "decision_agent_id": "decision_reconciliation",
+        "fan_in_decision_used": true,
+        "template_priority_reason": "4 independent evidence sources and explicit reconciliation/decision language outrank two-agent templates",
+        "app_agent_count": 5,
+        "monitor_count": 1
+      },
+      "aggregate": true
+    },
+    {
+      "stage": "ir_validation",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:53:04.656730+00:00",
+      "finished_at": "2026-07-01T19:53:04.657456+00:00",
+      "duration_ms": 0.72,
+      "success": true,
+      "error": null,
+      "ir_sanitization": {
+        "attempted": false,
+        "changed": false,
+        "removed_fields": [],
+        "normalized_fields": [],
+        "validation_before": {
+          "valid": true,
+          "errors": []
+        },
+        "validation_after": {
+          "valid": true,
+          "errors": []
+        },
+        "recovered": false,
+        "prevented_likely_unnecessary_failure": false
+      }
+    },
+    {
+      "stage": "deterministic_runtime_prompt",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:53:04.660310+00:00",
+      "finished_at": "2026-07-01T19:53:04.662687+00:00",
+      "duration_ms": 2.38,
+      "success": true,
+      "error": null,
+      "prompt_paths": [
+        "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\fan_in_decision_manual_validation_20260701_155302\\prompts\\runtime_b\\occupancy_agent.md",
+        "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\fan_in_decision_manual_validation_20260701_155302\\prompts\\runtime_b\\attendance_records_agent.md",
+        "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\fan_in_decision_manual_validation_20260701_155302\\prompts\\runtime_b\\badge_check_in_agent.md",
+        "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\fan_in_decision_manual_validation_20260701_155302\\prompts\\runtime_b\\calendar_updates_agent.md",
+        "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\fan_in_decision_manual_validation_20260701_155302\\prompts\\runtime_b\\decision_reconciliation.md"
+      ]
+    },
+    {
+      "stage": "cityos_plan_export",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:53:04.665558+00:00",
+      "finished_at": "2026-07-01T19:53:04.665808+00:00",
+      "duration_ms": 0.24,
+      "success": true,
+      "error": null
+    }
+  ],
+  "api_calls": [],
+  "repair": {
+    "total_attempts": 0,
+    "attempts": [],
+    "repair_time_seconds": 0.0,
+    "stop_reason": null,
+    "recommendation": null,
+    "config": {}
+  },
+  "ir_sanitization": {
+    "attempted": false,
+    "changed": false,
+    "removed_fields": [],
+    "normalized_fields": [],
+    "validation_before": {
+      "valid": true,
+      "errors": []
+    },
+    "validation_after": {
+      "valid": true,
+      "errors": []
+    },
+    "recovered": false,
+    "prevented_likely_unnecessary_failure": false
+  },
+  "single_agent_fast_path": {
+    "considered": true,
+    "used": false,
+    "reason": "multi-source signal detected: Reconcile",
+    "structured_input": false,
+    "agent_id": null,
+    "ir_generation_duration_ms": 0.0,
+    "fallback_to_opencode": true,
+    "error": null
+  },
+  "coordination_pattern_template": {
+    "considered": true,
+    "used": true,
+    "pattern_id": "fan_in_decision",
+    "confidence": 0.98,
+    "reason": "matched pattern 'fan_in_decision' with confidence 0.98",
+    "fallback_reason": "",
+    "fallback_to_opencode": false,
+    "error": null,
+    "tellme_route": "",
+    "user_query_excerpt": "",
+    "candidate_harnesses": [],
+    "pattern_scores": {
+      "fan_in_decision": 0.98,
+      "sequential_handoff": 0.0,
+      "verifier_approver": 0.0,
+      "producer_consumer": 0.0,
+      "attendance_verification": 0.0
+    },
+    "evidence_sources_detected": [
+      "observed room occupancy",
+      "expected attendance records",
+      "badge check-in status",
+      "calendar participation updates"
+    ],
+    "evidence_source_count": 4,
+    "decision_agent_id": "decision_reconciliation",
+    "fan_in_decision_used": true,
+    "template_priority_reason": "4 independent evidence sources and explicit reconciliation/decision language outrank two-agent templates",
+    "app_agent_count": 5,
+    "monitor_count": 1
+  },
+  "pattern_repository": {
+    "pattern_repository_enabled": null,
+    "candidate_harvest_attempted": false,
+    "candidate_saved": false,
+    "candidate_id": null,
+    "normalized_topology_hash": null,
+    "candidate_deduplicated": false,
+    "candidate_usage_count": 0,
+    "candidate_path": null,
+    "harvest_skip_reason": null
+  },
+  "summary": {
+    "slowest_stage": "tlc_verification",
+    "slowest_stage_duration_ms": 1369.51,
+    "api_call_count": 0,
+    "retry_count": 0,
+    "rate_limit_events": 0,
+    "total_repair_attempts": 0,
+    "repair_stop_reason": null,
+    "suspected_bottleneck": "formal_verification",
+    "confidence": "high",
+    "recommended_next_fix": "Inspect TLC state-space size and use bounded development constants without skipping TLC."
+  },
+  "limitations": [
+    "OpenCode timing observes the subprocess and its first JSON event, not provider first-token telemetry.",
+    "A long time-to-first-event can indicate OpenCode startup, provider queueing, or model latency."
+  ]
+}

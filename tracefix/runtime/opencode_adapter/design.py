@@ -23,9 +23,20 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from tracefix.pipeline_timing import PipelineTimingReport
+from tracefix.runtime.coordination_classifier import assess_coordination_pattern
+from tracefix.runtime.pattern_repository import harvest_candidate, repository_enabled
+from tracefix.runtime.single_agent_fastpath import (
+    FastPathDecision,
+    _extract_structured_task,
+    assess_single_agent_fast_path,
+    generate_single_agent_ir,
+    render_verified_runtime_prompt,
+)
 from tracefix.textio import safe_read_json, safe_read_text
 from tracefix.runtime.opencode_adapter.config_gen import build_design_config
 from tracefix.runtime.opencode_adapter.driver import run_opencode_agent
@@ -289,6 +300,90 @@ def _load_ir(ws: Path) -> dict | None:
         return safe_read_json(ir_path)
     except (json.JSONDecodeError, OSError):
         return None
+
+
+def _guard_task_agent_ir(ws: Path, task: str, diagnostics: list[str]) -> None:
+    """Repair a single-TASK_AGENT IR when the TeLLMe route was multi_agent.
+
+    If OpenCode produced a stub with only one agent named TASK_AGENT (and no
+    channels), replace it with a verifier_approver 2-agent IR derived from the
+    TeLLMe spec.  This prevents the TASK_AGENT placeholder from propagating
+    through TLC verification.
+
+    The repair is best-effort: if anything goes wrong we log and leave the IR
+    untouched so the normal validation path reports the problem.
+    """
+    from tracefix.runtime.coordination_classifier import (
+        _agents_from_harnesses,
+        _extract_two_agent_roles,
+    )
+
+    try:
+        spec = _extract_structured_task(task)
+        if not spec:
+            return
+        route = str(spec.get("route") or "").strip().lower()
+        if route != "multi_agent":
+            return
+
+        ir = _load_ir(ws)
+        if not isinstance(ir, dict):
+            return
+        existing_agents = [
+            a for a in (ir.get("agents") or [])
+            if isinstance(a, dict)
+        ]
+        existing_channels = ir.get("channels") or []
+        # Only repair when OpenCode produced a degenerate single-TASK_AGENT stub
+        if len(existing_agents) != 1:
+            return
+        agent_id = str(existing_agents[0].get("id") or "").upper()
+        if agent_id != "TASK_AGENT":
+            return
+        if existing_channels:
+            return  # Has channels — may be a real single-agent design; don't touch
+
+        diagnostics.append(
+            "TASK_AGENT guard: multi_agent route produced TASK_AGENT stub — "
+            "repairing with synthetic verifier_approver IR"
+        )
+
+        # Derive agent IDs from harnesses if available
+        harness_agents = _agents_from_harnesses(spec.get("candidate_harnesses") or [])
+        a_id, a_role, b_id, b_role = _extract_two_agent_roles(
+            harness_agents, (spec.get("user_query") or "").lower(), 0, 1
+        )
+
+        repaired_ir = {
+            "agents": [
+                {"id": a_id, "role": a_role},
+                {"id": b_id, "role": b_role},
+            ],
+            "resources": [
+                {"id": f"{a_id}_resource", "type": "Lock"},
+                {"id": f"{b_id}_resource", "type": "Lock"},
+            ],
+            "channels": [
+                {
+                    "id": f"{a_id}_to_{b_id}",
+                    "from": a_id,
+                    "to": b_id,
+                    "labels": ["submit"],
+                },
+            ],
+        }
+        from tracefix.pipeline.pipeline.validator import normalize_ir
+
+        repaired_ir = normalize_ir(repaired_ir)
+        (_spec_dir(ws) / "ir.json").write_text(
+            json.dumps(repaired_ir, indent=2) + "\n", encoding="utf-8"
+        )
+        diagnostics.append(
+            f"TASK_AGENT guard: IR repaired → agents=[{a_id}, {b_id}] "
+            f"channels=[{a_id}_to_{b_id}]"
+        )
+    except Exception as exc:  # noqa: BLE001
+        diagnostics.append(f"TASK_AGENT guard: repair failed (non-fatal): {exc}")
 
 
 def _channel_key(channel: dict) -> str:
@@ -566,11 +661,16 @@ def _ensure_plan_before_prompts(ws: Path) -> list[str]:
     return diagnostics
 
 
-def validate_design_ir(ws: Path) -> tuple[bool, list[str], list[str]]:
+def validate_design_ir(
+    ws: Path,
+    *,
+    sanitization_report: dict | None = None,
+) -> tuple[bool, list[str], list[str]]:
     """Normalize and validate spec/ir.json for design postflight."""
     from tracefix.pipeline.pipeline.validator import (
+        canonicalize_ir_with_diagnostics,
         normalize_ir_with_diagnostics,
-        validate_ir,
+        validate_canonical_ir,
     )
 
     spec = _spec_dir(ws)
@@ -589,13 +689,88 @@ def validate_design_ir(ws: Path) -> tuple[bool, list[str], list[str]]:
         diagnostics.append("IR normalized: agent/resource schemas canonicalized")
         diagnostics.extend(normalize_diagnostics)
 
-    result = validate_ir(normalized)
-    if result.valid:
+    result_before = validate_canonical_ir(normalized)
+    report = {
+        "attempted": False,
+        "changed": False,
+        "removed_fields": [],
+        "normalized_fields": [],
+        "validation_before": {
+            "valid": result_before.valid,
+            "errors": list(result_before.errors),
+        },
+        "validation_after": {
+            "valid": result_before.valid,
+            "errors": list(result_before.errors),
+        },
+        "recovered": False,
+        "prevented_likely_unnecessary_failure": False,
+    }
+    if result_before.valid:
+        if sanitization_report is not None:
+            sanitization_report.update(report)
         diagnostics.append("IR validation passed")
         return True, [], diagnostics
 
+    diagnostics.append("IR validation failed before sanitization")
+    candidate, canonicalization = canonicalize_ir_with_diagnostics(original)
+    report.update({
+        "attempted": canonicalization["attempted"],
+        "changed": canonicalization["changed"],
+        "removed_fields": canonicalization["removed_fields"],
+        "normalized_fields": canonicalization["normalized_fields"],
+    })
+    diagnostics.append("IR sanitization attempted")
+    diagnostics.extend(
+        f"IR sanitization removed {path}"
+        for path in report["removed_fields"]
+    )
+    diagnostics.extend(
+        f"IR sanitization normalized {change}"
+        for change in report["normalized_fields"]
+    )
+    if not report["changed"]:
+        diagnostics.append("IR sanitization made no safe changes")
+
+    result_after = validate_canonical_ir(candidate)
+    report["validation_after"] = {
+        "valid": result_after.valid,
+        "errors": list(result_after.errors),
+    }
+    report["recovered"] = bool(report["changed"] and result_after.valid)
+    report["prevented_likely_unnecessary_failure"] = report["recovered"]
+    if sanitization_report is not None:
+        sanitization_report.update(report)
+
+    if result_after.valid:
+        ir_path.write_text(json.dumps(candidate, indent=2) + "\n", encoding="utf-8")
+        diagnostics.append("IR validation passed after sanitization")
+        diagnostics.append("IR sanitizer recovered a valid IR; pipeline continued")
+        return True, [], diagnostics
+
+    diagnostics.append("IR validation failed after sanitization")
     diagnostics.append("IR validation failed")
-    return False, list(result.errors), diagnostics
+    return False, list(result_after.errors), diagnostics
+
+
+def _scaffold_coord_ir(ws: Path) -> list[str]:
+    """Write Protocol.cfg from IR for a coord-template run.
+
+    The template already wrote Protocol.tla — this only generates the TLC
+    config so the existing Protocol.tla is not overwritten.
+    """
+    from tracefix.pipeline.pipeline.pluscal_generator import generate_tlc_config
+    from tracefix.pipeline.pipeline.validator import normalize_ir, validate_ir
+
+    spec = _spec_dir(ws)
+    ir_path = spec / "ir.json"
+    ir_data = normalize_ir(safe_read_json(ir_path, {}))
+    result = validate_ir(ir_data)
+    if not result.valid:
+        errors = "; ".join(result.errors)
+        raise ValueError(f"cannot generate TLC config for invalid IR: {errors}")
+    (spec / "Protocol.cfg").write_text(generate_tlc_config(ir_data), encoding="utf-8")
+    return ["Coord template: generated Protocol.cfg from IR (Protocol.tla preserved)"]
 
 
 def _scaffold_valid_ir(ws: Path) -> list[str]:
@@ -661,7 +836,10 @@ def _verification_needed_after_scaffold(ws: Path) -> tuple[bool, list[str]]:
     return True, [*diagnostics, "Post-scaffold verification required"]
 
 
-def _run_tlc_and_extract(ws: Path) -> list[str]:
+def _run_tlc_and_extract(
+    ws: Path,
+    timing: PipelineTimingReport | None = None,
+) -> list[str]:
     """Python-level TLC verification + state extraction fallback.
 
     Called when Protocol.tla exists but TLC was never invoked (the opencode
@@ -737,9 +915,11 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
     # Step 1: PlusCal to TLA+ translation
     diagnostics.append("[TRACEFIX PLUSCAL START]")
     diagnostics.append(f"[TRACEFIX PLUSCAL COMMAND] {_format_command(pcal_command)}")
-    pcal_start = time.time()
+    print("[TRACEFIX PLUSCAL START]", flush=True)
+    pcal_started_at = datetime.now(timezone.utc).isoformat()
+    pcal_start = time.monotonic() * 1000.0
     pcal_result = translate_pluscal(tla_content, cfg_content, java_path=java, tla2tools_jar=jar)
-    pcal_duration = time.time() - pcal_start
+    pcal_duration = (time.monotonic() * 1000.0 - pcal_start) / 1000.0
 
     if not pcal_result.success:
         repaired_content, repair_diagnostics = _normalize_legacy_endeither_syntax(tla_content)
@@ -761,9 +941,22 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
                 diagnostics.append(
                     "TLC fallback: PlusCal translation succeeded after syntax repair"
                 )
-    pcal_duration = time.time() - pcal_start
+    pcal_duration = (time.monotonic() * 1000.0 - pcal_start) / 1000.0
 
     if not pcal_result.success:
+        print(
+            f"[TRACEFIX PLUSCAL END] result=fail duration={pcal_duration:.2f}s",
+            flush=True,
+        )
+        if timing is not None:
+            timing.stage(
+                "pluscal_translation",
+                started_at=pcal_started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_ms=pcal_duration * 1000.0,
+                success=False,
+                error=pcal_result.error_message,
+            )
         diagnostics.append(
             f"[TRACEFIX PLUSCAL END] result=fail duration={pcal_duration:.2f}s"
         )
@@ -780,8 +973,20 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
         )
         return diagnostics
 
+    if timing is not None:
+        timing.stage(
+            "pluscal_translation",
+            started_at=pcal_started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            duration_ms=pcal_duration * 1000.0,
+            success=True,
+        )
     diagnostics.append(
         f"[TRACEFIX PLUSCAL END] result=pass duration={pcal_duration:.2f}s"
+    )
+    print(
+        f"[TRACEFIX PLUSCAL END] result=pass duration={pcal_duration:.2f}s",
+        flush=True,
     )
     (spec / "Protocol_translated.tla").write_text(pcal_result.translated_tla, encoding="utf-8")
     diagnostics.append(
@@ -791,12 +996,27 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
     # Step 2: Run TLC on translated spec
     diagnostics.append("[TRACEFIX TLC START]")
     diagnostics.append(f"[TRACEFIX TLC COMMAND] {_format_command(tlc_command)}")
-    tlc_start = time.time()
+    print("[TRACEFIX TLC START]", flush=True)
+    tlc_started_at = datetime.now(timezone.utc).isoformat()
+    tlc_start = time.monotonic() * 1000.0
     tlc_result = run_tlc(pcal_result.translated_tla, cfg_content, java_path=java, tla2tools_jar=jar)
-    tlc_duration = time.time() - tlc_start
+    tlc_duration = (time.monotonic() * 1000.0 - tlc_start) / 1000.0
     (spec / "tlc_output.log").write_text(tlc_result.raw_output, encoding="utf-8")
 
     if not tlc_result.success:
+        print(
+            f"[TRACEFIX TLC END] result=fail duration={tlc_duration:.2f}s",
+            flush=True,
+        )
+        if timing is not None:
+            timing.stage(
+                "tlc_verification",
+                started_at=tlc_started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_ms=tlc_duration * 1000.0,
+                success=False,
+                error=tlc_result.violation_type,
+            )
         diagnostics.append(
             f"[TRACEFIX TLC END] result=fail duration={tlc_duration:.2f}s"
         )
@@ -817,19 +1037,44 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
         )
         return diagnostics
 
+    if timing is not None:
+        timing.stage(
+            "tlc_verification",
+            started_at=tlc_started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            duration_ms=tlc_duration * 1000.0,
+            success=True,
+        )
     diagnostics.append(
         f"[TRACEFIX TLC END] result=pass duration={tlc_duration:.2f}s"
+    )
+    print(
+        f"[TRACEFIX TLC END] result=pass duration={tlc_duration:.2f}s",
+        flush=True,
     )
     diagnostics.append("TLC fallback: TLC passed; wrote tlc_output.log")
 
     # Step 3: Extract per-agent states
     diagnostics.append("TLC fallback: extracting states from translated spec")
+    print("[TRACEFIX STATE EXTRACTION START]", flush=True)
+    extract_started_at = datetime.now(timezone.utc).isoformat()
+    extract_started_ms = time.monotonic() * 1000.0
     try:
         ir_data: dict = {}
         if ir_path.exists():
             ir_data = safe_read_json(ir_path, {})
         parse_result = parse_pluscal(pcal_result.translated_tla, ir_data)
     except Exception as exc:  # noqa: BLE001
+        print(f"[TRACEFIX STATE EXTRACTION END] result=fail error={type(exc).__name__}", flush=True)
+        if timing is not None:
+            timing.stage(
+                "state_extraction",
+                started_at=extract_started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_ms=time.monotonic() * 1000.0 - extract_started_ms,
+                success=False,
+                error=str(exc),
+            )
         diagnostics.append(f"TLC fallback: state extraction failed: {exc}")
         (spec / "tlc_error.md").write_text(
             f"# State Extraction Failed\n\nTLC passed but state extraction raised:\n\n"
@@ -860,16 +1105,36 @@ def _run_tlc_and_extract(ws: Path) -> list[str]:
         f"TLC fallback: extracted {len(parse_result.states)} states; "
         "wrote states.json and summary.json(tlc_passed=true)"
     )
+    print(
+        f"[TRACEFIX STATE EXTRACTION END] result=pass states={len(parse_result.states)}",
+        flush=True,
+    )
+    if timing is not None:
+        timing.stage(
+            "state_extraction",
+            started_at=extract_started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            duration_ms=time.monotonic() * 1000.0 - extract_started_ms,
+            success=True,
+        )
     diagnostics.extend(_ensure_cityos_plan(ws))
     return diagnostics
 
 
-def classify_design_artifacts(ws: Path, *, timed_out: bool = False) -> tuple[str, list[str], list[str]]:
+def classify_design_artifacts(
+    ws: Path,
+    *,
+    timed_out: bool = False,
+    sanitization_report: dict | None = None,
+) -> tuple[str, list[str], list[str]]:
     """Classify the design stage from artifacts without trusting transcript text."""
     if timed_out:
         return "timeout", [], ["Design timed out"]
 
-    valid_ir, ir_errors, diagnostics = validate_design_ir(ws)
+    valid_ir, ir_errors, diagnostics = validate_design_ir(
+        ws,
+        sanitization_report=sanitization_report,
+    )
     spec = _spec_dir(ws)
     protocol_path = spec / "Protocol.tla"
     states_path = spec / "states.json"
@@ -1069,10 +1334,68 @@ async def run_design(
     live_hold: float = 0.0,
 ) -> DesignResult:
     """One full design run: requirement in, verified workspace out."""
+    run_started_at = datetime.now(timezone.utc).isoformat()
+    run_started_ms = time.monotonic() * 1000.0
     root = repo_root()
+
+    # --- Early diagnostics: print task spec metadata before anything else --------
+    _diag_spec = _extract_structured_task(task)
+    _diag_route = str((_diag_spec or {}).get("route") or "")
+    _diag_query = str((_diag_spec or {}).get("user_query") or "")[:120]
+    _diag_harnesses = (_diag_spec or {}).get("candidate_harnesses") or []
+    _diag_is_placeholder = task.strip() == (
+        "Loaded automatically from the current TeLLMe task spec."
+    )
+    print(
+        f"[run_design] has_tellme_spec={_diag_spec is not None} "
+        f"is_placeholder={_diag_is_placeholder} "
+        f"route={_diag_route!r} "
+        f"task_len={len(task)}",
+        flush=True,
+    )
+    print(f"[run_design] user_query={_diag_query!r}", flush=True)
+    print(f"[run_design] candidate_harnesses={_diag_harnesses}", flush=True)
+    print(f"[run_design] task_preview={task[:100]!r}", flush=True)
+    if _diag_is_placeholder:
+        print(
+            "[run_design] WARNING: task is the UI placeholder string. "
+            "The TeLLMe spec was not passed through correctly — "
+            "TASK_AGENT fallback is likely.",
+            flush=True,
+        )
+    # ---------------------------------------------------------------------------
+
     name = name or slugify(task)
+    init_started_at = datetime.now(timezone.utc).isoformat()
+    init_started_ms = time.monotonic() * 1000.0
     ws = _init_workspace(name, task)
     ws_rel = str(ws.relative_to(root))
+    queued_at = os.getenv("TRACEFIX_UI_QUEUED_AT")
+    queue_wait_ms: float | None = None
+    if queued_at:
+        try:
+            queued_time = datetime.fromisoformat(queued_at)
+            started_time = datetime.fromisoformat(run_started_at)
+            queue_wait_ms = max(0.0, (started_time - queued_time).total_seconds() * 1000.0)
+        except ValueError:
+            queued_at = None
+    timing = PipelineTimingReport(
+        ws,
+        run_kind="tracefix_design",
+        run_id=ws.name,
+        started_at=run_started_at,
+        started_ms=run_started_ms,
+    )
+    timing.stage(
+        "workspace_initialization",
+        started_at=init_started_at,
+        finished_at=datetime.now(timezone.utc).isoformat(),
+        duration_ms=time.monotonic() * 1000.0 - init_started_ms,
+        success=True,
+        workspace=str(ws),
+        queued_at=queued_at,
+        queue_wait_ms=queue_wait_ms,
+    )
 
     prompt = build_designer_prompt(root)
     cfg = build_design_config(prompt, model=model)
@@ -1127,25 +1450,267 @@ async def run_design(
               f"timeout={timeout:.0f}s", file=sys.stderr)
 
     start = time.time()
-    disposition = await run_opencode_agent(
-        "designer", cfg,
-        opencode_cmd=opencode_cmd or ["opencode"],
-        output_dir=root,                      # --dir = repo root: skills + workspace/ resolve
-        kickoff=design_kickoff(ws_rel),
-        timeout=timeout,
-        on_event=on_event,
-        env_overrides=env,
+    fast_path_started_at = datetime.now(timezone.utc).isoformat()
+    fast_path_started_ms = time.monotonic() * 1000.0
+    fast_path_decision = assess_single_agent_fast_path(task)
+    fast_path_used = False
+    fast_path_error: str | None = None
+    fast_path_ir_duration_ms = 0.0
+    fast_path_diagnostics = [
+        f"Single-agent fast path considered: {fast_path_decision.reason}"
+    ]
+    if fast_path_decision.eligible:
+        try:
+            fast_path_ir_started_ms = time.monotonic() * 1000.0
+            fast_ir = generate_single_agent_ir(fast_path_decision)
+            from tracefix.pipeline.pipeline.validator import normalize_ir
+
+            fast_ir = normalize_ir(fast_ir)
+            (_spec_dir(ws) / "ir.json").write_text(
+                json.dumps(fast_ir, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            fast_path_ir_duration_ms = (
+                time.monotonic() * 1000.0 - fast_path_ir_started_ms
+            )
+            valid_fast_ir, fast_ir_errors, fast_ir_diagnostics = validate_design_ir(ws)
+            fast_path_diagnostics.extend(fast_ir_diagnostics)
+            if not valid_fast_ir:
+                raise ValueError("; ".join(fast_ir_errors))
+            fast_path_diagnostics.extend(_scaffold_valid_ir(ws))
+            fast_path_diagnostics.extend(_run_tlc_and_extract(ws, timing))
+            fast_status, fast_errors, fast_diagnostics = classify_design_artifacts(ws)
+            fast_path_diagnostics.extend(fast_diagnostics)
+            if fast_status != "ready":
+                raise ValueError(
+                    "; ".join(fast_errors)
+                    or f"deterministic verification ended with status {fast_status}"
+                )
+            fast_path_used = True
+            fast_path_diagnostics.append(
+                "Single-agent fast path completed deterministic verification"
+            )
+        except Exception as exc:  # noqa: BLE001 - fallback is the safety boundary
+            fast_path_error = str(exc)
+            fast_path_diagnostics.append(
+                f"Single-agent fast path fell back to OpenCode: {exc}"
+            )
+
+    fast_path_duration_ms = time.monotonic() * 1000.0 - fast_path_started_ms
+    fast_path_report = {
+        "considered": fast_path_decision.considered,
+        "used": fast_path_used,
+        "reason": fast_path_decision.reason,
+        "structured_input": fast_path_decision.structured_input,
+        "agent_id": fast_path_decision.agent_id or None,
+        "ir_generation_duration_ms": round(fast_path_ir_duration_ms, 2),
+        "fallback_to_opencode": not fast_path_used,
+        "error": fast_path_error,
+    }
+    timing.stage(
+        "single_agent_fast_path",
+        started_at=fast_path_started_at,
+        finished_at=datetime.now(timezone.utc).isoformat(),
+        duration_ms=fast_path_duration_ms,
+        success=fast_path_used or not fast_path_decision.eligible,
+        error=fast_path_error,
+        fast_path=fast_path_report,
+        aggregate=True,
     )
+
+    # --- Coordination-pattern template fast path -----------------------------------
+    # For known 2-agent patterns (sequential_handoff, verifier_approver,
+    # producer_consumer) we can bypass OpenCode entirely: build IR + Protocol.tla
+    # deterministically, validate, run TLC, and extract states — same pipeline as
+    # the single-agent fast path but for multi-agent coordination patterns.
+    coord_template_used = False
+    coord_template_error: str | None = None
+    coord_template_diagnostics: list[str] = []
+    coord_decision = None
+    _tspec_route: str = ""
+    _tspec_query: str = ""
+    _tspec_harnesses: list = []
+
+    if not fast_path_used:
+        coord_started_at = datetime.now(timezone.utc).isoformat()
+        coord_started_ms = time.monotonic() * 1000.0
+        try:
+            # Extract TeLLMe structured spec so the classifier gets agent IDs,
+            # user_query, and route metadata instead of estimating from raw text.
+            _tellme_spec = _extract_structured_task(task)
+            _tspec_route = str((_tellme_spec or {}).get("route") or "")
+            _tspec_query = str((_tellme_spec or {}).get("user_query") or "")[:120]
+            _tspec_harnesses = (_tellme_spec or {}).get("candidate_harnesses") or []
+            coord_decision = assess_coordination_pattern(task, tellme_spec=_tellme_spec)
+            _scores_str = (
+                ", ".join(f"{pid}={conf:.2f}" for pid, conf in coord_decision.all_scores)
+                if coord_decision.all_scores else "n/a"
+            )
+            coord_template_diagnostics.append(
+                f"Coord classifier: considered={coord_decision.considered} "
+                f"pattern={coord_decision.pattern_id!r} "
+                f"confidence={coord_decision.confidence:.2f} "
+                f"tellme_route={_tspec_route!r} "
+                f"user_query={_tspec_query!r} "
+                f"harnesses={_tspec_harnesses} "
+                f"scores=[{_scores_str}] "
+                f"fallback_reason={coord_decision.fallback_reason!r}"
+            )
+            if coord_decision.pattern_id is not None:
+                from tracefix.pipeline.pipeline.validator import normalize_ir
+
+                coord_decision.ir_data = normalize_ir(coord_decision.ir_data)
+                # Write IR
+                (_spec_dir(ws) / "ir.json").write_text(
+                    json.dumps(coord_decision.ir_data, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+                # Write Protocol.tla
+                (_spec_dir(ws) / "Protocol.tla").write_text(
+                    coord_decision.protocol_tla + "\n",
+                    encoding="utf-8",
+                )
+                # Validate IR
+                valid_coord_ir, coord_ir_errors, coord_ir_diag = validate_design_ir(ws)
+                coord_template_diagnostics.extend(coord_ir_diag)
+                if not valid_coord_ir:
+                    raise ValueError("; ".join(coord_ir_errors))
+                # Generate TLC config (do NOT overwrite our Protocol.tla)
+                coord_template_diagnostics.extend(_scaffold_coord_ir(ws))
+                coord_template_diagnostics.extend(_run_tlc_and_extract(ws, timing))
+                coord_status, coord_errs, coord_diag = classify_design_artifacts(ws)
+                coord_template_diagnostics.extend(coord_diag)
+                if coord_status != "ready":
+                    raise ValueError(
+                        "; ".join(coord_errs)
+                        or f"coord template verification ended with status {coord_status}"
+                    )
+                coord_template_used = True
+                coord_template_diagnostics.append(
+                    f"Coord template {coord_decision.pattern_id!r} completed "
+                    "deterministic verification"
+                )
+        except Exception as exc:  # noqa: BLE001 - fallback is the safety boundary
+            coord_template_error = str(exc)
+            coord_template_diagnostics.append(
+                f"Coord template fell back to OpenCode: {exc}"
+            )
+            coord_template_used = False
+
+        coord_duration_ms = time.monotonic() * 1000.0 - coord_started_ms
+        coord_report = {
+            "considered": coord_decision.considered if coord_decision else False,
+            "used": coord_template_used,
+            "pattern_id": coord_decision.pattern_id if coord_decision else None,
+            "confidence": coord_decision.confidence if coord_decision else 0.0,
+            "reason": coord_decision.reason if coord_decision else None,
+            "fallback_reason": coord_decision.fallback_reason if coord_decision else None,
+            "fallback_to_opencode": not coord_template_used,
+            "error": coord_template_error,
+            # Diagnostic fields — visible in run JSON for post-run investigation
+            "tellme_route": _tspec_route if coord_decision else None,
+            "user_query_excerpt": _tspec_query if coord_decision else None,
+            "candidate_harnesses": _tspec_harnesses if coord_decision else [],
+            "pattern_scores": {
+                pid: conf for pid, conf in (coord_decision.all_scores if coord_decision else [])
+            },
+            "evidence_sources_detected": (
+                coord_decision.evidence_sources_detected if coord_decision else []
+            ),
+            "evidence_source_count": (
+                coord_decision.evidence_source_count if coord_decision else 0
+            ),
+            "decision_agent_id": (
+                coord_decision.decision_agent_id if coord_decision else None
+            ),
+            "fan_in_decision_used": bool(
+                coord_template_used
+                and coord_decision
+                and coord_decision.pattern_id == "fan_in_decision"
+            ),
+            "template_priority_reason": (
+                coord_decision.template_priority_reason if coord_decision else None
+            ),
+            "app_agent_count": (
+                coord_decision.app_agent_count if coord_decision else 0
+            ),
+            "monitor_count": (
+                coord_decision.monitor_count if coord_decision else 1
+            ),
+        }
+        timing.stage(
+            "coordination_pattern_template",
+            started_at=coord_started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            duration_ms=coord_duration_ms,
+            success=coord_template_used or (coord_decision is not None and not coord_decision.considered),
+            error=coord_template_error,
+            coord_template=coord_report,
+            aggregate=True,
+        )
+    # -------------------------------------------------------------------------------
+
+    if fast_path_used or coord_template_used:
+        disposition = {
+            "status": "incomplete",
+            "events": 0,
+            "stderr_tail": [],
+            "returncode": 0,
+            "provider": None,
+            "model": None,
+        }
+    else:
+        disposition = await run_opencode_agent(
+            "designer", cfg,
+            opencode_cmd=opencode_cmd or ["opencode"],
+            output_dir=root,                      # --dir = repo root: skills + workspace/ resolve
+            kickoff=design_kickoff(ws_rel),
+            timeout=timeout,
+            on_event=on_event,
+            env_overrides=env,
+        )
+        timing.opencode_call("opencode_initial_design", disposition)
 
     timed_out = disposition["status"] == "timeout"
     run_diagnostics = [
         f"Workspace initialized: {ws_rel}",
         f"Model requested: {model or '(opencode default)'}",
-        "OpenCode design attempt finished",
+        *fast_path_diagnostics,
+        *coord_template_diagnostics,
+        (
+            "OpenCode initial design skipped: single-agent deterministic fast path verified"
+            if fast_path_used
+            else (
+                f"OpenCode initial design skipped: coord template {coord_decision.pattern_id!r} verified"
+                if coord_template_used and coord_decision
+                else "OpenCode design attempt finished"
+            )
+        ),
     ]
     run_diagnostics.extend(_workspace_stage_diagnostics(ws, "after initial design"))
-    run_diagnostics.extend(_opencode_provider_diagnostics(ws, disposition))
-    status, ir_errors, diagnostics = classify_design_artifacts(ws, timed_out=timed_out)
+    if not fast_path_used and not coord_template_used:
+        run_diagnostics.extend(_opencode_provider_diagnostics(ws, disposition))
+        # Guard: if TeLLMe route is multi_agent but OpenCode produced a single
+        # TASK_AGENT stub, repair the IR with a synthetic 2-agent structure so
+        # downstream validation has something meaningful to work with.
+        _guard_task_agent_ir(ws, task, run_diagnostics)
+    validation_started_at = datetime.now(timezone.utc).isoformat()
+    validation_started_ms = time.monotonic() * 1000.0
+    sanitization_report: dict = {}
+    status, ir_errors, diagnostics = classify_design_artifacts(
+        ws,
+        timed_out=timed_out,
+        sanitization_report=sanitization_report,
+    )
+    timing.stage(
+        "ir_validation",
+        started_at=validation_started_at,
+        finished_at=datetime.now(timezone.utc).isoformat(),
+        duration_ms=time.monotonic() * 1000.0 - validation_started_ms,
+        success=not ir_errors,
+        error="; ".join(ir_errors) if ir_errors else None,
+        ir_sanitization=sanitization_report,
+    )
     diagnostics = [*run_diagnostics, *diagnostics]
     repair_disposition = None
     continuation_disposition = None
@@ -1156,11 +1721,28 @@ async def run_design(
         and any("before PlusCal scaffolding" in error for error in ir_errors)
     ):
         diagnostics.append("PlusCal scaffold fallback started")
+        scaffold_started_at = datetime.now(timezone.utc).isoformat()
+        scaffold_started_ms = time.monotonic() * 1000.0
         try:
             diagnostics.extend(_scaffold_valid_ir(ws))
         except Exception as exc:  # noqa: BLE001 - keep the design report actionable
+            timing.stage(
+                "protocol_scaffold",
+                started_at=scaffold_started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_ms=time.monotonic() * 1000.0 - scaffold_started_ms,
+                success=False,
+                error=str(exc),
+            )
             diagnostics.append(f"PlusCal scaffold fallback failed: {exc}")
         else:
+            timing.stage(
+                "protocol_scaffold",
+                started_at=scaffold_started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_ms=time.monotonic() * 1000.0 - scaffold_started_ms,
+                success=True,
+            )
             diagnostics.append("PlusCal continuation pass started")
             continuation_disposition = await run_opencode_agent(
                 "designer",
@@ -1183,7 +1765,7 @@ async def run_design(
                 and continuation_disposition["status"] != "timeout"
             ):
                 try:
-                    diagnostics.extend(_run_tlc_and_extract(ws))
+                    diagnostics.extend(_run_tlc_and_extract(ws, timing))
                 except Exception as exc:  # noqa: BLE001
                     diagnostics.append(f"TLC direct fallback exception: {exc}")
                 status, ir_errors, tlc_fallback_diagnostics = classify_design_artifacts(ws)
@@ -1206,6 +1788,7 @@ async def run_design(
             on_event=on_event,
             env_overrides=env,
         )
+        timing.opencode_call("opencode_ir_repair", repair_disposition)
         diagnostics.append("IR repair pass finished")
         diagnostics.extend(_channel_diagnostics(ir_before_repair, _load_ir(ws)))
         diagnostics.extend(_workspace_stage_diagnostics(ws, "after IR repair"))
@@ -1222,11 +1805,28 @@ async def run_design(
             and any("before PlusCal scaffolding" in error for error in ir_errors)
         ):
             diagnostics.append("IR valid after repair; starting PlusCal scaffold")
+            scaffold_started_at = datetime.now(timezone.utc).isoformat()
+            scaffold_started_ms = time.monotonic() * 1000.0
             try:
                 diagnostics.extend(_scaffold_valid_ir(ws))
             except Exception as exc:  # noqa: BLE001
+                timing.stage(
+                    "protocol_scaffold_after_repair",
+                    started_at=scaffold_started_at,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    duration_ms=time.monotonic() * 1000.0 - scaffold_started_ms,
+                    success=False,
+                    error=str(exc),
+                )
                 diagnostics.append(f"PlusCal scaffold after repair failed: {exc}")
             else:
+                timing.stage(
+                    "protocol_scaffold_after_repair",
+                    started_at=scaffold_started_at,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    duration_ms=time.monotonic() * 1000.0 - scaffold_started_ms,
+                    success=True,
+                )
                 diagnostics.append("PlusCal continuation pass started (post-repair)")
                 post_repair_continuation = await run_opencode_agent(
                     "designer",
@@ -1237,6 +1837,10 @@ async def run_design(
                     timeout=timeout,
                     on_event=on_event,
                     env_overrides=env,
+                )
+                timing.opencode_call(
+                    "opencode_pluscal_continuation_post_repair",
+                    post_repair_continuation,
                 )
                 diagnostics.append("PlusCal continuation pass finished (post-repair)")
                 status, ir_errors, post_repair_diagnostics = classify_design_artifacts(
@@ -1249,7 +1853,7 @@ async def run_design(
                     and post_repair_continuation["status"] != "timeout"
                 ):
                     try:
-                        diagnostics.extend(_run_tlc_and_extract(ws))
+                        diagnostics.extend(_run_tlc_and_extract(ws, timing))
                     except Exception as exc:  # noqa: BLE001
                         diagnostics.append(f"TLC direct fallback exception (post-repair): {exc}")
                     status, ir_errors, tlc_fallback_diagnostics = classify_design_artifacts(ws)
@@ -1268,7 +1872,7 @@ async def run_design(
             "are present, so PlusCal/TLC must run"
         )
         try:
-            diagnostics.extend(_run_tlc_and_extract(ws))
+            diagnostics.extend(_run_tlc_and_extract(ws, timing))
         except Exception as exc:  # noqa: BLE001
             diagnostics.append(f"Post-scaffold verification gate exception: {exc}")
             _write_tlc_stage_error(
@@ -1285,6 +1889,68 @@ async def run_design(
     if _verified_protocol_ready(ws) and not timed_out:
         diagnostics.append("Prompt gate started")
         diagnostics.extend(_ensure_plan_before_prompts(ws))
+        if (fast_path_used or coord_template_used) and not _runtime_prompts_current(ws):
+            deterministic_prompt_started_at = datetime.now(timezone.utc).isoformat()
+            deterministic_prompt_started_ms = time.monotonic() * 1000.0
+            try:
+                plan_path = _spec_dir(ws) / "cityos_module_plan.json"
+                plan = safe_read_json(plan_path, {})
+                prompt_dir = ws / "prompts" / "runtime_b"
+                prompt_dir.mkdir(parents=True, exist_ok=True)
+                prompt_decisions = [fast_path_decision]
+                if coord_template_used and coord_decision:
+                    prompt_decisions = [
+                        FastPathDecision(
+                            considered=True,
+                            eligible=True,
+                            reason=f"deterministic {coord_decision.pattern_id} template",
+                            task_text=task,
+                            agent_id=str(agent.get("id") or ""),
+                            structured_input=bool(_extract_structured_task(task)),
+                        )
+                        for agent in coord_decision.agents
+                        if agent.get("id")
+                    ]
+                prompt_paths = []
+                for prompt_decision in prompt_decisions:
+                    prompt_text = render_verified_runtime_prompt(
+                        prompt_decision,
+                        plan,
+                    )
+                    prompt_path = prompt_dir / f"{prompt_decision.agent_id}.md"
+                    prompt_path.write_text(prompt_text, encoding="utf-8")
+                    prompt_paths.append(str(prompt_path))
+            except Exception as exc:  # noqa: BLE001
+                timing.stage(
+                    "deterministic_runtime_prompt",
+                    started_at=deterministic_prompt_started_at,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    duration_ms=(
+                        time.monotonic() * 1000.0
+                        - deterministic_prompt_started_ms
+                    ),
+                    success=False,
+                    error=str(exc),
+                )
+                diagnostics.append(
+                    f"Deterministic verified-plan prompt generation failed: {exc}"
+                )
+            else:
+                timing.stage(
+                    "deterministic_runtime_prompt",
+                    started_at=deterministic_prompt_started_at,
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    duration_ms=(
+                        time.monotonic() * 1000.0
+                        - deterministic_prompt_started_ms
+                    ),
+                    success=True,
+                    prompt_paths=prompt_paths,
+                )
+                diagnostics.append(
+                    "Deterministic runtime prompt generated from verified "
+                    f"CityOS plan: {', '.join(prompt_paths)}"
+                )
         if not _runtime_prompts_current(ws):
             diagnostics.append("Prompt generation pass started")
             prompt_disposition = await run_opencode_agent(
@@ -1297,6 +1963,8 @@ async def run_design(
                 on_event=on_event,
                 env_overrides=env,
             )
+            timing.opencode_call("opencode_runtime_prompt_generation", prompt_disposition)
+            timing.opencode_call("opencode_pluscal_continuation", continuation_disposition)
             diagnostics.append("Prompt generation pass finished")
             if prompt_disposition["status"] == "timeout":
                 diagnostics.append("Prompt generation pass timed out")
@@ -1337,12 +2005,79 @@ async def run_design(
         ]
 
     if result.success:
+        plan_started_at = datetime.now(timezone.utc).isoformat()
+        plan_started_ms = time.monotonic() * 1000.0
         try:
             diagnostics.extend(_ensure_cityos_plan(ws))
         except Exception as e:  # noqa: BLE001 - design should report the export issue cleanly
+            timing.stage(
+                "cityos_plan_export",
+                started_at=plan_started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_ms=time.monotonic() * 1000.0 - plan_started_ms,
+                success=False,
+                error=str(e),
+            )
             result.success = False
             result.status = "cityos_plan_failed"
             result.stderr_tail = [*result.stderr_tail, f"cityos plan export failed: {e}"]
+        else:
+            timing.stage(
+                "cityos_plan_export",
+                started_at=plan_started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_ms=time.monotonic() * 1000.0 - plan_started_ms,
+                success=True,
+            )
+
+    # --- Pattern candidate harvest -----------------------------------------
+    # Only after a successful verified run that used OpenCode fallback OR had no
+    # static template match. Single-agent fast path is not harvested by default.
+    opencode_fallback_used = not fast_path_used and not coord_template_used
+    if result.success and _verified_protocol_ready(ws):
+        harvest_started_at = datetime.now(timezone.utc).isoformat()
+        harvest_started_ms = time.monotonic() * 1000.0
+        harvest_result = harvest_candidate(
+            ws,
+            task_text=task,
+            used_opencode_fallback=opencode_fallback_used,
+            matched_existing_template=(
+                coord_decision.pattern_id is not None if coord_decision is not None else False
+            ),
+            is_single_agent=fast_path_used,
+            is_custom_task=True,
+            timing_report_path=timing.json_path if hasattr(timing, "json_path") else None,
+        )
+        repo_report = {
+            "pattern_repository_enabled": repository_enabled(),
+            "candidate_harvest_attempted": harvest_result.attempted,
+            "candidate_saved": harvest_result.saved,
+            "candidate_id": harvest_result.candidate_id or None,
+            "normalized_topology_hash": harvest_result.topology_hash or None,
+            "candidate_deduplicated": harvest_result.deduplicated,
+            "candidate_usage_count": harvest_result.usage_count,
+            "candidate_path": harvest_result.candidate_path or None,
+            "harvest_skip_reason": harvest_result.skip_reason or None,
+        }
+        timing.stage(
+            "pattern_candidate_harvest",
+            started_at=harvest_started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            duration_ms=time.monotonic() * 1000.0 - harvest_started_ms,
+            success=harvest_result.saved or bool(harvest_result.skip_reason),
+            error=harvest_result.error or None,
+            pattern_repository=repo_report,
+            aggregate=True,
+        )
+        if harvest_result.saved:
+            diagnostics.append(
+                f"Pattern candidate {'deduplicated' if harvest_result.deduplicated else 'saved'}: "
+                f"{harvest_result.candidate_id} "
+                f"(hash={harvest_result.topology_hash})"
+            )
+        elif harvest_result.skip_reason:
+            diagnostics.append(f"Pattern harvest skipped: {harvest_result.skip_reason}")
+    # -----------------------------------------------------------------------
 
     if live and bus is not None:
         if watcher_task is not None:
@@ -1360,4 +2095,5 @@ async def run_design(
             from tracefix.runtime.monitoring.live_server import stop_live_server
             await stop_live_server(server)
 
+    timing.finalize()
     return result

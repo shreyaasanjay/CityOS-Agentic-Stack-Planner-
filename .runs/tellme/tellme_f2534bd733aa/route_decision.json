@@ -1,0 +1,28 @@
+{
+  "caveats": [
+    "V0 only emits a TraceFixTaskSpec stub for complex queries."
+  ],
+  "explicit_agent_names_detected": true,
+  "intent": "general",
+  "rationale": "Explicit multi-agent coordination detected (triggers: attendance roster, meeting may begin, conference meeting may begin, attendance_term: attendance). Requires TraceFix.",
+  "required_tools": [],
+  "requires_tracefix": true,
+  "route": "multi_agent",
+  "selected_agent": null,
+  "selected_tool": null,
+  "time_window": null,
+  "trigger_terms_found": [
+    "attendance roster",
+    "meeting may begin",
+    "conference meeting may begin",
+    "attendance_term: attendance",
+    "attendance_term: attendees",
+    "attendance_term: roster",
+    "verification_term: confirming",
+    "verification_term: matches",
+    "meeting_readiness: meeting may begin",
+    "meeting_auth_term: attendance",
+    "meeting_auth_term: attendees",
+    "meeting_auth_term: roster"
+  ]
+}

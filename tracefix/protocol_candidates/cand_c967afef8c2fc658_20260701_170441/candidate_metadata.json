@@ -1,0 +1,25 @@
+{
+  "candidate_id": "cand_c967afef8c2fc658_20260701_170441",
+  "source_workspace": "workspace\\loaded_automatically_from_the_current_20260701_124442",
+  "source_task_text": "Determine the number of people physically present in the conference room.",
+  "created_at": "2026-07-01T17:04:41.788892+00:00",
+  "last_seen_at": "2026-07-01T17:04:41.788892+00:00",
+  "agents_count": 1,
+  "channels_count": 0,
+  "resources_count": 0,
+  "normalized_topology_hash": "c967afef8c2fc658",
+  "tlc_passed": true,
+  "pluscal_passed": true,
+  "used_opencode_fallback": true,
+  "matched_existing_template": false,
+  "suggested_pattern_name": "single_agent",
+  "promotion_status": "candidate",
+  "usage_count": 1,
+  "observed_workspaces": [
+    "workspace\\loaded_automatically_from_the_current_20260701_124442"
+  ],
+  "observed_tasks": [
+    "Determine the number of people physically present in the conference room."
+  ],
+  "notes": ""
+}

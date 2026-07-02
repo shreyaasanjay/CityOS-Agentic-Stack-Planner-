@@ -1,0 +1,12 @@
+{
+  "agents": [
+    {
+      "id": "TASK_AGENT"
+    }
+  ],
+  "resources": [],
+  "channels": [],
+  "state_tasks": {
+    "TASK_AGENT_start": "Loaded automatically from the current TeLLMe task spec."
+  }
+}

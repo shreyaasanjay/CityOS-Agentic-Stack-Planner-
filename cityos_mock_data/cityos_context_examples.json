@@ -1,0 +1,397 @@
+[
+  {
+    "context_id": "ctx_occ_1005_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:05:00Z",
+    "context_type": "occupancy",
+    "modality": "video",
+    "sensor_id": "camera_room_01",
+    "source_api": "get_occupancy_context",
+    "start_timestamp": "2026-06-24T10:04:45Z",
+    "end_timestamp": "2026-06-24T10:05:05Z",
+    "value": {
+      "count": 2,
+      "state": "occupied",
+      "supporting_modalities": ["video", "audio"],
+      "camera_sources": ["camera_door_01", "camera_room_01"],
+      "notes": "Doorway entry count and room-overview occupancy estimate are consistent."
+    },
+    "confidence": 0.89,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/camera_door_01/entry/2026-06-24T10:04:58Z",
+      "mock://cityos/smart_room_1/camera_room_01/occupancy/2026-06-24T10:05:00Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "24h_derived_context",
+    "limitations": [
+      "Anonymous count only.",
+      "No identity or face recognition."
+    ],
+    "trace_id": "trace_mock_1005",
+    "checkpoint_id": "cp_occ_1005"
+  },
+  {
+    "context_id": "ctx_entry_100458_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:04:58Z",
+    "context_type": "events",
+    "modality": "video",
+    "sensor_id": "camera_door_01",
+    "source_api": "get_entry_event_context",
+    "start_timestamp": "2026-06-24T10:04:57Z",
+    "end_timestamp": "2026-06-24T10:04:59Z",
+    "value": {
+      "event_type": "entry_event",
+      "direction": "into_room",
+      "track_id": "anon_track_17",
+      "notes": "Anonymous person crossed the threshold into the room."
+    },
+    "confidence": 0.93,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/camera_door_01/tracks/anon_track_17"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "24h_derived_context",
+    "limitations": ["Identity unavailable."],
+    "trace_id": "trace_mock_1005",
+    "checkpoint_id": "cp_entry_100458"
+  },
+  {
+    "context_id": "ctx_track_1005_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:05:03Z",
+    "context_type": "events",
+    "modality": "video",
+    "sensor_id": "camera_door_01",
+    "source_api": "get_anonymous_track_context",
+    "start_timestamp": "2026-06-24T10:04:58Z",
+    "end_timestamp": "2026-06-24T10:05:04Z",
+    "value": {
+      "event_type": "anonymous_track_continuity",
+      "track_id": "anon_track_17",
+      "continuity": "maintained",
+      "zone_sequence": ["doorway", "front_room"],
+      "notes": "Identity-free track continuity maintained while subject remained visible."
+    },
+    "confidence": 0.84,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/camera_door_01/tracks/anon_track_17"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "24h_derived_context",
+    "limitations": ["Track continuity does not imply identity."],
+    "trace_id": "trace_mock_1005",
+    "checkpoint_id": "cp_track_1005"
+  },
+  {
+    "context_id": "ctx_audio_presence_1005_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:05:02Z",
+    "context_type": "audio",
+    "modality": "audio",
+    "sensor_id": "microphone_array_01",
+    "source_api": "get_audio_level_context",
+    "start_timestamp": "2026-06-24T10:04:50Z",
+    "end_timestamp": "2026-06-24T10:05:10Z",
+    "value": {
+      "noise_level_db": 46,
+      "voice_activity": "low",
+      "source_zone": "center_room",
+      "notes": "Low conversational activity is consistent with continued room occupancy."
+    },
+    "confidence": 0.67,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/microphone_array_01/audio_level/2026-06-24T10:05:02Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "12h_derived_context",
+    "limitations": [
+      "Supporting evidence only.",
+      "No transcript or speaker identity."
+    ],
+    "trace_id": "trace_mock_1005",
+    "checkpoint_id": "cp_audio_1005"
+  },
+  {
+    "context_id": "ctx_room_state_1005_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:05:00Z",
+    "context_type": "room_state",
+    "modality": "context",
+    "sensor_id": "camera_room_01",
+    "source_api": "get_room_state",
+    "start_timestamp": "2026-06-24T10:04:50Z",
+    "end_timestamp": "2026-06-24T10:05:10Z",
+    "value": {
+      "summary_state": "occupied_with_low_speech_activity",
+      "occupancy_state": "occupied",
+      "motion_state": "recent_entry_detected",
+      "audio_state": "quiet_speech_activity",
+      "notes": "Camera occupancy and low speech activity jointly indicate an occupied but calm room state."
+    },
+    "confidence": 0.85,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/camera_room_01/occupancy/2026-06-24T10:05:00Z",
+      "mock://cityos/smart_room_1/microphone_array_01/audio_level/2026-06-24T10:05:02Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "24h_derived_context",
+    "limitations": ["Summary only.", "No identity or transcript."],
+    "trace_id": "trace_mock_1005",
+    "checkpoint_id": "cp_room_state_1005"
+  },
+  {
+    "context_id": "ctx_impact_100903_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:09:03Z",
+    "context_type": "audio",
+    "modality": "audio",
+    "sensor_id": "microphone_array_01",
+    "source_api": "get_impact_sound_context",
+    "start_timestamp": "2026-06-24T10:09:02Z",
+    "end_timestamp": "2026-06-24T10:09:04Z",
+    "value": {
+      "event_type": "impact_sound_candidate",
+      "sound_level_db": 78,
+      "source_zone": "center_room",
+      "notes": "A short, high-energy impact-like sound was detected several seconds after entry."
+    },
+    "confidence": 0.82,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/microphone_array_01/impact/2026-06-24T10:09:03Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "12h_derived_context",
+    "limitations": [
+      "Impact candidate only.",
+      "Does not imply a fall or injury."
+    ],
+    "trace_id": "trace_mock_impact",
+    "checkpoint_id": "cp_impact_100903"
+  },
+  {
+    "context_id": "ctx_posture_100905_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:09:05Z",
+    "context_type": "events",
+    "modality": "video",
+    "sensor_id": "camera_room_01",
+    "source_api": "get_posture_candidate_context",
+    "start_timestamp": "2026-06-24T10:09:04Z",
+    "end_timestamp": "2026-06-24T10:09:07Z",
+    "value": {
+      "event_type": "posture_candidate",
+      "candidate_label": "low_to_floor_motion_candidate",
+      "visibility": "partial_occlusion",
+      "notes": "Room camera observed a brief low-floor motion candidate with partial furniture occlusion."
+    },
+    "confidence": 0.58,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/camera_room_01/posture/2026-06-24T10:09:05Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "24h_derived_context",
+    "limitations": [
+      "Partially occluded.",
+      "Candidate-level observation only.",
+      "Not a medical conclusion."
+    ],
+    "trace_id": "trace_mock_impact",
+    "checkpoint_id": "cp_posture_100905"
+  },
+  {
+    "context_id": "ctx_speech_101500_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:15:00Z",
+    "context_type": "audio",
+    "modality": "audio",
+    "sensor_id": "microphone_array_01",
+    "source_api": "get_speech_activity_context",
+    "start_timestamp": "2026-06-24T10:14:50Z",
+    "end_timestamp": "2026-06-24T10:15:20Z",
+    "value": {
+      "speech_activity": "active",
+      "activity_intervals": [
+        {"start": "2026-06-24T10:14:52Z", "end": "2026-06-24T10:14:59Z"},
+        {"start": "2026-06-24T10:15:06Z", "end": "2026-06-24T10:15:17Z"}
+      ],
+      "source_zone": "center_room",
+      "notes": "Speech-like activity was detected, but words and speaker identity are unavailable."
+    },
+    "confidence": 0.88,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/microphone_array_01/speech/2026-06-24T10:15:00Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "12h_derived_context",
+    "limitations": [
+      "No transcript.",
+      "No speaker identity."
+    ],
+    "trace_id": "trace_mock_speech",
+    "checkpoint_id": "cp_speech_101500"
+  },
+  {
+    "context_id": "ctx_presence_101500_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:15:00Z",
+    "context_type": "occupancy",
+    "modality": "video",
+    "sensor_id": "camera_room_01",
+    "source_api": "get_camera_occupancy_context",
+    "start_timestamp": "2026-06-24T10:14:50Z",
+    "end_timestamp": "2026-06-24T10:15:10Z",
+    "value": {
+      "count": 1,
+      "state": "occupied",
+      "supporting_modalities": ["video"],
+      "notes": "One anonymous person was visible while speech activity occurred."
+    },
+    "confidence": 0.86,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/camera_room_01/occupancy/2026-06-24T10:15:00Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "24h_derived_context",
+    "limitations": ["No identity information."],
+    "trace_id": "trace_mock_speech",
+    "checkpoint_id": "cp_presence_101500"
+  },
+  {
+    "context_id": "ctx_table_gap_102000_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:20:00Z",
+    "context_type": "events",
+    "modality": "video",
+    "sensor_id": "camera_room_01",
+    "source_api": "get_camera_coverage_metadata",
+    "start_timestamp": "2026-06-24T10:20:00Z",
+    "end_timestamp": "2026-06-24T10:20:00Z",
+    "value": {
+      "event_type": "coverage_gap",
+      "gap_region": "under_table",
+      "notes": "The region under the table is a documented blind spot for available cameras."
+    },
+    "confidence": 1.0,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/camera_room_01/coverage"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "static_metadata",
+    "limitations": ["Metadata only; no visual event observation is available in that region."],
+    "trace_id": "trace_mock_gap",
+    "checkpoint_id": "cp_gap_102000"
+  },
+  {
+    "context_id": "ctx_table_audio_102000_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:20:02Z",
+    "context_type": "audio",
+    "modality": "audio",
+    "sensor_id": "microphone_array_01",
+    "source_api": "get_acoustic_event_context",
+    "start_timestamp": "2026-06-24T10:20:01Z",
+    "end_timestamp": "2026-06-24T10:20:03Z",
+    "value": {
+      "event_type": "chair_drag_candidate",
+      "source_zone": "rear_room",
+      "notes": "An acoustic event was heard near the rear-room seating area, but audio cannot resolve the blind spot visually."
+    },
+    "confidence": 0.61,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/microphone_array_01/acoustic_event/2026-06-24T10:20:02Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "12h_derived_context",
+    "limitations": [
+      "Audio only.",
+      "Cannot establish what happened under the table."
+    ],
+    "trace_id": "trace_mock_gap",
+    "checkpoint_id": "cp_gap_audio_102000"
+  },
+  {
+    "context_id": "ctx_impact_102400_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:24:00Z",
+    "context_type": "audio",
+    "modality": "audio",
+    "sensor_id": "microphone_array_01",
+    "source_api": "get_impact_sound_context",
+    "start_timestamp": "2026-06-24T10:23:59Z",
+    "end_timestamp": "2026-06-24T10:24:01Z",
+    "value": {
+      "event_type": "impact_sound_candidate",
+      "sound_level_db": 81,
+      "source_zone": "center_room",
+      "notes": "A loud impact-like sound was detected."
+    },
+    "confidence": 0.84,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/microphone_array_01/impact/2026-06-24T10:24:00Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "12h_derived_context",
+    "limitations": [
+      "Impact candidate only.",
+      "Does not imply injury."
+    ],
+    "trace_id": "trace_mock_ambiguity",
+    "checkpoint_id": "cp_impact_102400"
+  },
+  {
+    "context_id": "ctx_occluded_102401_01",
+    "space_id": "smart_room_1",
+    "timestamp": "2026-06-24T10:24:01Z",
+    "context_type": "events",
+    "modality": "video",
+    "sensor_id": "camera_room_01",
+    "source_api": "get_posture_candidate_context",
+    "start_timestamp": "2026-06-24T10:24:00Z",
+    "end_timestamp": "2026-06-24T10:24:03Z",
+    "value": {
+      "event_type": "visibility_limitation",
+      "candidate_label": "occluded_after_impact",
+      "visibility": "occluded",
+      "notes": "The room camera could not verify a low-floor outcome because furniture blocked the view."
+    },
+    "confidence": 0.49,
+    "evidence_refs": [
+      "mock://cityos/smart_room_1/camera_room_01/posture/2026-06-24T10:24:01Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "24h_derived_context",
+    "limitations": [
+      "Occluded visual evidence.",
+      "Insufficient to confirm a fall or injury."
+    ],
+    "trace_id": "trace_mock_ambiguity",
+    "checkpoint_id": "cp_occluded_102401"
+  },
+  {
+    "context_id": "ctx_room2_occ_1500_01",
+    "space_id": "smart_room_2",
+    "timestamp": "2026-06-24T15:00:00Z",
+    "context_type": "occupancy",
+    "modality": "video",
+    "sensor_id": "camera_room_02",
+    "source_api": "get_occupancy_context",
+    "start_timestamp": "2026-06-24T14:59:50Z",
+    "end_timestamp": "2026-06-24T15:00:10Z",
+    "value": {
+      "count": 1,
+      "state": "occupied",
+      "supporting_modalities": ["video"],
+      "notes": "Video-only room occupancy summary."
+    },
+    "confidence": 0.83,
+    "evidence_refs": [
+      "mock://cityos/smart_room_2/camera_room_02/occupancy/2026-06-24T15:00:00Z"
+    ],
+    "privacy_scope": "cityos_structured_context_only",
+    "retention_policy": "24h_derived_context",
+    "limitations": ["No microphone coverage in this room."],
+    "trace_id": "trace_mock_room2",
+    "checkpoint_id": "cp_room2_occ_1500"
+  }
+]

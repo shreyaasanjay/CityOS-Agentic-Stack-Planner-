@@ -1,0 +1,7 @@
+[
+  {
+    "from": "general_context_harness",
+    "label": "general_context_findings",
+    "to": "answer_synthesis_harness"
+  }
+]

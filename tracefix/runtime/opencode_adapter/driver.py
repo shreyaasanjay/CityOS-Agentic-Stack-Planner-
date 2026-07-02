@@ -18,6 +18,9 @@ import asyncio
 import json
 import os
 import shutil
+import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -209,14 +212,27 @@ async def run_opencode_agent(
     if model:
         cmd.extend(["--model", model])
 
+    started_at = datetime.now(timezone.utc).isoformat()
+    started_ms = time.monotonic() * 1000.0
+    print(
+        f"[TRACEFIX LLM START] agent={agent_id} model={model or '(opencode default)'} "
+        f"started_at={started_at}",
+        file=sys.stderr,
+        flush=True,
+    )
     proc = await asyncio.create_subprocess_exec(
         *cmd, env=env, limit=_STREAM_LIMIT,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
 
     state = AgentRunState()
     stderr_tail: list[str] = []
+    first_event_at: str | None = None
+    first_event_ms: float | None = None
+    retry_count = 0
+    rate_limit_events = 0
 
     def _on_stdout(line: str) -> None:
+        nonlocal first_event_at, first_event_ms
         if not line:
             return
         try:
@@ -225,6 +241,15 @@ async def run_opencode_agent(
             return
         if not isinstance(ev, dict):
             return
+        if first_event_at is None:
+            first_event_at = datetime.now(timezone.utc).isoformat()
+            first_event_ms = time.monotonic() * 1000.0
+            print(
+                f"[TRACEFIX LLM FIRST EVENT] agent={agent_id} "
+                f"time_to_first_event_ms={first_event_ms - started_ms:.2f}",
+                file=sys.stderr,
+                flush=True,
+            )
         state.feed(ev)
         if on_event is not None:
             try:
@@ -233,7 +258,13 @@ async def run_opencode_agent(
                 pass
 
     def _on_stderr(line: str) -> None:
+        nonlocal retry_count, rate_limit_events
         if line:
+            lowered = line.lower()
+            if "retry" in lowered or "backoff" in lowered:
+                retry_count += 1
+            if "rate limit" in lowered or "rate_limit" in lowered or " 429" in lowered:
+                rate_limit_events += 1
             stderr_tail.append(line)
             del stderr_tail[:-40]
 
@@ -255,8 +286,28 @@ async def run_opencode_agent(
         await _terminate(proc)
         raise
 
+    finished_at = datetime.now(timezone.utc).isoformat()
+    finished_ms = time.monotonic() * 1000.0
+    print(
+        f"[TRACEFIX LLM END] agent={agent_id} duration_ms={finished_ms - started_ms:.2f} "
+        f"retries={retry_count} rate_limit_events={rate_limit_events}",
+        file=sys.stderr,
+        flush=True,
+    )
+    provider = model.split("/", 1)[0] if model and "/" in model else None
     return {
         "agent_id": agent_id,
+        "provider": provider,
+        "model": model,
+        "started_at": started_at,
+        "first_event_at": first_event_at,
+        "finished_at": finished_at,
+        "duration_ms": round(finished_ms - started_ms, 2),
+        "time_to_first_event_ms": (
+            round(first_event_ms - started_ms, 2) if first_event_ms is not None else None
+        ),
+        "retry_count": retry_count,
+        "rate_limit_events": rate_limit_events,
         "status": classify(state, proc.returncode, timed_out),
         "returncode": proc.returncode,
         "signaled_done": state.signaled_done,

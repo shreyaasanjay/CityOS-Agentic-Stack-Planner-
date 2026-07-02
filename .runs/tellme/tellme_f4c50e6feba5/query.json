@@ -1,0 +1,8 @@
+{
+  "created_at": "2026-07-02T03:35:43.784168+00:00",
+  "intent": "general",
+  "query_id": "tellme_f4c50e6feba5",
+  "space_id": "smart_room_1",
+  "timestamp": null,
+  "user_query": "Determine whether attendance can be verified for an active meeting. Independently evaluate room occupancy observations, expected attendance records, and badge check-in status. Reconcile discrepancies between the evidence sources and generate a final attendance decision with confidence and evidence references."
+}

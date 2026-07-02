@@ -1,0 +1,27 @@
+{
+  "answer_type": "count",
+  "confidence": 0.92,
+  "context_requirements": [
+    "occupancy"
+  ],
+  "estimated_tool_calls": 3,
+  "intent": "occupancy_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_42a47f764fc8",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_explicit_multi_agent": true,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": false,
+  "requires_multi_timestamp_reasoning": false,
+  "requires_policy_review": false,
+  "risk_flags": [],
+  "space_scope": "single_space",
+  "time_scope": "unspecified",
+  "trigger_terms_found": [
+    "meeting attendance",
+    "attendance_term: attendance",
+    "verification_term: matches"
+  ],
+  "user_query": "Determine whether the observed room occupancy matches the expected meeting attendance count. If the evidence is insufficient or conflicting, produce an insufficient-evidence report with confidence, evidence references, and limitations."
+}

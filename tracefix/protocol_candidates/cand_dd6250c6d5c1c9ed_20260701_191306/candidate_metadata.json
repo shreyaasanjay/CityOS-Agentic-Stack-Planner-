@@ -1,0 +1,28 @@
+{
+  "candidate_id": "cand_dd6250c6d5c1c9ed_20260701_191306",
+  "source_workspace": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_151117",
+  "source_task_text": "TeLLMe structured smart-room application requirements.\nTreat this as compile-time input to TraceFix planning and verification.\nGenerate a complete multi-agent topology with explicit communication channels.\nDo not execute production agents or bypass PlusCal/TLC verification.\n\nStructured task specification:\n{\n  \"task_id\": \"task_befb79c12c4e\",\n  \"query_id\": \"tellme_befb79c12c4e\",\n  \"user_query\": \"Determine whether the observed room occupancy matches the expected meeting attendance count. Compare av",
+  "created_at": "2026-07-01T19:13:06.607050+00:00",
+  "last_seen_at": "2026-07-02T00:42:39.866159+00:00",
+  "agents_count": 2,
+  "channels_count": 2,
+  "resources_count": 2,
+  "normalized_topology_hash": "dd6250c6d5c1c9ed",
+  "tlc_passed": true,
+  "pluscal_passed": true,
+  "used_opencode_fallback": false,
+  "matched_existing_template": true,
+  "suggested_pattern_name": "bidirectional_pair",
+  "promotion_status": "candidate",
+  "usage_count": 4,
+  "observed_workspaces": [
+    "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_151117",
+    "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_204054",
+    "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_204109",
+    "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_204238"
+  ],
+  "observed_tasks": [
+    "TeLLMe structured smart-room application requirements.\nTreat this as compile-time input to TraceFix planning and verification.\nGenerate a complete multi-agent topology with explicit communication channels.\nDo not execute production agents or bypass PlusCal/TLC verification.\n\nStructured task specific"
+  ],
+  "notes": ""
+}

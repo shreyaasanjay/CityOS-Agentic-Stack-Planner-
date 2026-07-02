@@ -1,5 +1,7 @@
+const TELLME_LLM_TIMEOUT_SECONDS = 120;
+
 const state = {
-  workflow: "planner",
+  workflow: "tellme",
   tasks: [],
   runMode: "design",
   taskMode: "benchmark",
@@ -12,14 +14,57 @@ const state = {
   activeView: "log",
   usage: null,
   usageDetailsOpen: false,
+  workflowSeen: { tellme: true, planner: false, synth: false },
+  workflowReady: { tellme: false, planner: false, synth: false },
+  tellme: {
+    current: null,
+    runId: null,
+    apiKeyDetected: false,
+    envKeyDetected: false,
+    model: "gpt-4.1-mini",
+    taskText: "",  // actual TeLLMe spec text — set on handoff, used by startRun()
+  },
   synth: {
     workspaces: [],
     selected: null,
     result: null,
+    workspaceType: "custom",
   },
 };
 
 const els = {
+  tellmeForm: document.querySelector("#tellmeForm"),
+  tellmeMode: document.querySelector("#tellmeMode"),
+  tellmeModel: document.querySelector("#tellmeModel"),
+  tellmeApiKey: document.querySelector("#tellmeApiKey"),
+  tellmeKeyRow: document.querySelector("#tellmeKeyRow"),
+  tellmeKeyStatus: document.querySelector("#tellmeKeyStatus"),
+  tellmeQuery: document.querySelector("#tellmeQuery"),
+  tellmeSpaceId: document.querySelector("#tellmeSpaceId"),
+  tellmeTimestamp: document.querySelector("#tellmeTimestamp"),
+  tellmeProcess: document.querySelector("#tellmeProcess"),
+  tellmeRunAll: document.querySelector("#tellmeRunAll"),
+  tellmeTracefixProvider: document.querySelector("#tellmeTracefixProvider"),
+  tellmeTracefixModel: document.querySelector("#tellmeTracefixModel"),
+  tellmeTracefixApiKey: document.querySelector("#tellmeTracefixApiKey"),
+  tellmeTracefixKeyLabel: document.querySelector("#tellmeTracefixKeyLabel"),
+  tellmeTracefixOllamaLabel: document.querySelector("#tellmeTracefixOllamaLabel"),
+  tellmeTracefixOllamaUrl: document.querySelector("#tellmeTracefixOllamaUrl"),
+  tellmeTracefixKeyStatus: document.querySelector("#tellmeTracefixKeyStatus"),
+  tellmeToTracefix: document.querySelector("#tellmeToTracefix"),
+  tellmePanel: document.querySelector("#tellmePanel"),
+  tellmeRoute: document.querySelector("#tellmeRoute"),
+  tellmeRationale: document.querySelector("#tellmeRationale"),
+  tellmePrivacy: document.querySelector("#tellmePrivacy"),
+  tellmePrivacyScope: document.querySelector("#tellmePrivacyScope"),
+  tellmeTaskCount: document.querySelector("#tellmeTaskCount"),
+  tellmeHarnessCount: document.querySelector("#tellmeHarnessCount"),
+  tellmeRunStatus: document.querySelector("#tellmeRunStatus"),
+  tellmeRunId: document.querySelector("#tellmeRunId"),
+  tellmeMessages: document.querySelector("#tellmeMessages"),
+  tellmeIntent: document.querySelector("#tellmeIntent"),
+  tellmeTaskSpec: document.querySelector("#tellmeTaskSpec"),
+  tellmeAnswer: document.querySelector("#tellmeAnswer"),
   form: document.querySelector("#runForm"),
   provider: document.querySelector("#provider"),
   providerFields: document.querySelector("#providerFields"),
@@ -91,6 +136,8 @@ const els = {
   runForm: document.querySelector("#runForm"),
   synthControls: document.querySelector("#synthControls"),
   synthPanel: document.querySelector("#synthPanel"),
+  synthWorkspaceTypeGroup: document.querySelector("#synthWorkspaceTypeGroup"),
+  synthBenchmarkField: document.querySelector("#synthBenchmarkField"),
   synthBenchmarkSelect: document.querySelector("#synthBenchmarkSelect"),
   synthWorkspaceSelect: document.querySelector("#synthWorkspaceSelect"),
   synthWorkspacePath: document.querySelector("#synthWorkspacePath"),
@@ -101,6 +148,8 @@ const els = {
   synthGenerate: document.querySelector("#synthGenerate"),
   synthStatus: document.querySelector("#synthStatus"),
   synthChecklist: document.querySelector("#synthChecklist"),
+  synthWorkspaceTypeDisplay: document.querySelector("#synthWorkspaceTypeDisplay"),
+  synthTaskTextDisplay: document.querySelector("#synthTaskTextDisplay"),
   synthWorkspaceDisplay: document.querySelector("#synthWorkspaceDisplay"),
   synthPlanDisplay: document.querySelector("#synthPlanDisplay"),
   synthAgentsDisplay: document.querySelector("#synthAgentsDisplay"),
@@ -158,8 +207,9 @@ function showToast(text) {
 
 async function getJson(url) {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Request failed: ${response.status}`);
-  return response.json();
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || data.errors?.join("; ") || `Request failed: ${response.status}`);
+  return data;
 }
 
 async function postJson(url, payload) {
@@ -169,7 +219,7 @@ async function postJson(url, payload) {
     body: JSON.stringify(payload),
   });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || `Request failed: ${response.status}`);
+  if (!response.ok) throw new Error(data.error || data.errors?.join("; ") || `Request failed: ${response.status}`);
   return data;
 }
 
@@ -177,12 +227,54 @@ function bindEvents() {
   document.querySelectorAll("[data-workflow]").forEach((button) => {
     button.addEventListener("click", async () => {
       state.workflow = button.dataset.workflow;
+      markWorkflowSeen(state.workflow);
       document.querySelectorAll("[data-workflow]").forEach((item) => {
         item.classList.toggle("active", item === button);
       });
       updateWorkflow();
+      if (state.workflow === "tellme") await loadTellMeCurrent();
       if (state.workflow === "synth") await loadSynthConfig();
     });
+  });
+
+  els.tellmeForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await processTellMeQuery();
+  });
+
+  els.tellmeMode.addEventListener("change", () => {
+    updateTellMeModeFields();
+  });
+
+  els.tellmeApiKey.addEventListener("input", () => {
+    updateTellMeModeFields();
+    updateTellMeTracefixFields();
+  });
+
+  els.tellmeRunAll.addEventListener("click", async () => {
+    await processTellMeAndTraceFix();
+  });
+
+  els.tellmeToTracefix.addEventListener("click", async () => {
+    await startTraceFixFromTellMe();
+  });
+
+  els.tellmeTracefixProvider.addEventListener("change", () => {
+    selectTellMeTracefixProvider(els.tellmeTracefixProvider.value);
+  });
+
+  els.tellmeTracefixModel.addEventListener("input", () => {
+    els.model.value = els.tellmeTracefixModel.value;
+  });
+
+  els.tellmeTracefixApiKey.addEventListener("input", () => {
+    writeProviderKey(els.tellmeTracefixProvider.value, els.tellmeTracefixApiKey.value);
+    updateTellMeTracefixFields();
+  });
+
+  els.tellmeTracefixOllamaUrl.addEventListener("input", () => {
+    els.ollamaUrl.value = els.tellmeTracefixOllamaUrl.value;
+    updateTellMeTracefixFields();
   });
 
   els.provider.addEventListener("change", () => {
@@ -190,8 +282,12 @@ function bindEvents() {
     els.model.value = modelDefaults[provider] || (modelOptions[provider] || [])[0] || els.model.value;
     updateModelSuggestions();
     updateKeyFields();
+    syncTellMeTracefixFromPlanner();
   });
 
+  [els.model, els.openaiKey, els.anthropicKey, els.openrouterKey, els.ollamaUrl].forEach((field) => {
+    field.addEventListener("input", () => syncTellMeTracefixFromPlanner());
+  });
   document.querySelectorAll("[data-task-mode]").forEach((button) => {
     button.addEventListener("click", () => {
       state.taskMode = button.dataset.taskMode;
@@ -257,6 +353,18 @@ function bindEvents() {
     els.llmUsageDetails.classList.toggle("hidden", !state.usageDetailsOpen);
   });
 
+  els.synthWorkspaceTypeGroup.querySelectorAll("[data-workspace-type]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      state.synth.workspaceType = button.dataset.workspaceType;
+      els.synthWorkspaceTypeGroup.querySelectorAll("[data-workspace-type]").forEach((b) => {
+        b.classList.toggle("active", b === button);
+      });
+      const isBenchmark = state.synth.workspaceType === "benchmark";
+      els.synthBenchmarkField.classList.toggle("hidden", !isBenchmark);
+      await loadSynthConfig({ preferCurrent: false });
+    });
+  });
+
   els.synthWorkspaceSelect.addEventListener("change", async () => {
     els.synthWorkspacePath.value = els.synthWorkspaceSelect.value;
     await loadSynthWorkspace(els.synthWorkspacePath.value);
@@ -300,23 +408,103 @@ function bindEvents() {
 }
 
 function updateWorkflow() {
+  const isTellMe = state.workflow === "tellme";
+  const isPlanner = state.workflow === "planner";
   const isSynth = state.workflow === "synth";
-  els.runForm.classList.toggle("hidden", isSynth);
+  els.tellmeForm.classList.toggle("hidden", !isTellMe);
+  els.tellmePanel.classList.toggle("hidden", !isTellMe);
+  els.runForm.classList.toggle("hidden", !isPlanner);
   els.synthControls.classList.toggle("hidden", !isSynth);
   els.synthPanel.classList.toggle("hidden", !isSynth);
   document.querySelectorAll(".planner-only").forEach((section) => {
-    section.classList.toggle("hidden", isSynth);
+    section.classList.toggle("hidden", !isPlanner);
   });
-  if (isSynth) {
+  if (isTellMe) {
+    els.runTitle.textContent = "TeLLMe Intent Planner";
+    els.runMeta.textContent = "Privacy-bounded natural-language entrypoint";
+    els.statusBadge.textContent = state.tellme.current ? "Task ready" : "Idle";
+    els.statusBadge.className = `status-badge ${state.tellme.current ? "completed" : "idle"}`;
+  } else if (isSynth) {
     els.runTitle.textContent = "CityOS Synthesizer";
     els.runMeta.textContent = "Generate CityOS app artifacts from a verified TraceFix plan";
     els.statusBadge.textContent = "Synthesis";
     els.statusBadge.className = "status-badge idle";
+    // Sync workspace type button + benchmark field visibility
+    els.synthWorkspaceTypeGroup.querySelectorAll("[data-workspace-type]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.workspaceType === state.synth.workspaceType);
+    });
+    const isBenchmarkMode = state.synth.workspaceType === "benchmark";
+    if (els.synthBenchmarkField) els.synthBenchmarkField.classList.toggle("hidden", !isBenchmarkMode);
   } else {
     els.runTitle.textContent = state.runId ? els.runTitle.textContent : "No plan generated";
     els.runMeta.textContent = state.runId ? els.runMeta.textContent : "Idle";
     setStatus(state.runId ? "running" : "idle");
   }
+  updateWorkflowReadiness();
+}
+
+function hasTellMeTaskSpec() {
+  const spec = state.tellme.current?.tracefix_task_spec;
+  return Boolean(state.tellme.current && spec && Object.keys(spec).length && state.tellme.current.status !== "not_answerable");
+}
+
+function hasTracefixWorkspace() {
+  return Boolean(
+    state.runId
+    || state.artifacts?.workspace
+    || state.artifacts?.cityosPlan
+    || state.artifacts?.files?.length
+  );
+}
+
+function hasCityOSReadyState() {
+  return Boolean(
+    state.synth.selected?.ready
+    || state.synth.result?.manifestPath
+    || state.synth.result?.apps?.length
+  );
+}
+
+function markWorkflowSeen(workflow) {
+  if (workflow) state.workflowSeen[workflow] = true;
+}
+
+function updateWorkflowReadiness() {
+  const workflows = ["tellme", "planner", "synth"];
+  const readyByWorkflow = {
+    tellme: Boolean(state.tellme.current),
+    planner: hasTellMeTaskSpec() || hasTracefixWorkspace(),
+    synth: hasTracefixWorkspace() || hasCityOSReadyState(),
+  };
+
+  workflows.forEach((workflow) => {
+    const isReady = Boolean(readyByWorkflow[workflow]);
+    const justBecameReady = isReady && !state.workflowReady[workflow];
+    if (!isReady) {
+      state.workflowSeen[workflow] = false;
+    } else if (workflow === state.workflow) {
+      state.workflowSeen[workflow] = true;
+    } else if (justBecameReady) {
+      state.workflowSeen[workflow] = false;
+    }
+  });
+  state.workflowReady = readyByWorkflow;
+
+  const glowWorkflow = workflows.find((workflow) => (
+    readyByWorkflow[workflow]
+    && workflow !== state.workflow
+    && !state.workflowSeen[workflow]
+  ));
+
+  document.querySelectorAll("[data-workflow]").forEach((button) => {
+    const shouldGlow = button.dataset.workflow === glowWorkflow;
+    button.classList.toggle("ready", shouldGlow);
+    if (shouldGlow) {
+      button.title = "Ready to review";
+    } else {
+      button.removeAttribute("title");
+    }
+  });
 }
 
 function updateKeyFields() {
@@ -357,16 +545,328 @@ async function loadUiInfo() {
   }
 }
 
-async function loadSynthConfig(options = {}) {
+async function loadTellMeConfig() {
   try {
-    const benchmark = els.synthBenchmarkSelect.value;
-    const query = benchmark ? `?benchmark=${encodeURIComponent(benchmark)}` : "";
-    const data = await getJson(`/api/synth/config${query}`);
+    const response = await getJson("/api/tellme/config");
+    const envDetected = response.api_key_detected === true
+      || response.data?.openai_api_key_detected === true
+      || response.data?.tellme_api_key_detected === true;
+    state.tellme.envKeyDetected = envDetected;
+    state.tellme.apiKeyDetected = envDetected;
+    state.tellme.model = response.model || response.data?.model || "gpt-4.1-mini";
+    els.tellmeModel.value = state.tellme.model;
+  } catch {
+    state.tellme.envKeyDetected = false;
+    state.tellme.apiKeyDetected = false;
+  }
+  updateTellMeModeFields();
+  updateTellMeTracefixFields();
+}
+
+function updateTellMeModeFields() {
+  const isLlm = els.tellmeMode.value === "llm";
+  els.tellmeModel.disabled = !isLlm;
+  els.tellmeKeyRow.classList.toggle("hidden", !isLlm);
+
+  const typedKey = (els.tellmeApiKey.value || "").trim();
+  let statusText, statusClass;
+  if (typedKey) {
+    statusText = "API key ready";
+    statusClass = "detected";
+  } else if (state.tellme.envKeyDetected) {
+    statusText = "Environment API key detected";
+    statusClass = "detected";
+  } else {
+    statusText = "No API key detected";
+    statusClass = "missing";
+  }
+  els.tellmeKeyStatus.textContent = statusText;
+  els.tellmeKeyStatus.className = `api-key-status ${statusClass}`;
+}
+
+function providerKeyElement(provider) {
+  if (provider === "anthropic") return els.anthropicKey;
+  if (provider === "openrouter") return els.openrouterKey;
+  if (provider === "openai") return els.openaiKey;
+  return null;
+}
+
+function readProviderKey(provider) {
+  const field = providerKeyElement(provider);
+  return field ? (field.value || "").trim() : "";
+}
+
+function writeProviderKey(provider, value) {
+  const field = providerKeyElement(provider);
+  if (field) field.value = value;
+}
+
+function selectTellMeTracefixProvider(provider) {
+  els.provider.value = provider;
+  const nextModel = modelDefaults[provider] || (modelOptions[provider] || [])[0] || els.tellmeTracefixModel.value;
+  els.model.value = nextModel;
+  els.tellmeTracefixModel.value = nextModel;
+  els.tellmeTracefixApiKey.value = readProviderKey(provider);
+  els.tellmeTracefixOllamaUrl.value = els.ollamaUrl.value;
+  updateModelSuggestions();
+  updateKeyFields();
+  updateTellMeTracefixFields();
+}
+
+function syncTellMeTracefixFromPlanner() {
+  const provider = els.provider.value;
+  els.tellmeTracefixProvider.value = provider;
+  els.tellmeTracefixModel.value = els.model.value || modelDefaults[provider] || "";
+  els.tellmeTracefixOllamaUrl.value = els.ollamaUrl.value;
+  els.tellmeTracefixApiKey.value = readProviderKey(provider);
+  updateTellMeTracefixFields();
+}
+
+function syncPlannerFromTellMeTracefix() {
+  const provider = els.tellmeTracefixProvider.value;
+  els.provider.value = provider;
+  els.model.value = els.tellmeTracefixModel.value.trim() || modelDefaults[provider] || els.model.value;
+  if (provider === "ollama") {
+    els.ollamaUrl.value = els.tellmeTracefixOllamaUrl.value;
+  } else {
+    writeProviderKey(provider, els.tellmeTracefixApiKey.value.trim());
+  }
+  updateModelSuggestions();
+  updateKeyFields();
+  updateTellMeTracefixFields();
+}
+
+function updateTellMeTracefixFields() {
+  const provider = els.tellmeTracefixProvider.value;
+  const isOllama = provider === "ollama";
+  els.tellmeTracefixKeyLabel.classList.toggle("hidden", isOllama);
+  els.tellmeTracefixOllamaLabel.classList.toggle("hidden", !isOllama);
+
+  const typedTracefixKey = (els.tellmeTracefixApiKey.value || "").trim();
+  const plannerKey = readProviderKey(provider);
+  const tellmeKey = (els.tellmeApiKey.value || "").trim();
+  let statusText = "No TraceFix API key detected";
+  let statusClass = "missing";
+
+  if (isOllama) {
+    const ollamaReady = (els.tellmeTracefixOllamaUrl.value || "").trim();
+    statusText = ollamaReady ? "Ollama URL ready" : "No Ollama URL configured";
+    statusClass = ollamaReady ? "detected" : "missing";
+  } else if (typedTracefixKey || plannerKey) {
+    statusText = "TraceFix API key ready";
+    statusClass = "detected";
+  } else if (provider === "openai" && tellmeKey) {
+    statusText = "Using TeLLMe API key for TraceFix";
+    statusClass = "detected";
+  } else if (provider === "openai" && state.tellme.envKeyDetected) {
+    statusText = "Environment API key detected";
+    statusClass = "detected";
+  }
+
+  els.tellmeTracefixKeyStatus.textContent = statusText;
+  els.tellmeTracefixKeyStatus.className = `api-key-status ${statusClass}`;
+}
+
+async function loadTellMeCurrent() {
+  try {
+    const response = await getJson("/api/tellme/current");
+    if (response.api_key_detected === true) {
+      state.tellme.envKeyDetected = true;
+      state.tellme.apiKeyDetected = true;
+    }
+    if (response.model) state.tellme.model = response.model;
+    if (response.ok && response.data) {
+      state.tellme.current = response.data;
+      state.tellme.runId = response.run_id;
+      renderTellMe(response.data, response.errors, response.warnings);
+    } else {
+      renderTellMe(null, response.errors, response.warnings);
+    }
+  } catch (error) {
+    renderTellMe(null, [error.message], []);
+  }
+  updateTellMeModeFields();
+  updateTellMeTracefixFields();
+}
+
+async function processTellMeQuery() {
+  const query = els.tellmeQuery.value.trim();
+  if (!query) {
+    showToast("Enter a smart-room request");
+    return null;
+  }
+  els.tellmeProcess.disabled = true;
+  els.tellmeRunAll.disabled = true;
+  els.tellmeRunStatus.textContent = "Processing";
+  els.tellmeMessages.innerHTML = `<div class="message-card info">TeLLMe is analyzing route, privacy, and task decomposition...</div>`;
+  try {
+    const isLlm = els.tellmeMode.value === "llm";
+    const response = await postJson("/api/tellme/query", {
+      query,
+      space_id: els.tellmeSpaceId.value.trim() || "smart_room_1",
+      timestamp: els.tellmeTimestamp.value.trim() || null,
+      mode: els.tellmeMode.value,
+      model: els.tellmeModel.value.trim() || state.tellme.model,
+      llm_timeout_seconds: TELLME_LLM_TIMEOUT_SECONDS,
+      api_key: isLlm ? (els.tellmeApiKey.value.trim() || null) : null,
+    });
+    state.tellme.apiKeyDetected = response.api_key_detected === true;
+    state.tellme.model = response.model || state.tellme.model;
+    state.tellme.current = response.data;
+    state.tellme.runId = response.run_id;
+    renderTellMe(response.data, response.errors, response.warnings);
+    showToast("TeLLMe task spec generated");
+    return response.data;
+  } catch (error) {
+    renderTellMe(null, [error.message], []);
+    return null;
+  } finally {
+    els.tellmeProcess.disabled = false;
+    els.tellmeRunAll.disabled = false;
+    updateTellMeModeFields();
+    updateTellMeTracefixFields();
+  }
+}
+
+async function processTellMeAndTraceFix() {
+  const data = await processTellMeQuery();
+  if (!data) return;
+  if (data.status === "not_answerable") {
+    showToast("TeLLMe blocked this request");
+    return;
+  }
+  await startTraceFixFromTellMe();
+}
+
+function renderTellMe(data, errors = [], warnings = []) {
+  const route = data?.route_decision || {};
+  const privacy = data?.privacy_guardrail || {};
+  const spec = data?.tracefix_task_spec || {};
+  const harnesses = Array.isArray(spec.candidate_harnesses) ? spec.candidate_harnesses : [];
+  els.tellmeRoute.textContent = route.route || "Awaiting request";
+  els.tellmeRationale.textContent = route.rationale || "TeLLMe will classify the request before TraceFix design.";
+  els.tellmePrivacy.textContent = privacy.status || "Not evaluated";
+  els.tellmePrivacy.className = privacy.status === "passed" ? "status-text pass" : privacy.status === "blocked" ? "status-text fail" : "";
+  els.tellmePrivacyScope.textContent = privacy.privacy_scope || "CityOS structured context only";
+  els.tellmeTaskCount.textContent = data ? "1" : "0";
+  els.tellmeHarnessCount.textContent = `${harnesses.length} candidate harness${harnesses.length === 1 ? "" : "es"}`;
+  els.tellmeRunStatus.textContent = data?.status || "Idle";
+  els.tellmeRunId.textContent = data?.query_id || "No run yet";
+  els.tellmeIntent.textContent = data ? JSON.stringify(data.intent_decomposition || data.execution_brief || {}, null, 2) : "No intent decomposition yet.";
+  els.tellmeTaskSpec.textContent = data ? JSON.stringify(spec, null, 2) : "No TraceFix task spec yet.";
+  els.tellmeAnswer.textContent = data ? JSON.stringify(data.answer_packet || {}, null, 2) : "No answer packet yet.";
+  els.tellmeToTracefix.disabled = !data || !Object.keys(spec).length || data.status === "not_answerable";
+
+  const messages = [
+    ...(errors || []).map((text) => ({ kind: "error", text })),
+    ...(warnings || []).map((text) => ({ kind: "warning", text })),
+  ];
+  if (data && !messages.length) {
+    messages.push({
+      kind: privacy.status === "blocked" ? "error" : "success",
+      text: privacy.status === "blocked"
+        ? "Privacy guardrail blocked this request before TraceFix."
+        : "Typed TeLLMe task is ready for TraceFix verification.",
+    });
+  }
+  els.tellmeMessages.innerHTML = messages
+    .map((item) => `<div class="message-card ${item.kind}">${escapeHtml(item.text)}</div>`)
+    .join("");
+  updateWorkflowReadiness();
+}
+
+function tracefixPayloadKeys(provider) {
+  const firstPageKey = (els.tellmeTracefixApiKey.value || "").trim();
+  const tellmeKey = (els.tellmeApiKey.value || "").trim();
+  return {
+    openaiKey: (els.openaiKey.value || (provider === "openai" ? firstPageKey || tellmeKey : "")).trim(),
+    anthropicKey: (els.anthropicKey.value || (provider === "anthropic" ? firstPageKey : "")).trim(),
+    openrouterKey: (els.openrouterKey.value || (provider === "openrouter" ? firstPageKey : "")).trim(),
+  };
+}
+
+function traceFixProviderPayload() {
+  syncPlannerFromTellMeTracefix();
+  const provider = els.provider.value;
+  return {
+    provider,
+    model: normalizeModelForPayload(provider, els.model.value),
+    ...tracefixPayloadKeys(provider),
+    ollamaUrl: els.ollamaUrl.value,
+    opencodeBin: els.opencodeBin.value,
+    timeout: Number(els.timeout.value || 1800),
+    verbose: true,
+  };
+}
+
+async function startTraceFixFromTellMe() {
+  resetRunUi();
+  try {
+    const response = await postJson("/api/tracefix/from-tellme", traceFixProviderPayload());
+    const run = response.data;
+    state.runId = run.id;
+    state.taskMode = "custom";
+    state.runMode = "design";
+    state.workflow = "planner";
+    markWorkflowSeen("planner");
+    document.querySelectorAll("[data-workflow]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.workflow === "planner");
+    });
+    document.querySelectorAll("[data-task-mode]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.taskMode === "custom");
+    });
+    els.benchmarkField.classList.add("hidden");
+    els.customTaskField.classList.remove("hidden");
+    // Store the real task spec text returned by the server so that any
+    // subsequent "Generate Verified Plan" press sends the actual spec —
+    // not just the human-readable placeholder.
+    const actualTaskText = run.tellme_task_text || "";
+    state.tellme.taskText = actualTaskText;
+    els.customTask.value = actualTaskText || "Loaded automatically from the current TeLLMe task spec.";
+    updateWorkflow();
+    els.startRun.disabled = true;
+    els.stopRun.disabled = false;
+    els.runTitle.textContent = "Designing TeLLMe application";
+    els.runMeta.textContent = `${els.provider.value} / ${els.model.value}`;
+    setStatus("running");
+    connectEvents(run.id);
+  } catch (error) {
+    setStatus("failed");
+    appendTimeline("error", error.message);
+    renderOutput();
+    showToast(error.message);
+  }
+}
+
+async function loadSynthConfig(options = {}) {
+  // Sync benchmark field visibility with current type
+  const isBenchmark = state.synth.workspaceType === "benchmark";
+  if (els.synthBenchmarkField) {
+    els.synthBenchmarkField.classList.toggle("hidden", !isBenchmark);
+  }
+
+  try {
+    const benchmark = isBenchmark ? els.synthBenchmarkSelect.value : "";
+    const params = new URLSearchParams();
+    if (benchmark) params.set("benchmark", benchmark);
+    params.set("workspaceType", state.synth.workspaceType);
+    const data = await getJson(`/api/synth/config?${params}`);
     state.synth.workspaces = data.workspaces || [];
     renderSynthWorkspaceOptions();
     const workspacePaths = new Set(state.synth.workspaces.map((workspace) => workspace.path));
     let current = options.preferCurrent === false ? "" : (els.synthWorkspacePath.value || state.artifacts.workspace || "");
-    if (!current || (benchmark && !workspacePaths.has(current))) {
+    if (!current) {
+      // Try to restore the last verified TraceFix workspace from the server's
+      // cross-stage handoff (current.json), so the CityOS tab auto-selects after
+      // a TraceFix run even if the user reloaded the page.
+      try {
+        const cityosCurrent = await getJson("/api/cityos/current");
+        current = cityosCurrent?.data?.workspace?.path || "";
+      } catch (_) {
+        // Non-fatal — fall through to first available workspace.
+      }
+    }
+    if (!current || !workspacePaths.has(current)) {
       current = state.synth.workspaces[0]?.path || current;
     }
     if (current) {
@@ -386,11 +886,13 @@ function renderSynthWorkspaceOptions() {
   els.synthWorkspaceSelect.innerHTML = state.synth.workspaces.length
     ? state.synth.workspaces
         .map((workspace) => {
-          const readiness = workspace.ready ? "ready" : workspace.hasPlan ? workspace.verificationStatus : "missing plan";
+          const VS_LABELS = { verified: "verified", verified_no_summary: "verified", unknown: "pending", verification_incomplete: "incomplete" };
+          const readiness = workspace.ready ? "ready" : workspace.hasPlan ? (VS_LABELS[workspace.verificationStatus] || workspace.verificationStatus || "pending") : "missing plan";
           const modified = workspace.lastModified
             ? new Date(workspace.lastModified * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
             : "";
-          const label = [workspace.name, readiness, modified].filter(Boolean).join(" - ");
+          const typeTag = workspace.workspaceType === "custom" ? "custom" : null;
+          const label = [workspace.name, typeTag, readiness, modified].filter(Boolean).join(" · ");
           return `<option value="${escapeHtml(workspace.path)}">${escapeHtml(label)}</option>`;
         })
         .join("")
@@ -416,18 +918,38 @@ async function loadSynthWorkspace(workspacePath) {
 function renderSynthSummary(summary) {
   if (!summary) {
     els.synthStatus.textContent = "Select a verified workspace";
+    if (els.synthWorkspaceTypeDisplay) els.synthWorkspaceTypeDisplay.textContent = "—";
+    if (els.synthTaskTextDisplay) els.synthTaskTextDisplay.textContent = "—";
     els.synthWorkspaceDisplay.textContent = "None selected";
     els.synthPlanDisplay.textContent = "Unavailable";
     els.synthAgentsDisplay.textContent = "0";
     els.synthChannelsDisplay.textContent = "0";
     els.synthResourcesDisplay.textContent = "0";
     els.synthChecklist.innerHTML = "";
+    updateWorkflowReadiness();
     return;
   }
+  const isCustom = summary.workspaceType === "custom";
   els.synthStatus.textContent = summary.ready
     ? "Ready for CityOS synthesis"
-    : `Not ready: ${summary.verificationStatus || "missing artifacts"}`;
-  els.synthWorkspaceDisplay.textContent = summary.path;
+    : `Not ready: ${({ verified_no_summary: "Verified (no TLC summary)", unknown: "pending verification", verification_incomplete: "incomplete" })[summary.verificationStatus] || summary.verificationStatus || "missing artifacts"}`;
+
+  if (els.synthWorkspaceTypeDisplay) {
+    els.synthWorkspaceTypeDisplay.textContent = isCustom ? "Custom TraceFix Task" : "Benchmark";
+  }
+  if (els.synthTaskTextDisplay) {
+    const taskText = summary.taskText || summary.name || "";
+    els.synthTaskTextDisplay.textContent = taskText || "—";
+    els.synthTaskTextDisplay.title = taskText;
+  }
+
+  console.log(
+    `[synth] workspace=${summary.name} type=${summary.workspaceType} ` +
+    `ready=${summary.ready} path=${summary.path} ` +
+    `outputDir=${summary.outputDir}`
+  );
+
+  els.synthWorkspaceDisplay.textContent = summary.name || summary.path;
   els.synthPlanDisplay.textContent = summary.hasPlan ? summary.planPath : "Missing spec/cityos_module_plan.json";
   els.synthOutputDir.value = summary.outputDir || "";
   els.synthAgentsDisplay.textContent = String((summary.agents || []).length);
@@ -444,6 +966,7 @@ function renderSynthSummary(summary) {
       </div>
     `)
     .join("");
+  updateWorkflowReadiness();
 }
 
 async function synthesizeCityOSArtifacts() {
@@ -490,6 +1013,7 @@ function renderSynthArtifacts(result) {
   if (!apps.length) {
     els.synthAppsList.innerHTML = `<div class="synth-empty">Generate CityOS artifacts to see app containers, prompts, and build commands here.</div>`;
     els.synthBuildCommands.textContent = "No build commands yet.";
+    updateWorkflowReadiness();
     return;
   }
 
@@ -518,6 +1042,7 @@ function renderSynthArtifacts(result) {
   commands.push("# Direct Docker builds:");
   apps.forEach((app) => commands.push(dockerBuildCommand(app)));
   els.synthBuildCommands.textContent = commands.join("\n");
+  updateWorkflowReadiness();
 }
 
 function dockerBuildCommand(app) {
@@ -597,17 +1122,24 @@ async function loadTasks() {
 
 async function startRun() {
   resetRunUi();
+  const provider = els.provider.value;
   const payload = {
     mode: state.runMode,
-    provider: els.provider.value,
-    model: normalizeModelForPayload(els.provider.value, els.model.value),
-    openaiKey: els.openaiKey.value,
-    anthropicKey: els.anthropicKey.value,
-    openrouterKey: els.openrouterKey.value,
+    provider,
+    model: normalizeModelForPayload(provider, els.model.value),
+    ...tracefixPayloadKeys(provider),
     ollamaUrl: els.ollamaUrl.value,
     taskMode: state.taskMode,
     taskId: els.taskId.value,
-    customTask: els.customTask.value,
+    // When the textarea still holds the human-readable placeholder (e.g. after a
+    // page refresh or if the server's response didn't carry tellme_task_text),
+    // fall back to the spec text stored in state.  The backend also resolves the
+    // placeholder from the TeLLMe bridge, so either path is safe.
+    customTask: (state.taskMode === "custom" &&
+                 els.customTask.value.trim() === "Loaded automatically from the current TeLLMe task spec." &&
+                 state.tellme.taskText)
+      ? state.tellme.taskText
+      : els.customTask.value,
     maxTurns: Number(els.maxTurns.value || 20),
     maxTokens: Number(els.maxTokens.value || 32768),
     temperature: Number(els.temperature.value !== "" ? els.temperature.value : 0.3),
@@ -689,6 +1221,7 @@ function resetRunUi() {
   els.graph.innerHTML = "";
   els.graphStatus.textContent = "Waiting for IR";
   renderUsage();
+  updateWorkflowReadiness();
 }
 
 function connectEvents(runId) {
@@ -703,6 +1236,11 @@ function connectEvents(runId) {
       els.startRun.disabled = false;
       els.stopRun.disabled = true;
       await refreshRun();
+      // If TraceFix completed with a workspace, prime the CityOS Synthesizer to
+      // show it as a custom workspace so the user can synthesize without switching tabs.
+      if (event.status === "completed" && state.artifacts?.workspace) {
+        state.synth.workspaceType = "custom";
+      }
     }
   });
   source.onerror = () => {
@@ -774,6 +1312,7 @@ function setStatus(status) {
   if (status === "verification_incomplete") {
     setActiveView("error");
   }
+  updateWorkflowReadiness();
 }
 
 async function refreshRun() {
@@ -793,6 +1332,7 @@ function renderArtifacts() {
   const files = state.artifacts.files || [];
   els.artifactCount.textContent = String(files.length);
   renderGraph(state.artifacts.ir);
+  updateWorkflowReadiness();
 }
 
 function renderUsage() {
@@ -1158,8 +1698,11 @@ async function init() {
   bindEvents();
   updateKeyFields();
   updateModelSuggestions();
+  syncTellMeTracefixFromPlanner();
   updateModeFields();
   updateWorkflow();
+  await loadTellMeConfig();
+  await loadTellMeCurrent();
   await loadModelOptions();
   await loadTasks();
   renderUsage();

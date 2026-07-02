@@ -238,6 +238,272 @@ def test_validate_design_ir_normalizes_string_agents(tmp_path):
     assert normalized["agents"] == [{"id": "A"}, {"id": "B"}]
 
 
+def test_validate_design_ir_sanitizes_agent_description(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": [{"id": "A", "description": "worker"}, {"id": "B"}],
+        "resources": [{"id": "R", "type": "Lock"}],
+        "channels": [{"id": "a_to_b", "from": "A", "to": "B", "labels": ["go"]}],
+    }))
+    report = {}
+
+    valid, errors, diagnostics = validate_design_ir(
+        ws,
+        sanitization_report=report,
+    )
+
+    assert valid, errors
+    assert report["removed_fields"] == ["$.agents[0].description"]
+    assert report["validation_before"]["valid"] is False
+    assert report["validation_after"]["valid"] is True
+    assert report["recovered"] is True
+    assert any("removed $.agents[0].description" in item for item in diagnostics)
+    sanitized = json.loads((spec / "ir.json").read_text())
+    assert sanitized["agents"] == [{"id": "A"}, {"id": "B"}]
+
+
+def test_validate_design_ir_canonicalizes_agent_role(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": [
+            {"id": "A", "role": "produce evidence"},
+            {"id": "B", "role": "verify evidence"},
+        ],
+        "resources": [],
+        "channels": [
+            {"id": "a_to_b", "from": "A", "to": "B", "labels": ["submit"]},
+        ],
+    }))
+    report = {}
+
+    valid, errors, diagnostics = validate_design_ir(
+        ws, sanitization_report=report
+    )
+
+    persisted = json.loads((spec / "ir.json").read_text())
+    assert valid, errors
+    assert all("role" not in agent for agent in persisted["agents"])
+    assert report["removed_fields"] == ["$.agents[0].role", "$.agents[1].role"]
+    assert any("passed after sanitization" in item for item in diagnostics)
+
+
+def test_canonicalizer_does_not_hide_unknown_structural_field(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": [{"id": "A", "agent_id": "wrong-contract-field"}],
+        "resources": [],
+        "channels": [],
+    }))
+
+    valid, errors, _ = validate_design_ir(ws)
+
+    assert valid is False
+    assert any("$.agents[0].agent_id" in error for error in errors)
+
+
+def test_validate_design_ir_sanitizer_preserves_structural_failure(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    original = {
+        "agents": [{"id": "A", "notes": "harmless"}, {"id": "B"}],
+        "resources": [],
+        "channels": [],
+    }
+    (spec / "ir.json").write_text(json.dumps(original))
+    report = {}
+
+    valid, errors, _ = validate_design_ir(ws, sanitization_report=report)
+
+    assert not valid
+    assert any("no communication channels" in error for error in errors)
+    assert report["validation_after"]["valid"] is False
+    assert report["recovered"] is False
+    assert json.loads((spec / "ir.json").read_text()) == original
+
+
+def test_validate_design_ir_sanitizer_never_removes_required_fields(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": [{"description": "missing required id"}],
+        "resources": [],
+        "channels": [],
+    }))
+    report = {}
+
+    valid, errors, _ = validate_design_ir(ws, sanitization_report=report)
+
+    assert not valid
+    assert any("'id' is a required property" in error for error in errors)
+    assert report["removed_fields"] == ["$.agents[0].description"]
+    assert report["validation_after"]["valid"] is False
+
+
+def test_sanitized_ir_still_uses_normal_scaffold_gate(tmp_path):
+    ws = tmp_path / "ws"
+    spec = ws / "spec"
+    spec.mkdir(parents=True)
+    (spec / "ir.json").write_text(json.dumps({
+        "agents": [{"id": "A", "rationale": "sender"}, {"id": "B"}],
+        "resources": [{"id": "R", "type": "Lock"}],
+        "channels": [{
+            "id": "a_to_b",
+            "from": "A",
+            "to": "B",
+            "labels": ["work ready"],
+            "comments": "handoff",
+        }],
+    }))
+
+    valid, errors, _ = validate_design_ir(ws)
+    assert valid, errors
+    diagnostics = _scaffold_valid_ir(ws)
+
+    assert "Scaffold fallback wrote Protocol.tla and Protocol.cfg" in diagnostics
+    sanitized = json.loads((spec / "ir.json").read_text())
+    assert sanitized["channels"][0]["labels"] == ["work_ready"]
+    assert "comments" not in sanitized["channels"][0]
+    assert (spec / "Protocol.tla").is_file()
+    assert (spec / "Protocol.cfg").is_file()
+
+
+def test_timing_ignores_missing_optional_opencode_disposition(tmp_path):
+    from tracefix.pipeline_timing import PipelineTimingReport
+
+    report = PipelineTimingReport(tmp_path, run_kind="test")
+    report.opencode_call("opencode_optional", None)
+
+    assert report.api_calls == []
+    assert report.stages[-1]["stage"] == "opencode_optional"
+    assert report.stages[-1]["success"] is True
+    assert report.stages[-1]["skipped"] is True
+
+
+def test_simple_prompt_uses_single_agent_fast_path():
+    from tracefix.runtime.single_agent_fastpath import assess_single_agent_fast_path
+
+    decision = assess_single_agent_fast_path(
+        "How many people are in the room right now?"
+    )
+
+    assert decision.eligible is True
+    assert decision.agent_id == "OCCUPANCY_ANALYZER"
+
+
+def test_coordination_prompt_falls_back_to_opencode():
+    from tracefix.runtime.single_agent_fastpath import assess_single_agent_fast_path
+
+    decision = assess_single_agent_fast_path(
+        "Coordinate three agents to validate authorization and produce an audit report."
+    )
+
+    assert decision.eligible is False
+    assert "coordination signal" in decision.reason
+
+
+def test_multi_source_prompt_falls_back_to_opencode():
+    from tracefix.runtime.single_agent_fastpath import assess_single_agent_fast_path
+
+    decision = assess_single_agent_fast_path(
+        "Verify the room count against badge logs and meeting attendance."
+    )
+
+    assert decision.eligible is False
+    assert "multi-source signal" in decision.reason
+
+
+def test_fast_path_ir_passes_strict_validation():
+    from tracefix.pipeline.pipeline.validator import validate_ir
+    from tracefix.runtime.single_agent_fastpath import (
+        assess_single_agent_fast_path,
+        generate_single_agent_ir,
+    )
+
+    decision = assess_single_agent_fast_path("Summarize this log file.")
+    ir = generate_single_agent_ir(decision)
+    result = validate_ir(ir)
+
+    assert result.valid, result.errors
+    assert ir["agents"] == [{"id": "SUMMARY_AGENT"}]
+    assert ir["channels"] == []
+
+
+def test_structured_tellme_occupancy_uses_fast_path():
+    from tracefix.runtime.single_agent_fastpath import assess_single_agent_fast_path
+
+    task = """TeLLMe structured smart-room application requirements.
+Structured task specification:
+{
+  "user_query": "How many people are in the room right now?",
+  "route": "single_agent",
+  "required_modalities": ["video"],
+  "candidate_harnesses": [
+    "occupancy_context_harness",
+    "answer_synthesis_harness"
+  ],
+  "evidence_plan": {
+    "primary_evidence": ["occupancy_context_harness_packet"],
+    "supporting_evidence": [],
+    "conflicting_evidence_checks": []
+  },
+  "application_goal": {"goal_type": "occupancy_count"}
+}
+"""
+    decision = assess_single_agent_fast_path(task)
+
+    assert decision.eligible is True
+    assert decision.structured_input is True
+    assert decision.task_text == "How many people are in the room right now?"
+
+
+def test_fast_path_runtime_prompt_requires_verified_plan():
+    import pytest
+    from tracefix.runtime.single_agent_fastpath import (
+        assess_single_agent_fast_path,
+        render_verified_runtime_prompt,
+    )
+
+    decision = assess_single_agent_fast_path("Summarize this log file.")
+
+    with pytest.raises(ValueError, match="production-ready"):
+        render_verified_runtime_prompt(
+            decision,
+            {"verification": {"production_ready": False}},
+        )
+
+
+def test_fast_path_runtime_prompt_derives_from_verified_plan():
+    from tracefix.runtime.single_agent_fastpath import (
+        assess_single_agent_fast_path,
+        render_verified_runtime_prompt,
+    )
+
+    decision = assess_single_agent_fast_path("Summarize this log file.")
+    prompt = render_verified_runtime_prompt(decision, {
+        "verification": {"production_ready": True},
+        "agents": [{"name": "SUMMARY_AGENT"}],
+        "protocol": {
+            "allowed_transitions": [{
+                "agent": "SUMMARY_AGENT",
+                "from": "SUMMARY_AGENT_start",
+                "to": "SUMMARY_AGENT_done",
+            }],
+        },
+    })
+
+    assert "Summarize this log file." in prompt
+    assert "`SUMMARY_AGENT_start` -> `SUMMARY_AGENT_done`" in prompt
+    assert "after PlusCal/TLC verification" in prompt
+
+
 def test_validate_design_ir_normalizes_legacy_locks_and_counters(tmp_path):
     ws = tmp_path / "ws"
     spec = ws / "spec"

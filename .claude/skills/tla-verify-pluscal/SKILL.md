@@ -218,12 +218,18 @@ Fix any gaps found BEFORE running verification.
    {"attempt": 1, "error_type": "Deadlock", "description": "...", "fix": "..."}
    ```
    Increment `"total_repairs"` by 1.
-5. Go back to **Step 1**. Maximum 5 verify calls total — after the 5th failure, stop.
+5. Go back to **Step 1** only when the verifier permits another repair.
+   The default maximum is 10 repair attempts and is configurable with
+   `TRACEFIX_MAX_REPAIR_ATTEMPTS`. The verifier also stops earlier when
+   repeated errors, unchanged protocol hashes, lack of verification progress,
+   or the repair time budget show that model edits are no longer productive.
+   If verification prints `REPAIR_STOPPED`, stop immediately and report its
+   reason and recommendation. Do not make another speculative edit/verify call.
 
-**If 5 verify calls are exhausted without passing**: Set `"tlc_passed": false` in `summary.json` and report to the user:
+**If the repair guard stops without passing**: Set `"tlc_passed": false` in `summary.json` and report to the user:
 
 ```
-Verification Failed After 5 Attempts
+Verification Repair Stopped
 
 - Final error: [last error type and description]
 - Repairs attempted:
@@ -272,7 +278,8 @@ tracefix run --workspace <workspace>
 - Always write ir.json before running scaffold
 - Always run scaffold before editing Protocol.tla process bodies
 - When errors occur, read the error message carefully before making changes
-- Maximum 5 verify calls total in Phase 3 — if still failing, stop and report
+- Maximum repair attempts are configurable (default 10); stop earlier whenever
+  the verifier emits `REPAIR_STOPPED`
 - **Never edit `Protocol.cfg`, and never weaken the invariant definitions** (`TypeInvariant` / `NoOrphanLocks` / `ChannelsDrained`) below the algorithm block in `Protocol.tla` — dropping or loosening them makes a PASS meaningless. The one legitimate knob outside the process bodies is the `ChannelBound ==` definition (raising it to rule out bound artifacts, per Phase 3).
 - In the final summary, state the verification scope honestly: safety-only (no liveness/fairness) and the `channel_bound` the PASS was obtained under
 - When Phase 4 completes, summarize: protocol description, agent/resource/channel counts, TLC stats (from Phase 3), states extracted count

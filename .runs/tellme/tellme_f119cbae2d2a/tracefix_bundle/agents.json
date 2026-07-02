@@ -1,0 +1,6 @@
+[
+  {
+    "name": "answer_synthesis_harness",
+    "role": "Synthesize a final answer packet with caveats and evidence references."
+  }
+]

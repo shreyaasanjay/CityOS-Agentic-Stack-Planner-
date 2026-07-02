@@ -1,0 +1,221 @@
+{
+  "available_context_apis": [
+    "cityos_context_lookup",
+    "get_acoustic_event_context",
+    "get_anonymous_track_context",
+    "get_audio_context",
+    "get_audio_level_context",
+    "get_audio_source_zone_context",
+    "get_camera_coverage_metadata",
+    "get_camera_occupancy_context",
+    "get_context_by_time_window",
+    "get_distress_keyword_context",
+    "get_entry_event_context",
+    "get_event_context",
+    "get_exit_event_context",
+    "get_impact_sound_context",
+    "get_microphone_coverage_metadata",
+    "get_motion_event_context",
+    "get_occupancy_context",
+    "get_posture_candidate_context",
+    "get_raw_audio_reference",
+    "get_raw_video_reference",
+    "get_room_state",
+    "get_speech_activity_context"
+  ],
+  "coverage_gaps": [
+    "No available sensor supports 'room_state' context for this space."
+  ],
+  "notes": [],
+  "privacy_policy": {
+    "forbidden_inferences": [
+      "raw_sensor_access",
+      "face_identity",
+      "personal_identity",
+      "speaker_identification",
+      "unrestricted_transcription",
+      "medical_diagnosis",
+      "confirmed_injury",
+      "emotional_state_inference",
+      "unsupported_behavioral_inference"
+    ],
+    "identity_inference_allowed": false,
+    "notes": [
+      "Default planning must prefer derived context over restricted raw access.",
+      "No face recognition, persistent identity, speaker identification, unrestricted transcription, or medical diagnosis.",
+      "A single weak modality cannot justify certainty claims."
+    ],
+    "policy_id": "smart_room_1_camera_audio_default",
+    "privacy_scope": "cityos_structured_context_only",
+    "raw_sensor_access_allowed": false
+  },
+  "query_id": "tellme_f4c50e6feba5",
+  "relevant_sensors": [
+    {
+      "allowed_api_names": [
+        "get_camera_occupancy_context",
+        "get_entry_event_context",
+        "get_exit_event_context",
+        "get_anonymous_track_context",
+        "get_motion_event_context",
+        "get_camera_coverage_metadata"
+      ],
+      "available": true,
+      "blind_spots": [
+        "rear room",
+        "under tables",
+        "floor area outside doorway view"
+      ],
+      "coverage_zones": [
+        "entrance doorway",
+        "threshold",
+        "front-room edge"
+      ],
+      "limitations": [
+        "Anonymous tracks only; no face recognition.",
+        "Cannot verify events outside the doorway field of view."
+      ],
+      "modality": "video",
+      "reason": "Modality or supported context type matches the query requirements.",
+      "relevance": "primary",
+      "restricted_api_names": [
+        "get_raw_video_reference"
+      ],
+      "sensor_id": "camera_door_01",
+      "status": "online",
+      "supported_context_types": [
+        "occupancy",
+        "motion",
+        "events",
+        "tracks"
+      ]
+    },
+    {
+      "allowed_api_names": [
+        "get_camera_occupancy_context",
+        "get_motion_event_context",
+        "get_posture_candidate_context",
+        "get_camera_coverage_metadata"
+      ],
+      "available": true,
+      "blind_spots": [
+        "doorway threshold",
+        "areas blocked by furniture",
+        "under tables",
+        "close wall regions"
+      ],
+      "coverage_zones": [
+        "center room",
+        "seating area",
+        "presentation area"
+      ],
+      "limitations": [
+        "Occlusion from furniture can hide low-floor events.",
+        "Posture signals are candidate-level only."
+      ],
+      "modality": "video",
+      "reason": "Modality or supported context type matches the query requirements.",
+      "relevance": "primary",
+      "restricted_api_names": [
+        "get_raw_video_reference"
+      ],
+      "sensor_id": "camera_room_01",
+      "status": "online",
+      "supported_context_types": [
+        "occupancy",
+        "motion",
+        "events"
+      ]
+    },
+    {
+      "allowed_api_names": [
+        "get_speech_activity_context",
+        "get_acoustic_event_context",
+        "get_impact_sound_context",
+        "get_distress_keyword_context",
+        "get_audio_level_context",
+        "get_audio_source_zone_context",
+        "get_microphone_coverage_metadata",
+        "get_audio_context"
+      ],
+      "available": true,
+      "blind_spots": [],
+      "coverage_zones": [
+        "room-wide acoustic coverage"
+      ],
+      "limitations": [
+        "Source localization is coarse.",
+        "Overlapping speech reduces reliability.",
+        "HVAC noise can affect event confidence.",
+        "Cannot establish visual identity."
+      ],
+      "modality": "audio",
+      "reason": "Not directly targeted but available for corroboration.",
+      "relevance": "supporting",
+      "restricted_api_names": [
+        "get_raw_audio_reference",
+        "get_full_transcript_context"
+      ],
+      "sensor_id": "microphone_array_01",
+      "status": "online",
+      "supported_context_types": [
+        "audio",
+        "events"
+      ]
+    },
+    {
+      "allowed_api_names": [
+        "get_radar_context"
+      ],
+      "available": false,
+      "blind_spots": [
+        "entire room while offline"
+      ],
+      "coverage_zones": [
+        "n/a"
+      ],
+      "limitations": [
+        "Sensor offline in this primary mock room."
+      ],
+      "modality": "radar",
+      "reason": "Sensor is marked unavailable in the capability snapshot.",
+      "relevance": "unavailable",
+      "restricted_api_names": [],
+      "sensor_id": "radar_corner_01",
+      "status": "offline",
+      "supported_context_types": [
+        "motion",
+        "occupancy",
+        "events"
+      ]
+    },
+    {
+      "allowed_api_names": [
+        "get_wifi_context"
+      ],
+      "available": false,
+      "blind_spots": [
+        "entire room while offline"
+      ],
+      "coverage_zones": [
+        "n/a"
+      ],
+      "limitations": [
+        "Sensor offline in this primary mock room."
+      ],
+      "modality": "wifi",
+      "reason": "Sensor is marked unavailable in the capability snapshot.",
+      "relevance": "unavailable",
+      "restricted_api_names": [],
+      "sensor_id": "wifi_ap_01",
+      "status": "offline",
+      "supported_context_types": [
+        "occupancy",
+        "motion"
+      ]
+    }
+  ],
+  "snapshot_id": "cap_smart_room_1_cam_audio_v1",
+  "space_id": "smart_room_1",
+  "time_window": null
+}

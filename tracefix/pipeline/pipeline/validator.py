@@ -8,6 +8,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from collections.abc import Iterable
 from pathlib import Path
+import json
+import re
 
 import jsonschema
 
@@ -22,6 +24,16 @@ class ValidationResult:
 
 _SCHEMA_PATH = Path(__file__).parent / "schema.json"
 _SCHEMA = None
+_HARMLESS_METADATA_FIELDS = frozenset({
+    "comments",
+    "description",
+    "explanation",
+    "metadata",
+    "notes",
+    "rationale",
+    "role",
+})
+_SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _get_schema() -> dict:
@@ -155,8 +167,125 @@ def normalize_ir_with_diagnostics(ir_data: dict) -> tuple[dict, list[str]]:
 
 
 def normalize_ir(ir_data: dict) -> dict:
-    """Return a scaffold-friendly copy of an IR-like object."""
-    return normalize_ir_with_diagnostics(ir_data)[0]
+    """Return the canonical schema-facing form of an IR-like object."""
+    return canonicalize_ir_with_diagnostics(ir_data)[0]
+
+
+def sanitize_ir_with_diagnostics(ir_data: dict) -> tuple[dict, dict]:
+    """Conservatively remove non-semantic model noise from an IR candidate.
+
+    This does not invent agents, resources, channels, or references. The
+    returned candidate must still pass ``validate_ir`` before callers persist
+    or scaffold it.
+    """
+    sanitized = deepcopy(ir_data)
+    removed_fields: list[str] = []
+    normalized_fields: list[str] = []
+
+    def _strip_metadata(value, path: str):
+        if isinstance(value, dict):
+            cleaned = {}
+            for key, child in value.items():
+                child_path = f"{path}.{key}"
+                if key in _HARMLESS_METADATA_FIELDS:
+                    removed_fields.append(child_path)
+                    continue
+                cleaned[key] = _strip_metadata(child, child_path)
+            return cleaned
+        if isinstance(value, list):
+            return [
+                _strip_metadata(child, f"{path}[{index}]")
+                for index, child in enumerate(value)
+            ]
+        return value
+
+    sanitized = _strip_metadata(sanitized, "$")
+
+    channels = sanitized.get("channels")
+    if isinstance(channels, list):
+        unique_channels = []
+        seen_channels: dict[str, int] = {}
+        for index, channel in enumerate(channels):
+            if not isinstance(channel, dict):
+                unique_channels.append(channel)
+                continue
+            fingerprint = json.dumps(channel, sort_keys=True, separators=(",", ":"))
+            if fingerprint in seen_channels:
+                normalized_fields.append(
+                    f"$.channels[{index}] removed as identical duplicate of "
+                    f"$.channels[{seen_channels[fingerprint]}]"
+                )
+                continue
+            seen_channels[fingerprint] = index
+            unique_channels.append(channel)
+        sanitized["channels"] = unique_channels
+
+        for index, channel in enumerate(unique_channels):
+            if not isinstance(channel, dict):
+                continue
+            labels = channel.get("labels")
+            if not isinstance(labels, list) or not all(
+                isinstance(label, str) for label in labels
+            ):
+                continue
+            replacements = {
+                label: re.sub(r"\s+", "_", label.strip())
+                for label in labels
+            }
+            if not any(replacements[label] != label for label in labels):
+                continue
+            replacement_values = list(replacements.values())
+            if (
+                any(not value or not _SAFE_IDENTIFIER.fullmatch(value)
+                    for value in replacement_values)
+                or len(set(replacement_values)) != len(replacement_values)
+            ):
+                continue
+            channel["labels"] = [replacements[label] for label in labels]
+            content_labels = channel.get("content_labels")
+            if isinstance(content_labels, list):
+                channel["content_labels"] = [
+                    replacements.get(label, label) for label in content_labels
+                ]
+            normalized_fields.append(
+                f"$.channels[{index}].labels normalized to safe identifiers"
+            )
+
+    report = {
+        "attempted": True,
+        "changed": sanitized != ir_data,
+        "removed_fields": removed_fields,
+        "normalized_fields": normalized_fields,
+    }
+    return sanitized, report
+
+
+def canonicalize_ir_with_diagnostics(ir_data: dict) -> tuple[dict, dict]:
+    """Canonicalize an IR candidate without inventing protocol structure.
+
+    The schema remains the source of truth. This boundary only converts
+    supported legacy representations and removes explicitly approved
+    non-verification metadata before strict validation.
+    """
+    normalized, legacy_diagnostics = normalize_ir_with_diagnostics(ir_data)
+    canonical, sanitizer = sanitize_ir_with_diagnostics(normalized)
+    diagnostics = list(legacy_diagnostics)
+    diagnostics.extend(
+        f"IR canonicalized: removed metadata field {path}"
+        for path in sanitizer["removed_fields"]
+    )
+    diagnostics.extend(
+        f"IR canonicalized: {change}"
+        for change in sanitizer["normalized_fields"]
+    )
+    return canonical, {
+        "attempted": True,
+        "changed": canonical != ir_data,
+        "legacy_normalizations": legacy_diagnostics,
+        "removed_fields": list(sanitizer["removed_fields"]),
+        "normalized_fields": list(sanitizer["normalized_fields"]),
+        "diagnostics": diagnostics,
+    }
 
 
 def _agent_id_to_const(agent_id: str) -> str:
@@ -167,15 +296,13 @@ def _agent_id_to_const(agent_id: str) -> str:
     return s[0].upper() + s[1:]
 
 
-def validate_ir(ir_data: dict) -> ValidationResult:
-    """Validate IR v3 data against schema and semantic rules.
+def validate_canonical_ir(ir_data: dict) -> ValidationResult:
+    """Strictly validate canonical IR v3 data against schema and semantics.
 
     Checks agents, resources, and channels. Does NOT validate states
     (behavior is written as PlusCal process bodies).
     """
     errors: list[str] = []
-
-    ir_data = normalize_ir(ir_data)
 
     # --- Schema validation ---
     schema = _get_schema()
@@ -268,3 +395,8 @@ def validate_ir(ir_data: dict) -> ValidationResult:
         )
 
     return ValidationResult(valid=len(errors) == 0, errors=errors)
+
+
+def validate_ir(ir_data: dict) -> ValidationResult:
+    """Canonicalize an IR candidate, then apply strict IR v3 validation."""
+    return validate_canonical_ir(normalize_ir(ir_data))

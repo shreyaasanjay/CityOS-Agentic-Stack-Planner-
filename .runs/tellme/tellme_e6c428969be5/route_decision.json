@@ -1,0 +1,15 @@
+{
+  "caveats": [
+    "If the single-agent lookup is insufficient, the harness should escalate to TraceFix later."
+  ],
+  "intent": "general",
+  "rationale": "The query appears answerable with one focused CityOS-style context lookup.",
+  "required_tools": [
+    "cityos_context_lookup"
+  ],
+  "requires_tracefix": false,
+  "route": "single_agent",
+  "selected_agent": "general_context_agent",
+  "selected_tool": "cityos_context_lookup",
+  "time_window": null
+}

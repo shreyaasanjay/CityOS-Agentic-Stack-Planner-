@@ -1,0 +1,76 @@
+{
+  "agents": [
+    {
+      "name": "answer_synthesis_harness",
+      "role": "Synthesize a final answer packet with caveats and evidence references."
+    }
+  ],
+  "channels": [],
+  "notes": [
+    "Dry-run bundle only; do not invoke real TraceFix-main.",
+    "This bundle is an inspectable artifact representing future integration inputs.",
+    "Use only CityOS-approved structured context.",
+    "Do not use or request raw sensor data.",
+    "All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts."
+  ],
+  "output_contract": {
+    "allowed_claims": [
+      "bounded_count",
+      "presence_state",
+      "timestamped_event_summary"
+    ],
+    "answer_type": "direct_answer",
+    "fallback_answer_type": "insufficient_evidence",
+    "field_types": {
+      "answer": "string",
+      "caveats": "array",
+      "confidence": "number",
+      "evidence_refs": "array",
+      "limitations": "array",
+      "privacy_scope": "string"
+    },
+    "forbidden_claims": [
+      "raw_sensor_access",
+      "face_identity",
+      "personal_identity",
+      "medical_diagnosis",
+      "unsupported_behavioral_inference"
+    ],
+    "must_include_confidence": true,
+    "must_include_evidence_refs": true,
+    "must_include_limitations": true,
+    "required_fields": [
+      "answer",
+      "confidence",
+      "evidence_refs",
+      "caveats",
+      "privacy_scope",
+      "limitations"
+    ]
+  },
+  "query_id": "tellme_04aaf96c86b3",
+  "resources": [
+    {
+      "modalities": [
+        "context"
+      ],
+      "name": "cityos_structured_context",
+      "space_id": "smart_room_1",
+      "time_windows": [],
+      "type": "structured_context_bundle"
+    },
+    {
+      "name": "tellme_query_logs",
+      "query_id": "tellme_04aaf96c86b3",
+      "type": "local_query_run_directory"
+    }
+  ],
+  "task_description": "# TraceFix Dry-Run Task\n\n## User Query\nPerform a room operational audit. Independently evaluate occupancy observations, equipment readiness, maintenance records, badge access activity, and calendar scheduling information. Reconcile conflicting evidence and generate a final operational assessment with confidence, evidence references, and unresolved issues.\n\n## Scope\n- space_id: smart_room_1\n- privacy boundary: CityOS structured context only\n- raw sensor policy: no raw sensor data may be used; inputs are CityOS structured context, not raw sensor data\n\n## Time Windows\n- none specified\n\n## Required Modalities\n- context\n\n## Candidate Harnesses\n- answer_synthesis_harness\n\n## Application Goal\n- failure_condition: Return insufficient_evidence or escalate when the structured context is inadequate.\n- goal_type: occupancy_count\n- non_goals: ['identify person', 'face recognition', 'medical diagnosis', 'infer cause or intent']\n- success_condition: Return a privacy-bounded answer packet with confidence and evidence refs.\n- user_intent: occupancy_lookup\n\n## Evidence Plan\n- conflicting_evidence_checks: []\n- minimum_sufficient_evidence: ['video_findings_packet']\n- primary_evidence: ['video_findings_packet']\n- supporting_evidence: ['audio_context_packet']\n\n## Answer Packet Requirements\n- allowed_claims: ['bounded_count', 'presence_state', 'timestamped_event_summary']\n- answer_type: direct_answer\n- fallback_answer_type: insufficient_evidence\n- forbidden_claims: ['raw_sensor_access', 'face_identity', 'personal_identity', 'medical_diagnosis', 'unsupported_behavioral_inference']\n- must_include_confidence: True\n- must_include_evidence_refs: True\n- must_include_limitations: True\n- required_fields: ['answer', 'confidence', 'evidence_refs', 'caveats', 'privacy_scope', 'limitations']\n\n## Allowed Claims\n- bounded_count, presence_state, timestamped_event_summary\n\n## Forbidden Claims\n- raw_sensor_access, face_identity, personal_identity, medical_diagnosis, unsupported_behavioral_inference\n\n## Expected Output Contract\n- required_fields: answer, confidence, evidence_refs, caveats, privacy_scope, limitations\n- field_types:\n  - answer: string\n  - caveats: array\n  - confidence: number\n  - evidence_refs: array\n  - limitations: array\n  - privacy_scope: string\n\n## Privacy Constraints\n- Use only CityOS-approved structured context.\n- Do not use or request raw sensor data.\n- All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts.",
+  "task_id": "task_04aaf96c86b3",
+  "tool_manifest": {
+    "answer_synthesis_harness": [
+      "synthesize_answer_packet"
+    ]
+  },
+  "user_query": "Perform a room operational audit. Independently evaluate occupancy observations, equipment readiness, maintenance records, badge access activity, and calendar scheduling information. Reconcile conflicting evidence and generate a final operational assessment with confidence, evidence references, and unresolved issues."
+}

@@ -1,0 +1,113 @@
+{
+  "schema_version": "0.1",
+  "run_kind": "tellme",
+  "run_id": "tellme_4c1197cf9ce3",
+  "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_4c1197cf9ce3",
+  "started_at": "2026-07-02T14:06:22.531792+00:00",
+  "finished_at": "2026-07-02T14:06:49.537969+00:00",
+  "complete": true,
+  "total_wall_clock_ms": 27016.0,
+  "stages": [
+    {
+      "stage": "tellme_decomposition",
+      "queued_at": null,
+      "started_at": "2026-07-02T14:06:22.531792+00:00",
+      "finished_at": "2026-07-02T14:06:49.529854+00:00",
+      "duration_ms": 27000.0,
+      "success": true,
+      "error": null,
+      "model": "gpt-4.1-mini",
+      "provider": "openai_compatible",
+      "retry_count": 0
+    }
+  ],
+  "api_calls": [
+    {
+      "stage": "tellme_decomposition",
+      "request_start": "2026-07-02T14:06:22.567792+00:00",
+      "first_response_time": "2026-07-02T14:06:49.431789+00:00",
+      "request_end": "2026-07-02T14:06:49.436785+00:00",
+      "total_duration_ms": 26860.0,
+      "time_to_first_response_ms": 26860.0,
+      "model": "gpt-4.1-mini",
+      "provider": "https://api.openai.com/v1",
+      "failed": false,
+      "error": null,
+      "retry_count": 0,
+      "observation_scope": "http_request"
+    }
+  ],
+  "repair": {
+    "total_attempts": 0,
+    "attempts": [],
+    "repair_time_seconds": 0.0,
+    "stop_reason": null,
+    "recommendation": null,
+    "config": {}
+  },
+  "ir_sanitization": {
+    "attempted": false,
+    "changed": false,
+    "removed_fields": [],
+    "normalized_fields": [],
+    "validation_before": null,
+    "validation_after": null,
+    "recovered": false,
+    "prevented_likely_unnecessary_failure": false
+  },
+  "single_agent_fast_path": {
+    "considered": false,
+    "used": false,
+    "reason": null,
+    "structured_input": false,
+    "agent_id": null,
+    "ir_generation_duration_ms": 0.0,
+    "fallback_to_opencode": true,
+    "error": null
+  },
+  "coordination_pattern_template": {
+    "considered": false,
+    "used": false,
+    "pattern_id": null,
+    "confidence": 0.0,
+    "reason": null,
+    "fallback_reason": null,
+    "fallback_to_opencode": true,
+    "error": null,
+    "evidence_sources_detected": [],
+    "evidence_source_count": 0,
+    "decision_agent_id": null,
+    "fan_in_decision_used": false,
+    "pattern_scores": {},
+    "template_priority_reason": null,
+    "app_agent_count": 0,
+    "monitor_count": 1
+  },
+  "pattern_repository": {
+    "pattern_repository_enabled": null,
+    "candidate_harvest_attempted": false,
+    "candidate_saved": false,
+    "candidate_id": null,
+    "normalized_topology_hash": null,
+    "candidate_deduplicated": false,
+    "candidate_usage_count": 0,
+    "candidate_path": null,
+    "harvest_skip_reason": null
+  },
+  "summary": {
+    "slowest_stage": "tellme_decomposition",
+    "slowest_stage_duration_ms": 27000.0,
+    "api_call_count": 1,
+    "retry_count": 0,
+    "rate_limit_events": 0,
+    "total_repair_attempts": 0,
+    "repair_stop_reason": null,
+    "suspected_bottleneck": "external_model_or_orchestration",
+    "confidence": "medium",
+    "recommended_next_fix": "Compare API wait and deterministic stage durations in this report."
+  },
+  "limitations": [
+    "OpenCode timing observes the subprocess and its first JSON event, not provider first-token telemetry.",
+    "A long time-to-first-event can indicate OpenCode startup, provider queueing, or model latency."
+  ]
+}

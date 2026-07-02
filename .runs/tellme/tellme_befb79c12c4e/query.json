@@ -1,0 +1,8 @@
+{
+  "created_at": "2026-07-01T18:52:22.081303+00:00",
+  "intent": "general",
+  "query_id": "tellme_befb79c12c4e",
+  "space_id": "smart_room_1",
+  "timestamp": null,
+  "user_query": "Determine whether the observed room occupancy matches the expected meeting attendance count. Compare available occupancy evidence with expected attendance information, identify any mismatch or missing evidence, and generate a validated attendance verification report with confidence, evidence references, and limitations."
+}

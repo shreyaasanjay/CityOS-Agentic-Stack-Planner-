@@ -1,0 +1,25 @@
+{
+  "agents": [
+    "A",
+    "B"
+  ],
+  "edges": [
+    {
+      "from": "B",
+      "to": "A"
+    },
+    {
+      "from": "A",
+      "to": "B"
+    }
+  ],
+  "resources": [
+    "R1",
+    "R2"
+  ],
+  "shape": "bidirectional_pair",
+  "agent_count": 2,
+  "channel_count": 2,
+  "resource_count": 2,
+  "topology_hash": "dd6250c6d5c1c9ed"
+}

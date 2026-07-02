@@ -1,0 +1,71 @@
+{
+  "badges": [
+    {
+      "badge_id": "card_type",
+      "label": "insufficient_evidence",
+      "source": "query_analysis",
+      "tone": "info"
+    }
+  ],
+  "card_id": "card_task_f119cbae2d2a",
+  "card_type": "insufficient_evidence",
+  "conclusion": "Pending harness execution.",
+  "conclusion_class": "insufficient_evidence",
+  "confidence": {
+    "availability": "dry_run_placeholder",
+    "confidence_kind": "composite_confidence",
+    "explanation": "Populated only after harness execution.",
+    "inputs": [],
+    "label": null,
+    "score": null
+  },
+  "evidence_refs": [],
+  "evidence_summary": [
+    "State what could and could not be determined; do not fabricate confidence."
+  ],
+  "limitations": [
+    "A stronger answer was not produced because the bounded evidence was insufficient."
+  ],
+  "metrics": [
+    {
+      "availability": "dry_run_placeholder",
+      "display_value": "\u2014",
+      "explanation": "What the system could establish, if anything.",
+      "label": "What was determined",
+      "metric_id": "what_determined",
+      "source": "aggregator",
+      "source_packet_ids": [],
+      "value": null
+    },
+    {
+      "availability": "dry_run_placeholder",
+      "display_value": "\u2014",
+      "explanation": "What evidence was missing or insufficient.",
+      "label": "Missing evidence",
+      "metric_id": "missing_evidence",
+      "source": "aggregator",
+      "source_packet_ids": [],
+      "value": null
+    },
+    {
+      "availability": "dry_run_placeholder",
+      "display_value": "\u2014",
+      "explanation": "Which harness or modality failed, if safe to disclose.",
+      "label": "Failed harness/modality",
+      "metric_id": "failed_modality",
+      "source": "tracefix_verification",
+      "source_packet_ids": [],
+      "value": null
+    }
+  ],
+  "provenance": {
+    "mode": "dry_run",
+    "provenance_requirements": [
+      "List which expected packets were missing or empty."
+    ]
+  },
+  "subtitle": "Dry-run preview \u2014 values populated only after harness execution.",
+  "task_id": "task_f119cbae2d2a",
+  "title": "Insufficient evidence to answer confidently",
+  "validation_status": "valid"
+}

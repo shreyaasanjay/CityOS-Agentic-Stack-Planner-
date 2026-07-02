@@ -1,0 +1,19 @@
+{
+  "caveats": [
+    "If the single-agent lookup is insufficient, the harness should escalate to TraceFix later."
+  ],
+  "intent": "live_state",
+  "rationale": "The query appears answerable with one focused CityOS-style context lookup.",
+  "required_tools": [
+    "get_occupancy_context"
+  ],
+  "requires_tracefix": false,
+  "route": "single_agent",
+  "selected_agent": "occupancy_context_agent",
+  "selected_tool": "get_occupancy_context",
+  "time_window": {
+    "end": null,
+    "label": "latest",
+    "start": null
+  }
+}

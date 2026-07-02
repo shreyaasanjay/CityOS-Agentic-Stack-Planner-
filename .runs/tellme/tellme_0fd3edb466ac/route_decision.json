@@ -1,0 +1,13 @@
+{
+  "caveats": [
+    "V0 only emits a TraceFixTaskSpec stub for complex queries."
+  ],
+  "intent": "historical_lookup",
+  "rationale": "The query requires multi-step or multi-modal reasoning beyond one mock CityOS lookup.",
+  "required_tools": [],
+  "requires_tracefix": true,
+  "route": "multi_agent",
+  "selected_agent": null,
+  "selected_tool": null,
+  "time_window": null
+}

@@ -1,0 +1,51 @@
+{
+  "states": [
+    {
+      "id": "DEVELOPER_A_start",
+      "agent": "DEVELOPER_A",
+      "actions": [
+        {
+          "next_state": "DEVELOPER_A_done"
+        }
+      ]
+    },
+    {
+      "id": "DEVELOPER_A_done",
+      "agent": "DEVELOPER_A",
+      "actions": []
+    },
+    {
+      "id": "DEVELOPER_B_start",
+      "agent": "DEVELOPER_B",
+      "actions": [
+        {
+          "next_state": "DEVELOPER_B_done"
+        }
+      ]
+    },
+    {
+      "id": "DEVELOPER_B_done",
+      "agent": "DEVELOPER_B",
+      "actions": []
+    },
+    {
+      "id": "DEVELOPER_C_start",
+      "agent": "DEVELOPER_C",
+      "actions": [
+        {
+          "next_state": "DEVELOPER_C_done"
+        }
+      ]
+    },
+    {
+      "id": "DEVELOPER_C_done",
+      "agent": "DEVELOPER_C",
+      "actions": []
+    }
+  ],
+  "initial_states": {
+    "DEVELOPER_A": "DEVELOPER_A_start",
+    "DEVELOPER_B": "DEVELOPER_B_start",
+    "DEVELOPER_C": "DEVELOPER_C_start"
+  }
+}

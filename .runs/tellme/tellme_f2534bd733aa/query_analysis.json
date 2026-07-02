@@ -1,0 +1,36 @@
+{
+  "answer_type": "summary",
+  "confidence": 0.92,
+  "context_requirements": [
+    "general_context"
+  ],
+  "estimated_tool_calls": 3,
+  "intent": "general_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_f2534bd733aa",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_explicit_multi_agent": true,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": false,
+  "requires_multi_timestamp_reasoning": false,
+  "requires_policy_review": false,
+  "risk_flags": [],
+  "space_scope": "single_space",
+  "time_scope": "unspecified",
+  "trigger_terms_found": [
+    "attendance roster",
+    "meeting may begin",
+    "conference meeting may begin",
+    "attendance_term: attendance",
+    "attendance_term: attendees",
+    "attendance_term: roster",
+    "verification_term: confirming",
+    "verification_term: matches",
+    "meeting_readiness: meeting may begin",
+    "meeting_auth_term: attendance",
+    "meeting_auth_term: attendees",
+    "meeting_auth_term: roster"
+  ],
+  "user_query": "Determine whether a conference meeting may begin by confirming that the number of attendees physically present in the room matches the official attendance roster and that all required participants have checked in. Produce a validated meeting-readiness decision with supporting evidence."
+}

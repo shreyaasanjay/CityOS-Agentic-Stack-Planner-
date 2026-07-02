@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>TraceFix Intermediary Planner</title>
-    <link rel="stylesheet" href="/static/styles.css?v=tracefix-runner-ui-20260630-og-ui-v6-benchmark-workspaces" />
+    <title>TeLLMe / TraceFix / CityOS</title>
+    <link rel="stylesheet" href="/static/styles.css?v=tracefix-unified-ui-20260630-tellme-v1-cityos" />
   </head>
   <body>
     <main class="runner-shell">
@@ -12,18 +12,101 @@
         <div class="brand-row">
           <div class="brand-mark">TF</div>
           <div>
-            <h1>TraceFix Intermediary Planner</h1>
-            <p>Generate verified intermediary expressions for CityOS synthesis</p>
+            <h1>Smart Room Application Planner</h1>
+            <p>TeLLMe intent to verified TraceFix plan to CityOS artifacts</p>
             <p id="uiBuildStamp" class="build-stamp">UI build loading...</p>
           </div>
         </div>
 
         <div class="workflow-switch" role="group" aria-label="Workflow">
-          <button class="mode-button active" type="button" data-workflow="planner">TraceFix Planner</button>
+          <button class="mode-button active" type="button" data-workflow="tellme">TeLLMe</button>
+          <button class="mode-button" type="button" data-workflow="planner">TraceFix</button>
           <button class="mode-button" type="button" data-workflow="synth">CityOS Synthesizer</button>
         </div>
 
-        <form id="runForm" class="run-form">
+        <form id="tellmeForm" class="run-form">
+          <section class="sidebar-section">
+            <h2>Smart-Room Request</h2>
+            <div class="section-body">
+              <div class="field-row">
+                <label>
+                  Mode
+                  <select id="tellmeMode">
+                    <option value="deterministic">Deterministic</option>
+                    <option value="llm">LLM / API Key</option>
+                  </select>
+                </label>
+                <label>
+                  Model
+                  <input id="tellmeModel" value="gpt-4.1-mini" autocomplete="off" />
+                </label>
+              </div>
+              <div id="tellmeKeyRow" class="hidden">
+                <label>
+                  API key
+                  <input id="tellmeApiKey" type="password" autocomplete="off" placeholder="Paste OpenAI API key" />
+                </label>
+              </div>
+              <div id="tellmeKeyStatus" class="api-key-status missing">No API key detected</div>
+              <p class="environment-note">
+                Paste an API key above, or set OPENAI_API_KEY / TELLME_API_KEY before starting the server.
+              </p>
+              <label>
+                Natural-language intent
+                <textarea id="tellmeQuery" rows="8" placeholder="Turn off the lights in the conference room after 7 PM unless someone is still present."></textarea>
+              </label>
+              <label>
+                Space ID
+                <input id="tellmeSpaceId" value="smart_room_1" autocomplete="off" />
+              </label>
+              <label>
+                Timestamp <span class="optional-label">optional</span>
+                <input id="tellmeTimestamp" autocomplete="off" placeholder="2026-06-30T19:00:00Z" />
+              </label>
+            </div>
+          </section>
+
+          <section class="sidebar-section">
+            <h2>TraceFix Setup</h2>
+            <div class="section-body">
+              <div class="field-row">
+                <label>
+                  Provider
+                  <select id="tellmeTracefixProvider">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="ollama">Ollama</option>
+                  </select>
+                </label>
+                <label>
+                  Model
+                  <input id="tellmeTracefixModel" value="gpt-5-mini" autocomplete="off" list="modelSuggestions" />
+                </label>
+              </div>
+              <label id="tellmeTracefixKeyLabel">
+                TraceFix API key
+                <input id="tellmeTracefixApiKey" type="password" autocomplete="off" placeholder="Paste TraceFix provider key" />
+              </label>
+              <label id="tellmeTracefixOllamaLabel" class="hidden">
+                Ollama URL
+                <input id="tellmeTracefixOllamaUrl" value="http://localhost:11434/v1" autocomplete="off" />
+              </label>
+              <div id="tellmeTracefixKeyStatus" class="api-key-status missing">No TraceFix API key detected</div>
+            </div>
+          </section>
+
+          <section class="sidebar-section action-section">
+            <h2>Actions</h2>
+            <div class="section-body">
+              <button id="tellmeProcess" class="primary-button" type="submit">Process Intent</button>
+              <button id="tellmeRunAll" class="secondary-button" type="button">Process + Run TraceFix</button>
+              <button id="tellmeToTracefix" class="secondary-button" type="button" disabled>Continue To TraceFix</button>
+            </div>
+          </section>
+        </form>
+
+        <form id="runForm" class="run-form hidden">
           <div class="task-mode run-mode" role="group" aria-label="Run mode">
             <button class="mode-button" type="button" data-run-mode="design">Generate Plan</button>
             <button class="mode-button" type="button" data-run-mode="plan">Intermediary Plan</button>
@@ -159,10 +242,19 @@
           <section class="sidebar-section">
             <h2>Workspace</h2>
             <div class="section-body">
-              <label>
-                Benchmark filter
-                <select id="synthBenchmarkSelect"></select>
-              </label>
+              <label>Workspace Type</label>
+              <div class="mode-group" id="synthWorkspaceTypeGroup">
+                <button class="mode-button active" type="button" data-workspace-type="custom">Custom TraceFix Task</button>
+                <button class="mode-button" type="button" data-workspace-type="benchmark">Benchmark</button>
+              </div>
+
+              <div id="synthBenchmarkField">
+                <label>
+                  Benchmark filter
+                  <select id="synthBenchmarkSelect"></select>
+                </label>
+              </div>
+
               <label>
                 Recent verified workspace
                 <select id="synthWorkspaceSelect"></select>
@@ -211,7 +303,7 @@
           <div id="statusBadge" class="status-badge idle">Idle</div>
         </header>
 
-        <section class="metric-strip">
+        <section class="metric-strip planner-only hidden">
           <div>
             <span>Artifacts</span>
             <strong id="artifactCount">0</strong>
@@ -226,6 +318,57 @@
             <p id="llmTokenSummary">0 tokens</p>
             <small id="llmModelName">No model</small>
           </button>
+        </section>
+
+        <section id="tellmePanel" class="tellme-panel">
+          <div class="tellme-summary-grid">
+            <article class="tellme-card">
+              <span>Route Decision</span>
+              <strong id="tellmeRoute">Awaiting request</strong>
+              <p id="tellmeRationale">TeLLMe will classify the request before TraceFix design.</p>
+            </article>
+            <article class="tellme-card">
+              <span>Privacy Guardrail</span>
+              <strong id="tellmePrivacy">Not evaluated</strong>
+              <p id="tellmePrivacyScope">CityOS structured context only</p>
+            </article>
+            <article class="tellme-card">
+              <span>Generated Tasks</span>
+              <strong id="tellmeTaskCount">0</strong>
+              <p id="tellmeHarnessCount">0 candidate harnesses</p>
+            </article>
+            <article class="tellme-card">
+              <span>Run</span>
+              <strong id="tellmeRunStatus">Idle</strong>
+              <p id="tellmeRunId">No run yet</p>
+            </article>
+          </div>
+
+          <div id="tellmeMessages" class="message-stack"></div>
+
+          <div class="tellme-detail-grid">
+            <section class="tellme-detail-card">
+              <div class="panel-heading">
+                <h3>Intent Decomposition</h3>
+                <span>Validated planning context</span>
+              </div>
+              <pre id="tellmeIntent" class="output-view"></pre>
+            </section>
+            <section class="tellme-detail-card">
+              <div class="panel-heading">
+                <h3>TraceFix Task Spec</h3>
+                <span>Automatic handoff</span>
+              </div>
+              <pre id="tellmeTaskSpec" class="output-view"></pre>
+            </section>
+            <section class="tellme-detail-card">
+              <div class="panel-heading">
+                <h3>Answer Packet</h3>
+                <span>TeLLMe result</span>
+              </div>
+              <pre id="tellmeAnswer" class="output-view"></pre>
+            </section>
+          </div>
         </section>
 
         <section id="llmUsageDetails" class="usage-details hidden" aria-label="LLM usage details">
@@ -288,6 +431,8 @@
             <section>
               <h4>Discovered Plan</h4>
               <dl class="synth-facts">
+                <dt>Source</dt><dd id="synthWorkspaceTypeDisplay">—</dd>
+                <dt>Task</dt><dd id="synthTaskTextDisplay" class="synth-task-text">—</dd>
                 <dt>Workspace</dt><dd id="synthWorkspaceDisplay">None selected</dd>
                 <dt>Plan</dt><dd id="synthPlanDisplay">Unavailable</dd>
                 <dt>Agents</dt><dd id="synthAgentsDisplay">0</dd>
@@ -321,13 +466,10 @@
             </div>
             <div id="synthAppsList" class="synth-apps-list"></div>
           </section>
-          <section class="synth-build-panel">
-            <div class="panel-heading">
-              <h3>Build Commands</h3>
-              <span>Run from the CityOS root, or use direct Docker builds</span>
-            </div>
+          <details class="synth-build-panel">
+            <summary>Advanced / Debug Build Commands</summary>
             <pre id="synthBuildCommands" class="output-view synth-command-output"></pre>
-          </section>
+          </details>
           <section class="synth-log-panel">
             <div class="panel-heading">
               <h3>Generation Log</h3>
@@ -377,6 +519,6 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=tracefix-runner-ui-20260630-og-ui-v6-benchmark-workspaces" type="module"></script>
+    <script src="/static/app.js?v=tracefix-unified-ui-20260630-tellme-v1-cityos" type="module"></script>
   </body>
 </html>

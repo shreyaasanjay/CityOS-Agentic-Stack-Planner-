@@ -1,0 +1,7 @@
+[
+  {
+    "from": "video_context_harness",
+    "label": "video_findings",
+    "to": "answer_synthesis_harness"
+  }
+]
