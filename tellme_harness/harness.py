@@ -48,6 +48,7 @@ class TellMeHarness:
         llm_client: Optional[LLMClient] = None,
         llm_api_key: Optional[str] = None,
         llm_model: str = "gpt-4.1-mini",
+        llm_timeout_seconds: Optional[int] = None,
         execution_mode: str = "planning_only",
     ) -> None:
         # execution_mode:
@@ -71,6 +72,7 @@ class TellMeHarness:
         # logging artifacts, prompts, events, or AnswerPacket.raw_outputs.
         self._llm_api_key = llm_api_key
         self._llm_model = llm_model
+        self._llm_timeout_seconds = llm_timeout_seconds
         self.llm_client = llm_client
         self._decomposition_resilient: Optional[ResilientLLMClient] = None
         self.agent_backend = self._build_agent_backend(agent_backend_mode, llm_client)
@@ -484,6 +486,7 @@ class TellMeHarness:
             "real_llm_requested": self.agent_backend_mode == "llm",
             "openai_key_configured": bool(self._llm_api_key) or config.has_key,
             "model": self._resolved_llm_model() if self.agent_backend_mode == "llm" else None,
+            "timeout_seconds": self._resolved_llm_timeout_seconds() if self.agent_backend_mode == "llm" else None,
         }
         if self._decomposition_resilient is not None:
             metadata["decomposition"] = self._decomposition_resilient.operational_metadata()
@@ -501,6 +504,7 @@ class TellMeHarness:
                 client = OpenAICompatibleLLMClient.for_openai(
                     api_key=self._llm_api_key,
                     model=self._llm_model,
+                    timeout_seconds=self._resolved_llm_timeout_seconds(),
                 )
             else:
                 client = OpenAICompatibleLLMClient.from_config()
@@ -532,6 +536,7 @@ class TellMeHarness:
             return OpenAICompatibleLLMClient.for_openai(
                 api_key=self._llm_api_key,
                 model=self._llm_model,
+                timeout_seconds=self._resolved_llm_timeout_seconds(),
             )
         try:
             return OpenAICompatibleLLMClient.from_config()
@@ -542,6 +547,11 @@ class TellMeHarness:
         if self._llm_api_key:
             return self._llm_model
         return get_llm_config().model
+
+    def _resolved_llm_timeout_seconds(self) -> int:
+        if self._llm_timeout_seconds is not None:
+            return self._llm_timeout_seconds
+        return get_llm_config().timeout_seconds
 
     def _write_tracefix_bundle_artifacts(self, query_id: str, spec: TraceFixTaskSpec, bundle: dict) -> None:
         bundle_dir = "tracefix_bundle"

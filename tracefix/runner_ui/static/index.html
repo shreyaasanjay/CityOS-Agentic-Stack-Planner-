@@ -66,10 +66,41 @@
             </div>
           </section>
 
+          <section class="sidebar-section">
+            <h2>TraceFix Setup</h2>
+            <div class="section-body">
+              <div class="field-row">
+                <label>
+                  Provider
+                  <select id="tellmeTracefixProvider">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="ollama">Ollama</option>
+                  </select>
+                </label>
+                <label>
+                  Model
+                  <input id="tellmeTracefixModel" value="gpt-5-mini" autocomplete="off" list="modelSuggestions" />
+                </label>
+              </div>
+              <label id="tellmeTracefixKeyLabel">
+                TraceFix API key
+                <input id="tellmeTracefixApiKey" type="password" autocomplete="off" placeholder="Paste TraceFix provider key" />
+              </label>
+              <label id="tellmeTracefixOllamaLabel" class="hidden">
+                Ollama URL
+                <input id="tellmeTracefixOllamaUrl" value="http://localhost:11434/v1" autocomplete="off" />
+              </label>
+              <div id="tellmeTracefixKeyStatus" class="api-key-status missing">No TraceFix API key detected</div>
+            </div>
+          </section>
+
           <section class="sidebar-section action-section">
             <h2>Actions</h2>
             <div class="section-body">
               <button id="tellmeProcess" class="primary-button" type="submit">Process Intent</button>
+              <button id="tellmeRunAll" class="secondary-button" type="button">Process + Run TraceFix</button>
               <button id="tellmeToTracefix" class="secondary-button" type="button" disabled>Continue To TraceFix</button>
             </div>
           </section>

@@ -17,6 +17,7 @@ from typing import Dict, Optional
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OPENAI_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+DEFAULT_OPENAI_TIMEOUT_SECONDS = 120
 
 _loaded = False
 
@@ -88,8 +89,13 @@ def get_llm_config() -> LLMConfig:
     api_key = tellme_key or openai_key or None
     model = os.getenv("TELLME_MODEL") or os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL
     base_url = os.getenv("OPENAI_BASE_URL") or DEFAULT_OPENAI_BASE_URL
+    timeout_raw = (
+        os.getenv("OPENAI_TIMEOUT_SECONDS")
+        or os.getenv("TELLME_LLM_TIMEOUT_SECONDS")
+        or str(DEFAULT_OPENAI_TIMEOUT_SECONDS)
+    )
     try:
-        timeout_seconds = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "30"))
+        timeout_seconds = int(timeout_raw)
     except ValueError:
-        timeout_seconds = 30
+        timeout_seconds = DEFAULT_OPENAI_TIMEOUT_SECONDS
     return LLMConfig(api_key=api_key, model=model, base_url=base_url, timeout_seconds=timeout_seconds)

@@ -1,0 +1,70 @@
+{
+  "harness_subtasks": [
+    {
+      "expected_modalities": [
+        "video"
+      ],
+      "harness_name": "video_context_harness",
+      "space_id": "smart_room_1",
+      "time_window": null
+    }
+  ],
+  "llm_notes": [
+    "Compiled from validated LLMDecompositionProposal."
+  ],
+  "needs_cross_modal_consistency": false,
+  "needs_temporal_consistency": false,
+  "output_contract": {
+    "allowed_claims": [
+      "timestamped_event_summary"
+    ],
+    "answer_type": "direct_answer",
+    "fallback_answer_type": "insufficient_evidence",
+    "field_types": {
+      "answer": "string",
+      "caveats": "array",
+      "confidence": "number",
+      "evidence_refs": "array",
+      "limitations": "array",
+      "privacy_scope": "string"
+    },
+    "forbidden_claims": [
+      "raw_sensor_access",
+      "face_identity",
+      "personal_identity",
+      "medical_diagnosis",
+      "unsupported_behavioral_inference"
+    ],
+    "must_include_confidence": true,
+    "must_include_evidence_refs": true,
+    "must_include_limitations": true,
+    "required_fields": [
+      "answer",
+      "confidence",
+      "evidence_refs",
+      "caveats",
+      "privacy_scope",
+      "limitations"
+    ]
+  },
+  "plan_type": "tracefix",
+  "query_id": "tellme_51b5ccf65989",
+  "required_harnesses": [
+    "video_context_harness"
+  ],
+  "required_modalities": [
+    "context",
+    "video"
+  ],
+  "safety_caveats": [
+    "This is a stub only; TraceFix-main is not invoked in V0.",
+    "Real TraceFix multi-agent execution is not integrated yet.",
+    "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
+    "No available sensor supports 'room_state' context for this space.",
+    "Only the selected derived-context APIs may be used.",
+    "Use CityOS structured context only.",
+    "Do not request raw sensor access.",
+    "Do not identify a person, diagnose injury, or infer unsupported behavior."
+  ],
+  "time_windows": []
+}

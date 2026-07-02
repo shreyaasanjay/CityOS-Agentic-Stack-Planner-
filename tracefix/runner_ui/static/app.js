@@ -1,3 +1,5 @@
+const TELLME_LLM_TIMEOUT_SECONDS = 120;
+
 const state = {
   workflow: "tellme",
   tasks: [],
@@ -12,6 +14,8 @@ const state = {
   activeView: "log",
   usage: null,
   usageDetailsOpen: false,
+  workflowSeen: { tellme: true, planner: false, synth: false },
+  workflowReady: { tellme: false, planner: false, synth: false },
   tellme: {
     current: null,
     runId: null,
@@ -39,6 +43,14 @@ const els = {
   tellmeSpaceId: document.querySelector("#tellmeSpaceId"),
   tellmeTimestamp: document.querySelector("#tellmeTimestamp"),
   tellmeProcess: document.querySelector("#tellmeProcess"),
+  tellmeRunAll: document.querySelector("#tellmeRunAll"),
+  tellmeTracefixProvider: document.querySelector("#tellmeTracefixProvider"),
+  tellmeTracefixModel: document.querySelector("#tellmeTracefixModel"),
+  tellmeTracefixApiKey: document.querySelector("#tellmeTracefixApiKey"),
+  tellmeTracefixKeyLabel: document.querySelector("#tellmeTracefixKeyLabel"),
+  tellmeTracefixOllamaLabel: document.querySelector("#tellmeTracefixOllamaLabel"),
+  tellmeTracefixOllamaUrl: document.querySelector("#tellmeTracefixOllamaUrl"),
+  tellmeTracefixKeyStatus: document.querySelector("#tellmeTracefixKeyStatus"),
   tellmeToTracefix: document.querySelector("#tellmeToTracefix"),
   tellmePanel: document.querySelector("#tellmePanel"),
   tellmeRoute: document.querySelector("#tellmeRoute"),
@@ -215,6 +227,7 @@ function bindEvents() {
   document.querySelectorAll("[data-workflow]").forEach((button) => {
     button.addEventListener("click", async () => {
       state.workflow = button.dataset.workflow;
+      markWorkflowSeen(state.workflow);
       document.querySelectorAll("[data-workflow]").forEach((item) => {
         item.classList.toggle("active", item === button);
       });
@@ -235,10 +248,33 @@ function bindEvents() {
 
   els.tellmeApiKey.addEventListener("input", () => {
     updateTellMeModeFields();
+    updateTellMeTracefixFields();
+  });
+
+  els.tellmeRunAll.addEventListener("click", async () => {
+    await processTellMeAndTraceFix();
   });
 
   els.tellmeToTracefix.addEventListener("click", async () => {
     await startTraceFixFromTellMe();
+  });
+
+  els.tellmeTracefixProvider.addEventListener("change", () => {
+    selectTellMeTracefixProvider(els.tellmeTracefixProvider.value);
+  });
+
+  els.tellmeTracefixModel.addEventListener("input", () => {
+    els.model.value = els.tellmeTracefixModel.value;
+  });
+
+  els.tellmeTracefixApiKey.addEventListener("input", () => {
+    writeProviderKey(els.tellmeTracefixProvider.value, els.tellmeTracefixApiKey.value);
+    updateTellMeTracefixFields();
+  });
+
+  els.tellmeTracefixOllamaUrl.addEventListener("input", () => {
+    els.ollamaUrl.value = els.tellmeTracefixOllamaUrl.value;
+    updateTellMeTracefixFields();
   });
 
   els.provider.addEventListener("change", () => {
@@ -246,8 +282,12 @@ function bindEvents() {
     els.model.value = modelDefaults[provider] || (modelOptions[provider] || [])[0] || els.model.value;
     updateModelSuggestions();
     updateKeyFields();
+    syncTellMeTracefixFromPlanner();
   });
 
+  [els.model, els.openaiKey, els.anthropicKey, els.openrouterKey, els.ollamaUrl].forEach((field) => {
+    field.addEventListener("input", () => syncTellMeTracefixFromPlanner());
+  });
   document.querySelectorAll("[data-task-mode]").forEach((button) => {
     button.addEventListener("click", () => {
       state.taskMode = button.dataset.taskMode;
@@ -400,6 +440,71 @@ function updateWorkflow() {
     els.runMeta.textContent = state.runId ? els.runMeta.textContent : "Idle";
     setStatus(state.runId ? "running" : "idle");
   }
+  updateWorkflowReadiness();
+}
+
+function hasTellMeTaskSpec() {
+  const spec = state.tellme.current?.tracefix_task_spec;
+  return Boolean(state.tellme.current && spec && Object.keys(spec).length && state.tellme.current.status !== "not_answerable");
+}
+
+function hasTracefixWorkspace() {
+  return Boolean(
+    state.runId
+    || state.artifacts?.workspace
+    || state.artifacts?.cityosPlan
+    || state.artifacts?.files?.length
+  );
+}
+
+function hasCityOSReadyState() {
+  return Boolean(
+    state.synth.selected?.ready
+    || state.synth.result?.manifestPath
+    || state.synth.result?.apps?.length
+  );
+}
+
+function markWorkflowSeen(workflow) {
+  if (workflow) state.workflowSeen[workflow] = true;
+}
+
+function updateWorkflowReadiness() {
+  const workflows = ["tellme", "planner", "synth"];
+  const readyByWorkflow = {
+    tellme: Boolean(state.tellme.current),
+    planner: hasTellMeTaskSpec() || hasTracefixWorkspace(),
+    synth: hasTracefixWorkspace() || hasCityOSReadyState(),
+  };
+
+  workflows.forEach((workflow) => {
+    const isReady = Boolean(readyByWorkflow[workflow]);
+    const justBecameReady = isReady && !state.workflowReady[workflow];
+    if (!isReady) {
+      state.workflowSeen[workflow] = false;
+    } else if (workflow === state.workflow) {
+      state.workflowSeen[workflow] = true;
+    } else if (justBecameReady) {
+      state.workflowSeen[workflow] = false;
+    }
+  });
+  state.workflowReady = readyByWorkflow;
+
+  const glowWorkflow = workflows.find((workflow) => (
+    readyByWorkflow[workflow]
+    && workflow !== state.workflow
+    && !state.workflowSeen[workflow]
+  ));
+
+  document.querySelectorAll("[data-workflow]").forEach((button) => {
+    const shouldGlow = button.dataset.workflow === glowWorkflow;
+    button.classList.toggle("ready", shouldGlow);
+    if (shouldGlow) {
+      button.title = "Ready to review";
+    } else {
+      button.removeAttribute("title");
+    }
+  });
 }
 
 function updateKeyFields() {
@@ -455,6 +560,7 @@ async function loadTellMeConfig() {
     state.tellme.apiKeyDetected = false;
   }
   updateTellMeModeFields();
+  updateTellMeTracefixFields();
 }
 
 function updateTellMeModeFields() {
@@ -478,6 +584,89 @@ function updateTellMeModeFields() {
   els.tellmeKeyStatus.className = `api-key-status ${statusClass}`;
 }
 
+function providerKeyElement(provider) {
+  if (provider === "anthropic") return els.anthropicKey;
+  if (provider === "openrouter") return els.openrouterKey;
+  if (provider === "openai") return els.openaiKey;
+  return null;
+}
+
+function readProviderKey(provider) {
+  const field = providerKeyElement(provider);
+  return field ? (field.value || "").trim() : "";
+}
+
+function writeProviderKey(provider, value) {
+  const field = providerKeyElement(provider);
+  if (field) field.value = value;
+}
+
+function selectTellMeTracefixProvider(provider) {
+  els.provider.value = provider;
+  const nextModel = modelDefaults[provider] || (modelOptions[provider] || [])[0] || els.tellmeTracefixModel.value;
+  els.model.value = nextModel;
+  els.tellmeTracefixModel.value = nextModel;
+  els.tellmeTracefixApiKey.value = readProviderKey(provider);
+  els.tellmeTracefixOllamaUrl.value = els.ollamaUrl.value;
+  updateModelSuggestions();
+  updateKeyFields();
+  updateTellMeTracefixFields();
+}
+
+function syncTellMeTracefixFromPlanner() {
+  const provider = els.provider.value;
+  els.tellmeTracefixProvider.value = provider;
+  els.tellmeTracefixModel.value = els.model.value || modelDefaults[provider] || "";
+  els.tellmeTracefixOllamaUrl.value = els.ollamaUrl.value;
+  els.tellmeTracefixApiKey.value = readProviderKey(provider);
+  updateTellMeTracefixFields();
+}
+
+function syncPlannerFromTellMeTracefix() {
+  const provider = els.tellmeTracefixProvider.value;
+  els.provider.value = provider;
+  els.model.value = els.tellmeTracefixModel.value.trim() || modelDefaults[provider] || els.model.value;
+  if (provider === "ollama") {
+    els.ollamaUrl.value = els.tellmeTracefixOllamaUrl.value;
+  } else {
+    writeProviderKey(provider, els.tellmeTracefixApiKey.value.trim());
+  }
+  updateModelSuggestions();
+  updateKeyFields();
+  updateTellMeTracefixFields();
+}
+
+function updateTellMeTracefixFields() {
+  const provider = els.tellmeTracefixProvider.value;
+  const isOllama = provider === "ollama";
+  els.tellmeTracefixKeyLabel.classList.toggle("hidden", isOllama);
+  els.tellmeTracefixOllamaLabel.classList.toggle("hidden", !isOllama);
+
+  const typedTracefixKey = (els.tellmeTracefixApiKey.value || "").trim();
+  const plannerKey = readProviderKey(provider);
+  const tellmeKey = (els.tellmeApiKey.value || "").trim();
+  let statusText = "No TraceFix API key detected";
+  let statusClass = "missing";
+
+  if (isOllama) {
+    const ollamaReady = (els.tellmeTracefixOllamaUrl.value || "").trim();
+    statusText = ollamaReady ? "Ollama URL ready" : "No Ollama URL configured";
+    statusClass = ollamaReady ? "detected" : "missing";
+  } else if (typedTracefixKey || plannerKey) {
+    statusText = "TraceFix API key ready";
+    statusClass = "detected";
+  } else if (provider === "openai" && tellmeKey) {
+    statusText = "Using TeLLMe API key for TraceFix";
+    statusClass = "detected";
+  } else if (provider === "openai" && state.tellme.envKeyDetected) {
+    statusText = "Environment API key detected";
+    statusClass = "detected";
+  }
+
+  els.tellmeTracefixKeyStatus.textContent = statusText;
+  els.tellmeTracefixKeyStatus.className = `api-key-status ${statusClass}`;
+}
+
 async function loadTellMeCurrent() {
   try {
     const response = await getJson("/api/tellme/current");
@@ -497,15 +686,17 @@ async function loadTellMeCurrent() {
     renderTellMe(null, [error.message], []);
   }
   updateTellMeModeFields();
+  updateTellMeTracefixFields();
 }
 
 async function processTellMeQuery() {
   const query = els.tellmeQuery.value.trim();
   if (!query) {
     showToast("Enter a smart-room request");
-    return;
+    return null;
   }
   els.tellmeProcess.disabled = true;
+  els.tellmeRunAll.disabled = true;
   els.tellmeRunStatus.textContent = "Processing";
   els.tellmeMessages.innerHTML = `<div class="message-card info">TeLLMe is analyzing route, privacy, and task decomposition...</div>`;
   try {
@@ -516,6 +707,7 @@ async function processTellMeQuery() {
       timestamp: els.tellmeTimestamp.value.trim() || null,
       mode: els.tellmeMode.value,
       model: els.tellmeModel.value.trim() || state.tellme.model,
+      llm_timeout_seconds: TELLME_LLM_TIMEOUT_SECONDS,
       api_key: isLlm ? (els.tellmeApiKey.value.trim() || null) : null,
     });
     state.tellme.apiKeyDetected = response.api_key_detected === true;
@@ -524,12 +716,26 @@ async function processTellMeQuery() {
     state.tellme.runId = response.run_id;
     renderTellMe(response.data, response.errors, response.warnings);
     showToast("TeLLMe task spec generated");
+    return response.data;
   } catch (error) {
     renderTellMe(null, [error.message], []);
+    return null;
   } finally {
     els.tellmeProcess.disabled = false;
+    els.tellmeRunAll.disabled = false;
     updateTellMeModeFields();
+    updateTellMeTracefixFields();
   }
+}
+
+async function processTellMeAndTraceFix() {
+  const data = await processTellMeQuery();
+  if (!data) return;
+  if (data.status === "not_answerable") {
+    showToast("TeLLMe blocked this request");
+    return;
+  }
+  await startTraceFixFromTellMe();
 }
 
 function renderTellMe(data, errors = [], warnings = []) {
@@ -566,15 +772,26 @@ function renderTellMe(data, errors = [], warnings = []) {
   els.tellmeMessages.innerHTML = messages
     .map((item) => `<div class="message-card ${item.kind}">${escapeHtml(item.text)}</div>`)
     .join("");
+  updateWorkflowReadiness();
+}
+
+function tracefixPayloadKeys(provider) {
+  const firstPageKey = (els.tellmeTracefixApiKey.value || "").trim();
+  const tellmeKey = (els.tellmeApiKey.value || "").trim();
+  return {
+    openaiKey: (els.openaiKey.value || (provider === "openai" ? firstPageKey || tellmeKey : "")).trim(),
+    anthropicKey: (els.anthropicKey.value || (provider === "anthropic" ? firstPageKey : "")).trim(),
+    openrouterKey: (els.openrouterKey.value || (provider === "openrouter" ? firstPageKey : "")).trim(),
+  };
 }
 
 function traceFixProviderPayload() {
+  syncPlannerFromTellMeTracefix();
+  const provider = els.provider.value;
   return {
-    provider: els.provider.value,
-    model: normalizeModelForPayload(els.provider.value, els.model.value),
-    openaiKey: els.openaiKey.value,
-    anthropicKey: els.anthropicKey.value,
-    openrouterKey: els.openrouterKey.value,
+    provider,
+    model: normalizeModelForPayload(provider, els.model.value),
+    ...tracefixPayloadKeys(provider),
     ollamaUrl: els.ollamaUrl.value,
     opencodeBin: els.opencodeBin.value,
     timeout: Number(els.timeout.value || 1800),
@@ -591,6 +808,7 @@ async function startTraceFixFromTellMe() {
     state.taskMode = "custom";
     state.runMode = "design";
     state.workflow = "planner";
+    markWorkflowSeen("planner");
     document.querySelectorAll("[data-workflow]").forEach((button) => {
       button.classList.toggle("active", button.dataset.workflow === "planner");
     });
@@ -708,6 +926,7 @@ function renderSynthSummary(summary) {
     els.synthChannelsDisplay.textContent = "0";
     els.synthResourcesDisplay.textContent = "0";
     els.synthChecklist.innerHTML = "";
+    updateWorkflowReadiness();
     return;
   }
   const isCustom = summary.workspaceType === "custom";
@@ -747,6 +966,7 @@ function renderSynthSummary(summary) {
       </div>
     `)
     .join("");
+  updateWorkflowReadiness();
 }
 
 async function synthesizeCityOSArtifacts() {
@@ -793,6 +1013,7 @@ function renderSynthArtifacts(result) {
   if (!apps.length) {
     els.synthAppsList.innerHTML = `<div class="synth-empty">Generate CityOS artifacts to see app containers, prompts, and build commands here.</div>`;
     els.synthBuildCommands.textContent = "No build commands yet.";
+    updateWorkflowReadiness();
     return;
   }
 
@@ -821,6 +1042,7 @@ function renderSynthArtifacts(result) {
   commands.push("# Direct Docker builds:");
   apps.forEach((app) => commands.push(dockerBuildCommand(app)));
   els.synthBuildCommands.textContent = commands.join("\n");
+  updateWorkflowReadiness();
 }
 
 function dockerBuildCommand(app) {
@@ -900,13 +1122,12 @@ async function loadTasks() {
 
 async function startRun() {
   resetRunUi();
+  const provider = els.provider.value;
   const payload = {
     mode: state.runMode,
-    provider: els.provider.value,
-    model: normalizeModelForPayload(els.provider.value, els.model.value),
-    openaiKey: els.openaiKey.value,
-    anthropicKey: els.anthropicKey.value,
-    openrouterKey: els.openrouterKey.value,
+    provider,
+    model: normalizeModelForPayload(provider, els.model.value),
+    ...tracefixPayloadKeys(provider),
     ollamaUrl: els.ollamaUrl.value,
     taskMode: state.taskMode,
     taskId: els.taskId.value,
@@ -1000,6 +1221,7 @@ function resetRunUi() {
   els.graph.innerHTML = "";
   els.graphStatus.textContent = "Waiting for IR";
   renderUsage();
+  updateWorkflowReadiness();
 }
 
 function connectEvents(runId) {
@@ -1090,6 +1312,7 @@ function setStatus(status) {
   if (status === "verification_incomplete") {
     setActiveView("error");
   }
+  updateWorkflowReadiness();
 }
 
 async function refreshRun() {
@@ -1109,6 +1332,7 @@ function renderArtifacts() {
   const files = state.artifacts.files || [];
   els.artifactCount.textContent = String(files.length);
   renderGraph(state.artifacts.ir);
+  updateWorkflowReadiness();
 }
 
 function renderUsage() {
@@ -1474,6 +1698,7 @@ async function init() {
   bindEvents();
   updateKeyFields();
   updateModelSuggestions();
+  syncTellMeTracefixFromPlanner();
   updateModeFields();
   updateWorkflow();
   await loadTellMeConfig();

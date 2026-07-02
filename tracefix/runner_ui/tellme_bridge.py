@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from tellme_harness import TellMeHarness
-from tellme_harness.config import DEFAULT_OPENAI_MODEL, get_llm_config
+from tellme_harness.config import DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_TIMEOUT_SECONDS, get_llm_config
 from tracefix.pipeline_timing import PipelineTimingReport
 
 
@@ -31,6 +31,7 @@ class TellMeBridge:
         backend_mode: str = "deterministic",
         llm_model: str = "",
         request_api_key: str | None = None,
+        llm_timeout_seconds: int | None = None,
     ) -> dict[str, Any]:
         query = query.strip()
         if not query:
@@ -41,6 +42,7 @@ class TellMeBridge:
         config = get_llm_config()
         effective_api_key = (request_api_key or "").strip() or config.api_key
         selected_model = llm_model.strip() or config.model or DEFAULT_OPENAI_MODEL
+        selected_timeout_seconds = self._resolve_timeout_seconds(llm_timeout_seconds, config.timeout_seconds)
         if backend_mode == "llm" and not effective_api_key:
             raise ValueError(
                 "LLM mode selected, but no API key was found. "
@@ -54,6 +56,7 @@ class TellMeBridge:
             agent_backend_mode=backend_mode,
             llm_api_key=effective_api_key if backend_mode == "llm" else None,
             llm_model=selected_model,
+            llm_timeout_seconds=selected_timeout_seconds,
             execution_mode="planning_only",
         )
         answer = harness.handle_query(query, space_id=space_id, timestamp=timestamp)
@@ -62,11 +65,17 @@ class TellMeBridge:
         answer_payload = answer.model_dump()
         llm_metadata = ((answer_payload.get("raw_outputs") or {}).get("llm_operational") or {})
         decomposition = llm_metadata.get("decomposition") if isinstance(llm_metadata, dict) else {}
+        llm_warnings: list[str] = []
         if backend_mode == "llm" and isinstance(decomposition, dict) and decomposition.get("last_used") == "fallback":
             reason = decomposition.get("fallback_reason") or "unknown_llm_error"
-            raise RuntimeError(
-                f"TeLLMe LLM request failed ({reason}). "
-                "Check the API key, model, and network connection, or use Deterministic mode."
+            if self._is_hard_llm_failure(reason):
+                raise RuntimeError(
+                    f"TeLLMe LLM request failed ({reason}). "
+                    "Check the API key and model, or use Deterministic mode."
+                )
+            llm_warnings.append(
+                f"TeLLMe LLM request fell back to deterministic planning ({reason}) after waiting up to "
+                f"{selected_timeout_seconds}s. TraceFix can continue with the validated fallback task spec."
             )
         run_dir = Path(str(answer.raw_outputs.get("run_dir") or "")).resolve()
         timing = PipelineTimingReport(
@@ -99,6 +108,7 @@ class TellMeBridge:
         task_spec = answer_payload.get("tracefix_task_spec") or {}
         validation_policy = task_spec.get("validation_policy") if isinstance(task_spec, dict) else {}
         warnings = list(validation_policy.get("warnings") or []) if isinstance(validation_policy, dict) else []
+        warnings.extend(llm_warnings)
 
         data = {
             "query_id": answer.query_id,
@@ -106,6 +116,7 @@ class TellMeBridge:
             "mode": backend_mode,
             "model": selected_model,
             "api_key_detected": bool(effective_api_key),
+            "llm_timeout_seconds": selected_timeout_seconds if backend_mode == "llm" else None,
             "status": answer.status,
             "route_decision": answer_payload.get("route_decision") or {},
             "privacy_guardrail": self._privacy_guardrail(answer_payload),
@@ -127,6 +138,18 @@ class TellMeBridge:
         return data
 
     @staticmethod
+    def _resolve_timeout_seconds(requested: int | None, default: int | None) -> int:
+        try:
+            value = int(requested if requested is not None else default or DEFAULT_OPENAI_TIMEOUT_SECONDS)
+        except (TypeError, ValueError):
+            value = DEFAULT_OPENAI_TIMEOUT_SECONDS
+        return max(10, min(value, 600))
+
+    @staticmethod
+    def _is_hard_llm_failure(reason: str) -> bool:
+        return reason.startswith(("http_error_401", "http_error_403", "http_error_404"))
+
+    @staticmethod
     def llm_config() -> dict[str, Any]:
         config = get_llm_config()
         openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
@@ -136,6 +159,7 @@ class TellMeBridge:
             "mode": "deterministic",
             "model": config.model or DEFAULT_OPENAI_MODEL,
             "api_key_detected": api_key_detected,
+            "timeout_seconds": config.timeout_seconds,
             "openai_api_key_detected": bool(openai_key),
             "tellme_api_key_detected": bool(tellme_key),
             "supported_modes": ["deterministic", "llm"],
@@ -244,9 +268,15 @@ class TellMeBridge:
     @staticmethod
     def _write_json(path: Path, payload: dict[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        body = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
         temporary = path.with_suffix(path.suffix + ".tmp")
-        temporary.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
-        temporary.replace(path)
+        temporary.write_text(body, encoding="utf-8")
+        try:
+            temporary.replace(path)
+        except PermissionError:
+            # Some Windows ACL/share-mode combinations deny delete-style replace.
+            path.write_text(body, encoding="utf-8")
+            try:
+                temporary.unlink()
+            except OSError:
+                pass

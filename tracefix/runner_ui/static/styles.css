@@ -277,17 +277,38 @@ textarea:focus {
 }
 
 .mode-button {
+  position: relative;
   flex: 1;
   min-height: 36px;
   color: #c8d2ce;
   border-color: var(--line-strong);
   background: var(--panel);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, background 0.18s ease;
 }
 
 .mode-button.active {
   color: #fff;
   border-color: var(--green);
   background: var(--green-soft);
+}
+
+.mode-button.ready:not(.active) {
+  color: #f6f8f7;
+  border-color: rgba(255, 255, 255, 0.58);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 16px rgba(255, 255, 255, 0.22);
+}
+
+.mode-button.ready:not(.active)::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 0 9px rgba(255, 255, 255, 0.75);
 }
 
 .mode-button.legacy {

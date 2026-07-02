@@ -71,9 +71,16 @@ class ResilientLLMClient(LLMClient):
 def _sanitize_error(exc: Exception) -> str:
     """Map an exception to a coarse, secret-free category string."""
     name = type(exc).__name__
+    if isinstance(exc, TimeoutError):
+        return "timeout"
     if isinstance(exc, urllib.error.HTTPError):
         return f"http_error_{exc.code}"
     if isinstance(exc, urllib.error.URLError):
+        reason = getattr(exc, "reason", None)
+        if isinstance(reason, TimeoutError):
+            return "timeout"
+        return "network_error"
+    if isinstance(exc, OSError):
         return "network_error"
     if isinstance(exc, (ValueError, TypeError)):
         return "invalid_response"
@@ -177,7 +184,7 @@ class OpenAICompatibleLLMClient(LLMClient):
         base_url: str,
         model: str,
         api_key: Optional[str] = None,
-        timeout_seconds: int = 30,
+        timeout_seconds: int = 120,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -201,7 +208,7 @@ class OpenAICompatibleLLMClient(LLMClient):
             base_url=base_url,
             model=model,
             api_key=os.getenv("TELLME_LLM_API_KEY"),
-            timeout_seconds=int(os.getenv("TELLME_LLM_TIMEOUT_SECONDS", "30")),
+            timeout_seconds=int(os.getenv("TELLME_LLM_TIMEOUT_SECONDS", "120")),
         )
 
     @classmethod
@@ -231,7 +238,7 @@ class OpenAICompatibleLLMClient(LLMClient):
         api_key: str,
         model: str = "gpt-4.1-mini",
         base_url: str = "https://api.openai.com/v1",
-        timeout_seconds: int = 30,
+        timeout_seconds: int = 120,
     ) -> "OpenAICompatibleLLMClient":
         """Build a client for the OpenAI HTTP API with an explicit (in-memory) API key.
 
@@ -274,9 +281,9 @@ class OpenAICompatibleLLMClient(LLMClient):
                 first_response_at = datetime.now(timezone.utc).isoformat()
                 first_response_ms = time.monotonic() * 1000.0
                 body = response.read().decode("utf-8")
-        except urllib.error.URLError as exc:
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
             request_error = _sanitize_error(exc)
-            raise RuntimeError("Real LLM request failed: {error}".format(error=exc)) from exc
+            raise
         finally:
             request_finished_ms = time.monotonic() * 1000.0
             self.last_request_metadata = {

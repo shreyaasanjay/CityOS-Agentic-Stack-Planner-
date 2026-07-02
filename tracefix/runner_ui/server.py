@@ -54,6 +54,15 @@ def _clean_key(value: Any) -> str:
     return (str(value) if value is not None else "").strip()
 
 
+def _bounded_int(value: Any, default: int, *, minimum: int, maximum: int) -> int:
+    try:
+        raw = default if value is None or value == "" else value
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(minimum, min(parsed, maximum))
+
+
 def _api_envelope(
     *,
     ok: bool,
@@ -1756,6 +1765,12 @@ class RunnerHandler(BaseHTTPRequestHandler):
             config = bridge.llm_config()
             requested_mode = str(payload.get("mode") or payload.get("backend_mode") or "deterministic")
             requested_model = str(payload.get("model") or payload.get("llm_model") or config["model"])
+            requested_timeout = _bounded_int(
+                payload.get("llm_timeout_seconds") or payload.get("timeout_seconds"),
+                int(config.get("timeout_seconds") or 120),
+                minimum=10,
+                maximum=600,
+            )
             request_api_key = _clean_key(payload.get("api_key"))
             env_api_key = _clean_key(os.getenv("TELLME_API_KEY") or os.getenv("OPENAI_API_KEY") or "")
             effective_api_key = request_api_key or env_api_key
@@ -1777,6 +1792,7 @@ class RunnerHandler(BaseHTTPRequestHandler):
                     backend_mode=requested_mode,
                     llm_model=requested_model,
                     request_api_key=effective_api_key or None,
+                    llm_timeout_seconds=requested_timeout,
                 )
             except Exception as exc:  # noqa: BLE001 - API must surface TeLLMe failures
                 self._send_json(
