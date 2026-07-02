@@ -1,0 +1,8 @@
+{
+  "created_at": "2026-07-01T18:00:53.729633+00:00",
+  "intent": "general",
+  "query_id": "tellme_612bea81dfe0",
+  "space_id": "smart_room_1",
+  "timestamp": null,
+  "user_query": "Agent A determines the number of people physically present in the conference room. Agent B verifies the occupancy count against the meeting attendance roster and produces a validated occupancy report."
+}

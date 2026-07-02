@@ -1,0 +1,8 @@
+{
+  "answer_synthesis_harness": [
+    "synthesize_answer_packet"
+  ],
+  "occupancy_context_harness": [
+    "get_occupancy_context"
+  ]
+}

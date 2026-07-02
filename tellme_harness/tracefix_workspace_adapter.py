@@ -86,6 +86,16 @@ def _load_ir_validator() -> Tuple[Optional[Callable[[dict], Any]], str]:
         return None, "none"
 
 
+def _canonicalize_ir(ir: dict) -> tuple[dict, str]:
+    """Use TraceFix's canonical IR boundary when the package is available."""
+    try:
+        from tracefix.pipeline.pipeline.validator import normalize_ir
+
+        return normalize_ir(ir), "tracefix_normalizer"
+    except Exception:
+        return ir, "unavailable"
+
+
 class TraceFixWorkspaceAdapter:
     def build_workspace(
         self,
@@ -100,7 +110,9 @@ class TraceFixWorkspaceAdapter:
         (workspace_root / "output").mkdir(parents=True, exist_ok=True)
         (workspace_root / "prompts").mkdir(parents=True, exist_ok=True)
 
-        ir = coordination_plan_to_ir(coordination_plan)
+        ir, normalization_source = _canonicalize_ir(
+            coordination_plan_to_ir(coordination_plan)
+        )
 
         # Validate against TraceFix's real IR contract before writing anything else.
         validate_ir, source = _load_ir_validator()
@@ -135,6 +147,7 @@ class TraceFixWorkspaceAdapter:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "ir_valid": ir_valid,
             "ir_validation_source": source,
+            "ir_normalization_source": normalization_source,
             "agent_count": len(coordination_plan.agents),
             "channel_count": len(coordination_plan.channels),
             # NOTE: intentionally no secrets, no raw media, no env values.

@@ -18,13 +18,14 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 from tracefix.runner_ui.tellme_bridge import TellMeBridge
+from tracefix.pipeline_timing import append_stage
 from tracefix.textio import safe_read_json, safe_read_text
 
 
@@ -568,15 +569,13 @@ def _synth_apps_dir(payload: dict[str, Any], workspace: Path) -> Path:
 
 def _synth_file_requirements(workspace: Path) -> list[dict[str, Any]]:
     spec = _spec_dir(workspace)
-    requirements = [
+    required_entries = [
         ("spec/cityos_module_plan.json", spec / "cityos_module_plan.json", "Generate Verified Plan or Export Intermediary Plan"),
         ("spec/ir.json", spec / "ir.json", "Generate Verified Plan"),
         ("spec/states.json", spec / "states.json", "Run TraceFix verification until TLC/state extraction completes"),
-        ("spec/summary.json", spec / "summary.json", "Run TraceFix verification until summary is written"),
         ("spec/Protocol.tla", spec / "Protocol.tla", "Run TraceFix protocol generation"),
         ("spec/Protocol.cfg", spec / "Protocol.cfg", "Run TraceFix protocol generation"),
     ]
-    translated = spec / "Protocol_translated.tla"
     items = [
         {
             "path": label,
@@ -585,8 +584,19 @@ def _synth_file_requirements(workspace: Path) -> list[dict[str, Any]]:
             "createdBy": created_by,
             "required": True,
         }
-        for label, path, created_by in requirements
+        for label, path, created_by in required_entries
     ]
+    # summary.json is informational — its absence does not block synthesis when
+    # states.json and cityos_module_plan.json are both present.
+    summary_path = spec / "summary.json"
+    items.append({
+        "path": "spec/summary.json",
+        "absolutePath": str(summary_path),
+        "exists": summary_path.exists(),
+        "createdBy": "Run TraceFix verification until summary is written",
+        "required": False,
+    })
+    translated = spec / "Protocol_translated.tla"
     items.append({
         "path": "spec/Protocol_translated.tla",
         "absolutePath": str(translated),
@@ -597,7 +607,7 @@ def _synth_file_requirements(workspace: Path) -> list[dict[str, Any]]:
     return items
 
 
-def _synth_workspace_summary(workspace: Path) -> dict[str, Any]:
+def _synth_workspace_summary(workspace: Path, root: Path | None = None) -> dict[str, Any]:
     spec = _spec_dir(workspace)
     plan_path = spec / "cityos_module_plan.json"
     plan = _read_json(plan_path)
@@ -617,16 +627,55 @@ def _synth_workspace_summary(workspace: Path) -> dict[str, Any]:
         }
     requirements = _synth_file_requirements(workspace)
     missing_required = [item for item in requirements if item["required"] and not item["exists"]]
+    found_artifacts = [item["path"] for item in requirements if item["exists"]]
+
+    # Determine workspace type (benchmark or custom)
+    bm_ids: frozenset[str] = frozenset()
+    if root is not None:
+        bm_ids = _benchmark_task_ids(root)
+    ws_type = _workspace_type(workspace, bm_ids)
+    task_text = _workspace_task_text(workspace)
+
+    # Derive readiness: core artifacts (states + plan) are sufficient when summary.json
+    # is absent; summary.json provides richer tlc_passed / production_ready signals.
+    _has_core_artifacts = (spec / "states.json").exists() and plan_path.exists()
+    _tlc_passed = isinstance(summary, dict) and summary.get("tlc_passed") is True
+    _production_ready = verification.get("production_ready") is True
+    _workspace_ready = not missing_required and (_production_ready or _tlc_passed or _has_core_artifacts)
+
+    if _production_ready or _tlc_passed:
+        _verification_status = verification.get("status") or "verified"
+        _tlc_status = "passed" if _tlc_passed else "unknown"
+    elif _has_core_artifacts:
+        _verification_status = "verified_no_summary"
+        _tlc_status = "unknown"
+    else:
+        _verification_status = verification.get("status") or "unknown"
+        _tlc_status = "unknown"
+
+    print(
+        f"[SYNTH] workspace={workspace.name} type={ws_type} "
+        f"ready={_workspace_ready} status={_verification_status} "
+        f"task_text={task_text[:60]!r}",
+        flush=True,
+    )
+
     return {
         "name": workspace.name,
         "path": str(workspace),
         "lastModified": workspace.stat().st_mtime if workspace.exists() else None,
         "planPath": str(plan_path),
         "hasPlan": plan_path.exists(),
-        "productionReady": verification.get("production_ready") is True,
-        "verificationStatus": verification.get("status") or (
-            "verified" if isinstance(summary, dict) and summary.get("tlc_passed") is True else "unknown"
-        ),
+        "productionReady": _production_ready,
+        "verificationStatus": _verification_status,
+        "verificationReady": _workspace_ready,
+        "missingArtifacts": [item["path"] for item in missing_required],
+        "foundArtifacts": found_artifacts,
+        "tlcStatus": _tlc_status,
+        "planStatus": "ready" if plan_path.exists() else "incomplete",
+        "workspaceType": ws_type,
+        "taskText": task_text,
+        "taskSource": "tellme" if ws_type == "custom" else "benchmark",
         "agents": [
             agent.get("name") or agent.get("id")
             for agent in agents
@@ -637,11 +686,53 @@ def _synth_workspace_summary(workspace: Path) -> dict[str, Any]:
         "requirements": requirements,
         "missingRequired": missing_required,
         "outputDir": str((workspace / "output" / "cityos_synthesis").resolve()),
-        "ready": not missing_required and (
-            verification.get("production_ready") is True
-            or (isinstance(summary, dict) and summary.get("tlc_passed") is True)
-        ),
+        "ready": _workspace_ready,
     }
+
+
+def _benchmark_task_ids(root: Path) -> frozenset[str]:
+    """Return the set of known benchmark task IDs (e.g. '3E', '4A') as lowercase."""
+    return frozenset(
+        task["id"].lower()
+        for task in _task_options(root)
+        if isinstance(task, dict) and task.get("id")
+    )
+
+
+def _workspace_type(workspace: Path, benchmark_ids: frozenset[str]) -> str:
+    """Return 'benchmark' if the workspace name contains a known benchmark ID, else 'custom'."""
+    tokens = frozenset(re.split(r"[^a-z0-9]+", workspace.name.lower())) - {""}
+    if tokens & benchmark_ids:
+        return "benchmark"
+    return "custom"
+
+
+def _workspace_task_text(workspace: Path) -> str:
+    """Best-effort: extract a short human-readable task description from the workspace."""
+    spec = _spec_dir(workspace)
+    ir = _read_json(spec / "ir.json")
+    if isinstance(ir, dict):
+        # Explicit task/description field
+        task = str(ir.get("task") or ir.get("description") or "").strip()
+        if task:
+            return task[:300]
+        # state_tasks values often contain the natural-language task text
+        state_tasks = ir.get("state_tasks")
+        if isinstance(state_tasks, dict):
+            for value in state_tasks.values():
+                v = str(value).strip()
+                if v and not v.upper().startswith("SKIP") and len(v) > 10:
+                    return v[:300]
+        # Agent roles as fallback
+        agents = ir.get("agents") or []
+        if isinstance(agents, list) and agents:
+            roles = [str(a.get("role") or a.get("id") or "") for a in agents if isinstance(a, dict)]
+            roles = [r for r in roles if r]
+            if roles:
+                return "; ".join(roles[:4])
+    # Fall back to a human-readable workspace name
+    name_clean = re.sub(r"[_\-]+", " ", workspace.name).strip()
+    return name_clean[:200] if name_clean else workspace.name
 
 
 def _workspace_matches_benchmark(workspace: Path, benchmark: str | None) -> bool:
@@ -654,25 +745,37 @@ def _workspace_matches_benchmark(workspace: Path, benchmark: str | None) -> bool
     return normalized in tokens
 
 
-def _synth_workspace_options(root: Path, benchmark: str | None = None) -> list[dict[str, Any]]:
+def _synth_workspace_options(
+    root: Path,
+    benchmark: str | None = None,
+    workspace_type: str | None = None,
+) -> list[dict[str, Any]]:
     workspace_root = root / "workspace"
     if not workspace_root.exists():
         return []
     workspaces = [path for path in workspace_root.iterdir() if path.is_dir()]
     if benchmark:
         workspaces = [path for path in workspaces if _workspace_matches_benchmark(path, benchmark)]
+    if workspace_type in ("benchmark", "custom"):
+        bm_ids = _benchmark_task_ids(root)
+        workspaces = [
+            path for path in workspaces
+            if _workspace_type(path, bm_ids) == workspace_type
+        ]
     workspaces.sort(key=lambda path: path.stat().st_mtime, reverse=True)
-    selected = workspaces if benchmark else workspaces[:80]
-    return [_synth_workspace_summary(path) for path in selected]
+    selected = workspaces if (benchmark or workspace_type) else workspaces[:80]
+    return [_synth_workspace_summary(path, root=root) for path in selected]
 
 
 def _run_cityos_synthesis(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     from tracefix.runtime.cityos_synthesizer import synthesize_cityos_apps
 
+    started_at = datetime.now(timezone.utc).isoformat()
+    started_ms = time.monotonic() * 1000.0
     workspace = _workspace_from_payload(root, payload)
     if not workspace.exists():
         raise FileNotFoundError(f"Workspace does not exist: {workspace}")
-    summary = _synth_workspace_summary(workspace)
+    summary = _synth_workspace_summary(workspace, root=root)
     missing = summary.get("missingRequired") or []
     if missing:
         details = "; ".join(
@@ -684,11 +787,32 @@ def _run_cityos_synthesis(root: Path, payload: dict[str, Any]) -> dict[str, Any]
     apps_dir = _synth_apps_dir(payload, workspace)
     package_name = str(payload.get("packageName") or "").strip() or None
     overwrite = bool(payload.get("overwrite"))
-    result = synthesize_cityos_apps(
+    try:
+        result = synthesize_cityos_apps(
+            workspace,
+            apps_dir=apps_dir,
+            package_name=package_name,
+            overwrite=overwrite,
+        )
+    except Exception as exc:
+        append_stage(
+            workspace,
+            "cityos_synthesis",
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            duration_ms=time.monotonic() * 1000.0 - started_ms,
+            success=False,
+            error=str(exc),
+        )
+        raise
+    append_stage(
         workspace,
-        apps_dir=apps_dir,
-        package_name=package_name,
-        overwrite=overwrite,
+        "cityos_synthesis",
+        started_at=started_at,
+        finished_at=datetime.now(timezone.utc).isoformat(),
+        duration_ms=time.monotonic() * 1000.0 - started_ms,
+        success=True,
+        generated_app_count=len(result.apps),
     )
     return {
         "workspace": str(result.workspace),
@@ -706,7 +830,7 @@ def _run_cityos_synthesis(root: Path, payload: dict[str, Any]) -> dict[str, Any]
             }
             for app in result.apps
         ],
-        "summary": _synth_workspace_summary(result.workspace),
+        "summary": _synth_workspace_summary(result.workspace, root=root),
     }
 
 
@@ -1033,12 +1157,40 @@ def _benchmark_task_text(root: Path, task_id: str) -> str:
     return "\n\n".join(part for part in parts if part.strip())
 
 
+# Placeholder text set by the frontend when the user clicks "Continue To TraceFix".
+# If this string arrives as customTask, it means the user later pressed
+# "Generate Verified Plan" without editing the textarea — resolve to the real spec.
+_TELLME_PLACEHOLDER = "Loaded automatically from the current TeLLMe task spec."
+
+
 def _task_text_from_payload(root: Path, payload: dict[str, Any]) -> str:
     task_mode = str(payload.get("taskMode", "benchmark"))
     if task_mode == "custom":
         custom_task = str(payload.get("customTask", "")).strip()
-        if not custom_task:
-            raise ValueError("Custom task text is required")
+        if custom_task == _TELLME_PLACEHOLDER or not custom_task:
+            # Placeholder arrived — the user pressed "Generate Verified Plan" after a
+            # TeLLMe handoff.  Resolve the actual spec from the stored bridge state
+            # instead of passing the bare placeholder to run_design().
+            print(
+                f"[server] customTask is placeholder — resolving from TeLLMe bridge state",
+                flush=True,
+            )
+            try:
+                bridge = TellMeBridge(root)
+                resolved = bridge.tracefix_task_text()
+                print(
+                    f"[server] TeLLMe spec resolved: "
+                    f"{len(resolved)} chars, preview={resolved[:80]!r}",
+                    flush=True,
+                )
+                return resolved
+            except Exception as exc:
+                if not custom_task:
+                    raise ValueError("Custom task text is required") from None
+                raise ValueError(
+                    f"TeLLMe spec could not be resolved ({exc}). "
+                    "Process a query in the TeLLMe tab first, or provide a custom task."
+                ) from exc
         return custom_task
     task_id = str(payload.get("taskId", "3E")).strip() or "3E"
     return _benchmark_task_text(root, task_id)
@@ -1245,6 +1397,7 @@ def _start_run(root: Path, payload: dict[str, Any]) -> RunState:
     env.update(env_updates)
     env = _ensure_java_env(env)
     env["PYTHONUNBUFFERED"] = "1"
+    env["TRACEFIX_UI_QUEUED_AT"] = datetime.now(timezone.utc).isoformat()
 
     with RUNS_LOCK:
         RUNS[run_id] = run
@@ -1488,7 +1641,7 @@ class RunnerHandler(BaseHTTPRequestHandler):
             workspace_raw = str(tracefix.get("workspace") or "")
             summary = None
             if workspace_raw and Path(workspace_raw).exists():
-                summary = _synth_workspace_summary(Path(workspace_raw))
+                summary = _synth_workspace_summary(Path(workspace_raw), root=self.root)
             data = {"result": cityos, "workspace": summary}
             self._send_json(_api_envelope(
                 ok=bool(summary or cityos),
@@ -1513,21 +1666,37 @@ class RunnerHandler(BaseHTTPRequestHandler):
         if path == "/api/synth/config":
             query = parse_qs(parsed.query)
             benchmark = (query.get("benchmark") or [""])[0].strip()
+            workspace_type = (query.get("workspaceType") or [""])[0].strip() or None
             cityos_root = _default_cityos_root()
+            workspaces = _synth_workspace_options(self.root, benchmark, workspace_type)
+            print(
+                f"[SYNTH] /api/synth/config benchmark={benchmark!r} "
+                f"workspaceType={workspace_type!r} count={len(workspaces)}",
+                flush=True,
+            )
             self._send_json({
                 "repoRoot": str(self.root.resolve()),
                 "benchmark": benchmark,
+                "workspaceType": workspace_type or "",
                 "cityosRoot": str(cityos_root) if cityos_root is not None else "",
                 "appsDir": str((cityos_root / "apps").resolve()) if cityos_root is not None else "",
-                "workspaces": _synth_workspace_options(self.root, benchmark),
+                "workspaces": workspaces,
             })
             return
         if path == "/api/synth/workspaces":
             query = parse_qs(parsed.query)
             benchmark = (query.get("benchmark") or [""])[0].strip()
+            workspace_type = (query.get("workspaceType") or [""])[0].strip() or None
+            workspaces = _synth_workspace_options(self.root, benchmark, workspace_type)
+            print(
+                f"[SYNTH] /api/synth/workspaces benchmark={benchmark!r} "
+                f"workspaceType={workspace_type!r} count={len(workspaces)}",
+                flush=True,
+            )
             self._send_json({
                 "benchmark": benchmark,
-                "workspaces": _synth_workspace_options(self.root, benchmark),
+                "workspaceType": workspace_type or "",
+                "workspaces": workspaces,
             })
             return
         if path == "/api/synth/workspace":
@@ -1540,7 +1709,13 @@ class RunnerHandler(BaseHTTPRequestHandler):
             except Exception as exc:  # noqa: BLE001 - local UI should surface clear errors
                 self._send_error(400, str(exc))
                 return
-            self._send_json({"workspace": _synth_workspace_summary(workspace)})
+            ws_summary = _synth_workspace_summary(workspace, root=self.root)
+            print(
+                f"[SYNTH] /api/synth/workspace path={workspace.name} "
+                f"type={ws_summary.get('workspaceType')} ready={ws_summary.get('ready')}",
+                flush=True,
+            )
+            self._send_json({"workspace": ws_summary})
             return
         if path == "/api/intermediary-plan":
             query = parse_qs(parsed.query)
@@ -1650,7 +1825,7 @@ class RunnerHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(_api_envelope(
                 ok=True,
-                data=run.snapshot(),
+                data={**run.snapshot(), "tellme_task_text": task_text},
                 run_id=run.id,
             ), status=201)
             return
@@ -1862,6 +2037,19 @@ def run_server(host: str = "127.0.0.1", port: int = 8788, root: Path | None = No
     print(f"TeLLMe TELLME_API_KEY detected: {bool(_tellme_key)}", flush=True)
     print(f"TeLLMe TELLME_MODEL: {os.getenv('TELLME_MODEL') or '(not set, using default)'}", flush=True)
     del _openai_key, _tellme_key
+    # Routing-module diagnostics: confirm which source files are actually loaded.
+    # If these paths are wrong the server is importing from a stale install or
+    # the wrong working directory — restart is required for any patch to take effect.
+    try:
+        import tellme_harness.query_analysis as _qa_mod
+        import tellme_harness.route_policy as _rp_mod
+        _has_compound = hasattr(_qa_mod, "_ATTENDANCE_TOKENS")
+        print(f"TeLLMe query_analysis.py : {Path(_qa_mod.__file__).resolve()}", flush=True)
+        print(f"TeLLMe route_policy.py   : {Path(_rp_mod.__file__).resolve()}", flush=True)
+        print(f"TeLLMe compound detector : {'present' if _has_compound else 'MISSING — old version loaded'}", flush=True)
+        del _qa_mod, _rp_mod, _has_compound
+    except Exception as _diag_exc:  # noqa: BLE001
+        print(f"TeLLMe routing diagnostics failed: {_diag_exc}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

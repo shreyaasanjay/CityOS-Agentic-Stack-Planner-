@@ -1,0 +1,261 @@
+{
+  "schema_version": "0.1",
+  "run_kind": "tracefix_design",
+  "run_id": "tellme_structured_smart_room_application_20260701_151117",
+  "run_dir": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_151117",
+  "started_at": "2026-07-01T19:11:17.925580+00:00",
+  "finished_at": null,
+  "complete": false,
+  "total_wall_clock_ms": 108678.52,
+  "stages": [
+    {
+      "stage": "workspace_initialization",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:11:17.926223+00:00",
+      "finished_at": "2026-07-01T19:11:17.929145+00:00",
+      "duration_ms": 2.92,
+      "success": true,
+      "error": null,
+      "workspace": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_151117"
+    },
+    {
+      "stage": "single_agent_fast_path",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:11:17.931689+00:00",
+      "finished_at": "2026-07-01T19:11:17.931778+00:00",
+      "duration_ms": 0.08,
+      "success": true,
+      "error": null,
+      "fast_path": {
+        "considered": true,
+        "used": false,
+        "reason": "TeLLMe route is multi_agent, not single_agent",
+        "structured_input": true,
+        "agent_id": null,
+        "ir_generation_duration_ms": 0.0,
+        "fallback_to_opencode": true,
+        "error": null
+      },
+      "aggregate": true
+    },
+    {
+      "stage": "pluscal_translation",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:11:17.942341+00:00",
+      "finished_at": "2026-07-01T19:11:18.189849+00:00",
+      "duration_ms": 247.49,
+      "success": true,
+      "error": null
+    },
+    {
+      "stage": "tlc_verification",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:11:18.191773+00:00",
+      "finished_at": "2026-07-01T19:11:19.318971+00:00",
+      "duration_ms": 1126.11,
+      "success": true,
+      "error": null
+    },
+    {
+      "stage": "state_extraction",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:11:19.320212+00:00",
+      "finished_at": "2026-07-01T19:11:19.323217+00:00",
+      "duration_ms": 3.0,
+      "success": true,
+      "error": null
+    },
+    {
+      "stage": "coordination_pattern_template",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:11:17.933481+00:00",
+      "finished_at": "2026-07-01T19:11:19.327978+00:00",
+      "duration_ms": 1394.48,
+      "success": true,
+      "error": null,
+      "coord_template": {
+        "considered": true,
+        "used": true,
+        "pattern_id": "verifier_approver",
+        "confidence": 0.88,
+        "reason": "matched pattern 'verifier_approver' with confidence 0.88",
+        "fallback_reason": "",
+        "fallback_to_opencode": false,
+        "error": null,
+        "tellme_route": "multi_agent",
+        "user_query_excerpt": "Determine whether the observed room occupancy matches the expected meeting attendance count. Compare available occupancy",
+        "candidate_harnesses": [
+          "video_context_harness",
+          "audio_context_harness",
+          "answer_synthesis_harness"
+        ],
+        "pattern_scores": {
+          "verifier_approver": 0.88,
+          "attendance_verification": 0.88,
+          "sequential_handoff": 0.0,
+          "producer_consumer": 0.0
+        }
+      },
+      "aggregate": true
+    },
+    {
+      "stage": "ir_validation",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:11:19.329380+00:00",
+      "finished_at": "2026-07-01T19:11:19.329828+00:00",
+      "duration_ms": 0.45,
+      "success": true,
+      "error": null,
+      "ir_sanitization": {
+        "attempted": false,
+        "changed": false,
+        "removed_fields": [],
+        "normalized_fields": [],
+        "validation_before": {
+          "valid": true,
+          "errors": []
+        },
+        "validation_after": {
+          "valid": true,
+          "errors": []
+        },
+        "recovered": false,
+        "prevented_likely_unnecessary_failure": false
+      }
+    },
+    {
+      "stage": "opencode_runtime_prompt_generation",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:11:19.341143+00:00",
+      "finished_at": "2026-07-01T19:13:06.599275+00:00",
+      "duration_ms": 107258.13,
+      "success": true,
+      "error": null,
+      "retry_count": 0,
+      "rate_limit_events": 0,
+      "first_response_time": "2026-07-01T19:11:24.653709+00:00",
+      "time_to_first_event_ms": 5312.56
+    },
+    {
+      "stage": "opencode_pluscal_continuation",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:13:06.601206+00:00",
+      "finished_at": "2026-07-01T19:13:06.601206+00:00",
+      "duration_ms": 0.0,
+      "success": true,
+      "error": null,
+      "skipped": true,
+      "skip_reason": "optional OpenCode stage was not invoked"
+    },
+    {
+      "stage": "cityos_plan_export",
+      "queued_at": null,
+      "started_at": "2026-07-01T19:13:06.603755+00:00",
+      "finished_at": "2026-07-01T19:13:06.603995+00:00",
+      "duration_ms": 0.24,
+      "success": true,
+      "error": null
+    }
+  ],
+  "api_calls": [
+    {
+      "stage": "opencode_runtime_prompt_generation",
+      "provider": null,
+      "model": null,
+      "request_start": "2026-07-01T19:11:19.341143+00:00",
+      "first_response_time": "2026-07-01T19:11:24.653709+00:00",
+      "request_end": "2026-07-01T19:13:06.599275+00:00",
+      "total_duration_ms": 107258.13,
+      "time_to_first_event_ms": 5312.56,
+      "retry_count": 0,
+      "rate_limit_events": 0,
+      "failed": false,
+      "status": "incomplete",
+      "observation_scope": "opencode_process"
+    }
+  ],
+  "repair": {
+    "total_attempts": 0,
+    "attempts": [],
+    "repair_time_seconds": 0.0,
+    "stop_reason": null,
+    "recommendation": null,
+    "config": {}
+  },
+  "ir_sanitization": {
+    "attempted": false,
+    "changed": false,
+    "removed_fields": [],
+    "normalized_fields": [],
+    "validation_before": {
+      "valid": true,
+      "errors": []
+    },
+    "validation_after": {
+      "valid": true,
+      "errors": []
+    },
+    "recovered": false,
+    "prevented_likely_unnecessary_failure": false
+  },
+  "single_agent_fast_path": {
+    "considered": true,
+    "used": false,
+    "reason": "TeLLMe route is multi_agent, not single_agent",
+    "structured_input": true,
+    "agent_id": null,
+    "ir_generation_duration_ms": 0.0,
+    "fallback_to_opencode": true,
+    "error": null
+  },
+  "coordination_pattern_template": {
+    "considered": true,
+    "used": true,
+    "pattern_id": "verifier_approver",
+    "confidence": 0.88,
+    "reason": "matched pattern 'verifier_approver' with confidence 0.88",
+    "fallback_reason": "",
+    "fallback_to_opencode": false,
+    "error": null,
+    "tellme_route": "multi_agent",
+    "user_query_excerpt": "Determine whether the observed room occupancy matches the expected meeting attendance count. Compare available occupancy",
+    "candidate_harnesses": [
+      "video_context_harness",
+      "audio_context_harness",
+      "answer_synthesis_harness"
+    ],
+    "pattern_scores": {
+      "verifier_approver": 0.88,
+      "attendance_verification": 0.88,
+      "sequential_handoff": 0.0,
+      "producer_consumer": 0.0
+    }
+  },
+  "pattern_repository": {
+    "pattern_repository_enabled": null,
+    "candidate_harvest_attempted": false,
+    "candidate_saved": false,
+    "candidate_id": null,
+    "normalized_topology_hash": null,
+    "candidate_deduplicated": false,
+    "candidate_usage_count": 0,
+    "candidate_path": null,
+    "harvest_skip_reason": null
+  },
+  "summary": {
+    "slowest_stage": "opencode_runtime_prompt_generation",
+    "slowest_stage_duration_ms": 107258.13,
+    "api_call_count": 1,
+    "retry_count": 0,
+    "rate_limit_events": 0,
+    "total_repair_attempts": 0,
+    "repair_stop_reason": null,
+    "suspected_bottleneck": "opencode_model_or_tool_loop",
+    "confidence": "high",
+    "recommended_next_fix": "Reduce repeated model repair passes or cache successful intermediate artifacts after correctness review."
+  },
+  "limitations": [
+    "OpenCode timing observes the subprocess and its first JSON event, not provider first-token telemetry.",
+    "A long time-to-first-event can indicate OpenCode startup, provider queueing, or model latency."
+  ]
+}

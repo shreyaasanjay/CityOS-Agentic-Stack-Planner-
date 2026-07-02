@@ -91,6 +91,8 @@ class RouteDecision(BaseModel):
     time_window: Optional[TimeWindow] = None
     requires_tracefix: bool = False
     caveats: List[str] = Field(default_factory=list)
+    trigger_terms_found: List[str] = Field(default_factory=list)
+    explicit_agent_names_detected: bool = False
 
 
 class QueryAnalysis(BaseModel):
@@ -109,6 +111,8 @@ class QueryAnalysis(BaseModel):
     requires_diagnostic_reasoning: bool = False
     requires_concordfs_trace_inspection: bool = False
     requires_policy_review: bool = False
+    requires_explicit_multi_agent: bool = False
+    trigger_terms_found: List[str] = Field(default_factory=list)
     risk_flags: List[str] = Field(default_factory=list)
     confidence: float
 

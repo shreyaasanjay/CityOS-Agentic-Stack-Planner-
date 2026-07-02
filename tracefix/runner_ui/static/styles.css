@@ -743,6 +743,19 @@ textarea:focus {
   overflow-wrap: anywhere;
 }
 
+.synth-task-text {
+  max-height: 3.6em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  cursor: help;
+}
+
+#synthBenchmarkField.hidden {
+  display: none;
+}
+
 .synth-output-heading {
   margin-top: 16px;
 }

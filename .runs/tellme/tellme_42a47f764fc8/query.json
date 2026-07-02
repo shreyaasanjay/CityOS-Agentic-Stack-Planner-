@@ -1,0 +1,8 @@
+{
+  "created_at": "2026-07-01T18:25:24.145991+00:00",
+  "intent": "general",
+  "query_id": "tellme_42a47f764fc8",
+  "space_id": "smart_room_1",
+  "timestamp": null,
+  "user_query": "Determine whether the observed room occupancy matches the expected meeting attendance count. If the evidence is insufficient or conflicting, produce an insufficient-evidence report with confidence, evidence references, and limitations."
+}

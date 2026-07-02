@@ -18,11 +18,13 @@ const state = {
     apiKeyDetected: false,
     envKeyDetected: false,
     model: "gpt-4.1-mini",
+    taskText: "",  // actual TeLLMe spec text — set on handoff, used by startRun()
   },
   synth: {
     workspaces: [],
     selected: null,
     result: null,
+    workspaceType: "custom",
   },
 };
 
@@ -122,6 +124,8 @@ const els = {
   runForm: document.querySelector("#runForm"),
   synthControls: document.querySelector("#synthControls"),
   synthPanel: document.querySelector("#synthPanel"),
+  synthWorkspaceTypeGroup: document.querySelector("#synthWorkspaceTypeGroup"),
+  synthBenchmarkField: document.querySelector("#synthBenchmarkField"),
   synthBenchmarkSelect: document.querySelector("#synthBenchmarkSelect"),
   synthWorkspaceSelect: document.querySelector("#synthWorkspaceSelect"),
   synthWorkspacePath: document.querySelector("#synthWorkspacePath"),
@@ -132,6 +136,8 @@ const els = {
   synthGenerate: document.querySelector("#synthGenerate"),
   synthStatus: document.querySelector("#synthStatus"),
   synthChecklist: document.querySelector("#synthChecklist"),
+  synthWorkspaceTypeDisplay: document.querySelector("#synthWorkspaceTypeDisplay"),
+  synthTaskTextDisplay: document.querySelector("#synthTaskTextDisplay"),
   synthWorkspaceDisplay: document.querySelector("#synthWorkspaceDisplay"),
   synthPlanDisplay: document.querySelector("#synthPlanDisplay"),
   synthAgentsDisplay: document.querySelector("#synthAgentsDisplay"),
@@ -307,6 +313,18 @@ function bindEvents() {
     els.llmUsageDetails.classList.toggle("hidden", !state.usageDetailsOpen);
   });
 
+  els.synthWorkspaceTypeGroup.querySelectorAll("[data-workspace-type]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      state.synth.workspaceType = button.dataset.workspaceType;
+      els.synthWorkspaceTypeGroup.querySelectorAll("[data-workspace-type]").forEach((b) => {
+        b.classList.toggle("active", b === button);
+      });
+      const isBenchmark = state.synth.workspaceType === "benchmark";
+      els.synthBenchmarkField.classList.toggle("hidden", !isBenchmark);
+      await loadSynthConfig({ preferCurrent: false });
+    });
+  });
+
   els.synthWorkspaceSelect.addEventListener("change", async () => {
     els.synthWorkspacePath.value = els.synthWorkspaceSelect.value;
     await loadSynthWorkspace(els.synthWorkspacePath.value);
@@ -371,6 +389,12 @@ function updateWorkflow() {
     els.runMeta.textContent = "Generate CityOS app artifacts from a verified TraceFix plan";
     els.statusBadge.textContent = "Synthesis";
     els.statusBadge.className = "status-badge idle";
+    // Sync workspace type button + benchmark field visibility
+    els.synthWorkspaceTypeGroup.querySelectorAll("[data-workspace-type]").forEach((b) => {
+      b.classList.toggle("active", b.dataset.workspaceType === state.synth.workspaceType);
+    });
+    const isBenchmarkMode = state.synth.workspaceType === "benchmark";
+    if (els.synthBenchmarkField) els.synthBenchmarkField.classList.toggle("hidden", !isBenchmarkMode);
   } else {
     els.runTitle.textContent = state.runId ? els.runTitle.textContent : "No plan generated";
     els.runMeta.textContent = state.runId ? els.runMeta.textContent : "Idle";
@@ -575,7 +599,12 @@ async function startTraceFixFromTellMe() {
     });
     els.benchmarkField.classList.add("hidden");
     els.customTaskField.classList.remove("hidden");
-    els.customTask.value = "Loaded automatically from the current TeLLMe task spec.";
+    // Store the real task spec text returned by the server so that any
+    // subsequent "Generate Verified Plan" press sends the actual spec —
+    // not just the human-readable placeholder.
+    const actualTaskText = run.tellme_task_text || "";
+    state.tellme.taskText = actualTaskText;
+    els.customTask.value = actualTaskText || "Loaded automatically from the current TeLLMe task spec.";
     updateWorkflow();
     els.startRun.disabled = true;
     els.stopRun.disabled = false;
@@ -592,10 +621,18 @@ async function startTraceFixFromTellMe() {
 }
 
 async function loadSynthConfig(options = {}) {
+  // Sync benchmark field visibility with current type
+  const isBenchmark = state.synth.workspaceType === "benchmark";
+  if (els.synthBenchmarkField) {
+    els.synthBenchmarkField.classList.toggle("hidden", !isBenchmark);
+  }
+
   try {
-    const benchmark = els.synthBenchmarkSelect.value;
-    const query = benchmark ? `?benchmark=${encodeURIComponent(benchmark)}` : "";
-    const data = await getJson(`/api/synth/config${query}`);
+    const benchmark = isBenchmark ? els.synthBenchmarkSelect.value : "";
+    const params = new URLSearchParams();
+    if (benchmark) params.set("benchmark", benchmark);
+    params.set("workspaceType", state.synth.workspaceType);
+    const data = await getJson(`/api/synth/config?${params}`);
     state.synth.workspaces = data.workspaces || [];
     renderSynthWorkspaceOptions();
     const workspacePaths = new Set(state.synth.workspaces.map((workspace) => workspace.path));
@@ -611,7 +648,7 @@ async function loadSynthConfig(options = {}) {
         // Non-fatal — fall through to first available workspace.
       }
     }
-    if (!current || (benchmark && !workspacePaths.has(current))) {
+    if (!current || !workspacePaths.has(current)) {
       current = state.synth.workspaces[0]?.path || current;
     }
     if (current) {
@@ -631,11 +668,13 @@ function renderSynthWorkspaceOptions() {
   els.synthWorkspaceSelect.innerHTML = state.synth.workspaces.length
     ? state.synth.workspaces
         .map((workspace) => {
-          const readiness = workspace.ready ? "ready" : workspace.hasPlan ? workspace.verificationStatus : "missing plan";
+          const VS_LABELS = { verified: "verified", verified_no_summary: "verified", unknown: "pending", verification_incomplete: "incomplete" };
+          const readiness = workspace.ready ? "ready" : workspace.hasPlan ? (VS_LABELS[workspace.verificationStatus] || workspace.verificationStatus || "pending") : "missing plan";
           const modified = workspace.lastModified
             ? new Date(workspace.lastModified * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
             : "";
-          const label = [workspace.name, readiness, modified].filter(Boolean).join(" - ");
+          const typeTag = workspace.workspaceType === "custom" ? "custom" : null;
+          const label = [workspace.name, typeTag, readiness, modified].filter(Boolean).join(" · ");
           return `<option value="${escapeHtml(workspace.path)}">${escapeHtml(label)}</option>`;
         })
         .join("")
@@ -661,6 +700,8 @@ async function loadSynthWorkspace(workspacePath) {
 function renderSynthSummary(summary) {
   if (!summary) {
     els.synthStatus.textContent = "Select a verified workspace";
+    if (els.synthWorkspaceTypeDisplay) els.synthWorkspaceTypeDisplay.textContent = "—";
+    if (els.synthTaskTextDisplay) els.synthTaskTextDisplay.textContent = "—";
     els.synthWorkspaceDisplay.textContent = "None selected";
     els.synthPlanDisplay.textContent = "Unavailable";
     els.synthAgentsDisplay.textContent = "0";
@@ -669,10 +710,27 @@ function renderSynthSummary(summary) {
     els.synthChecklist.innerHTML = "";
     return;
   }
+  const isCustom = summary.workspaceType === "custom";
   els.synthStatus.textContent = summary.ready
     ? "Ready for CityOS synthesis"
-    : `Not ready: ${summary.verificationStatus || "missing artifacts"}`;
-  els.synthWorkspaceDisplay.textContent = summary.path;
+    : `Not ready: ${({ verified_no_summary: "Verified (no TLC summary)", unknown: "pending verification", verification_incomplete: "incomplete" })[summary.verificationStatus] || summary.verificationStatus || "missing artifacts"}`;
+
+  if (els.synthWorkspaceTypeDisplay) {
+    els.synthWorkspaceTypeDisplay.textContent = isCustom ? "Custom TraceFix Task" : "Benchmark";
+  }
+  if (els.synthTaskTextDisplay) {
+    const taskText = summary.taskText || summary.name || "";
+    els.synthTaskTextDisplay.textContent = taskText || "—";
+    els.synthTaskTextDisplay.title = taskText;
+  }
+
+  console.log(
+    `[synth] workspace=${summary.name} type=${summary.workspaceType} ` +
+    `ready=${summary.ready} path=${summary.path} ` +
+    `outputDir=${summary.outputDir}`
+  );
+
+  els.synthWorkspaceDisplay.textContent = summary.name || summary.path;
   els.synthPlanDisplay.textContent = summary.hasPlan ? summary.planPath : "Missing spec/cityos_module_plan.json";
   els.synthOutputDir.value = summary.outputDir || "";
   els.synthAgentsDisplay.textContent = String((summary.agents || []).length);
@@ -852,7 +910,15 @@ async function startRun() {
     ollamaUrl: els.ollamaUrl.value,
     taskMode: state.taskMode,
     taskId: els.taskId.value,
-    customTask: els.customTask.value,
+    // When the textarea still holds the human-readable placeholder (e.g. after a
+    // page refresh or if the server's response didn't carry tellme_task_text),
+    // fall back to the spec text stored in state.  The backend also resolves the
+    // placeholder from the TeLLMe bridge, so either path is safe.
+    customTask: (state.taskMode === "custom" &&
+                 els.customTask.value.trim() === "Loaded automatically from the current TeLLMe task spec." &&
+                 state.tellme.taskText)
+      ? state.tellme.taskText
+      : els.customTask.value,
     maxTurns: Number(els.maxTurns.value || 20),
     maxTokens: Number(els.maxTokens.value || 32768),
     temperature: Number(els.temperature.value !== "" ? els.temperature.value : 0.3),
@@ -948,6 +1014,11 @@ function connectEvents(runId) {
       els.startRun.disabled = false;
       els.stopRun.disabled = true;
       await refreshRun();
+      // If TraceFix completed with a workspace, prime the CityOS Synthesizer to
+      // show it as a custom workspace so the user can synthesize without switching tabs.
+      if (event.status === "completed" && state.artifacts?.workspace) {
+        state.synth.workspaceType = "custom";
+      }
     }
   });
   source.onerror = () => {

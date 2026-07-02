@@ -211,10 +211,19 @@
           <section class="sidebar-section">
             <h2>Workspace</h2>
             <div class="section-body">
-              <label>
-                Benchmark filter
-                <select id="synthBenchmarkSelect"></select>
-              </label>
+              <label>Workspace Type</label>
+              <div class="mode-group" id="synthWorkspaceTypeGroup">
+                <button class="mode-button active" type="button" data-workspace-type="custom">Custom TraceFix Task</button>
+                <button class="mode-button" type="button" data-workspace-type="benchmark">Benchmark</button>
+              </div>
+
+              <div id="synthBenchmarkField">
+                <label>
+                  Benchmark filter
+                  <select id="synthBenchmarkSelect"></select>
+                </label>
+              </div>
+
               <label>
                 Recent verified workspace
                 <select id="synthWorkspaceSelect"></select>
@@ -391,6 +400,8 @@
             <section>
               <h4>Discovered Plan</h4>
               <dl class="synth-facts">
+                <dt>Source</dt><dd id="synthWorkspaceTypeDisplay">—</dd>
+                <dt>Task</dt><dd id="synthTaskTextDisplay" class="synth-task-text">—</dd>
                 <dt>Workspace</dt><dd id="synthWorkspaceDisplay">None selected</dd>
                 <dt>Plan</dt><dd id="synthPlanDisplay">Unavailable</dd>
                 <dt>Agents</dt><dd id="synthAgentsDisplay">0</dd>

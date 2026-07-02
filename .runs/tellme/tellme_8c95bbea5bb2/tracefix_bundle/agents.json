@@ -1,0 +1,10 @@
+[
+  {
+    "name": "answer_synthesis_harness",
+    "role": "Synthesize a final answer packet with caveats and evidence references."
+  },
+  {
+    "name": "occupancy_context_harness",
+    "role": "Retrieve occupancy-oriented structured context."
+  }
+]

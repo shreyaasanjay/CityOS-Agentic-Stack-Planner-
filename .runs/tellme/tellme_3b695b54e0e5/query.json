@@ -1,0 +1,8 @@
+{
+  "created_at": "2026-07-01T19:34:30.663951+00:00",
+  "intent": "general",
+  "query_id": "tellme_3b695b54e0e5",
+  "space_id": "smart_room_1",
+  "timestamp": null,
+  "user_query": "Determine whether a conference meeting may begin. Compare observed room occupancy with expected attendance information, identify any discrepancies between the two sources, and generate a final attendance verification report explaining whether attendance can be validated, including confidence, evidence references, limitations, and unresolved issues."
+}

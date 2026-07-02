@@ -14,6 +14,100 @@ _MODALITY_TOKENS = {
     "audio": ("audio", "sound", "noise", "microphone", "speaking", "speech"),
 }
 
+_EXPLICIT_MULTI_AGENT_PHRASES = (
+    # Exact cross-agent verification phrases
+    "verify against",
+    "verifies against",
+    "validate against",
+    "validates against",
+    "verify that",
+    "verifying that",
+    "validates that",
+    "confirm attendance",
+    "confirming attendance",
+    # Roster / record exact phrases
+    "attendance roster",
+    "attendance record",
+    "attendance records",
+    "attendance list",
+    "attendee list",
+    "attendee record",
+    "attendees present",
+    "meeting attendance",
+    # Comparison / reconciliation
+    "comparing",
+    "matches the physical occupancy",
+    "matches occupancy",
+    # Meeting-readiness gates
+    "meeting may begin",
+    "meeting may proceed",
+    "conference meeting may begin",
+    "board meeting may proceed",
+    # Policy / coordination
+    "quorum",
+    "audit report",
+    "compliance report",
+    "authorization report",
+    "resolve discrepancies",
+    "handoff",
+    "hand off",
+    "approve or reject",
+    "multiple agents",
+    "multi-agent",
+)
+
+# attendance/attendee tokens that, when combined with a verification token,
+# signal multi-agent coordination even without exact phrase matches
+_ATTENDANCE_TOKENS = frozenset((
+    "attendance",
+    "attendee",
+    "attendees",
+    "roster",
+))
+
+# Standalone record/list only counts when paired with an attendance token OR
+# a verification token (too generic alone)
+_ATTENDANCE_SUPPORT_TOKENS = frozenset((
+    "record",
+    "records",
+    "list",
+))
+
+_VERIFICATION_TOKENS = frozenset((
+    "verify",
+    "verifying",
+    "validate",
+    "validating",
+    "confirm",
+    "confirming",
+    "compare",
+    "comparing",
+    "match",
+    "matches",
+    "reconcile",
+    "discrepancy",
+    "discrepancies",
+))
+
+_MEETING_READINESS_TOKENS = frozenset((
+    "meeting may begin",
+    "meeting may proceed",
+    "conference may begin",
+    "session may begin",
+))
+
+_MEETING_AUTH_TOKENS = frozenset((
+    "attendance",
+    "attendee",
+    "attendees",
+    "quorum",
+    "authorization",
+    "compliance",
+    "roster",
+))
+
+_EXPLICIT_AGENT_PATTERN = re.compile(r"\bagent\s+[a-c]\b")
+
 
 def analyze_query(query: TellMeQuery) -> QueryAnalysis:
     user_query = query.user_query.strip()
@@ -63,6 +157,7 @@ def analyze_query(query: TellMeQuery) -> QueryAnalysis:
         for token in ("checkpoint", "resume", "pipeline", "query log", "trace")
     ) or ("fall alert" in lowered and "fail" in lowered) or ("alert" in lowered and "fail" in lowered)
     requires_policy_review = any(token in lowered for token in ("policy", "privacy", "allowed"))
+    requires_explicit_multi_agent, trigger_terms_found = _detect_explicit_multi_agent_coordination(lowered)
 
     mentions_compare = any(
         token in lowered
@@ -91,6 +186,7 @@ def analyze_query(query: TellMeQuery) -> QueryAnalysis:
         requires_multi_timestamp_reasoning=requires_multi_timestamp_reasoning,
         requires_diagnostic_reasoning=requires_diagnostic_reasoning,
         requires_concordfs_trace_inspection=requires_concordfs_trace_inspection,
+        requires_explicit_multi_agent=requires_explicit_multi_agent,
     )
 
     confidence = _estimate_confidence(
@@ -119,6 +215,8 @@ def analyze_query(query: TellMeQuery) -> QueryAnalysis:
         requires_diagnostic_reasoning=requires_diagnostic_reasoning,
         requires_concordfs_trace_inspection=requires_concordfs_trace_inspection,
         requires_policy_review=requires_policy_review,
+        requires_explicit_multi_agent=requires_explicit_multi_agent,
+        trigger_terms_found=trigger_terms_found,
         risk_flags=risk_flags,
         confidence=confidence,
     )
@@ -246,6 +344,54 @@ def _infer_risk_flags(lowered: str, intent: str) -> List[str]:
     return sorted(flags)
 
 
+def _detect_explicit_multi_agent_coordination(lowered: str) -> tuple[bool, list[str]]:
+    found: list[str] = []
+
+    # Rule 1: explicit "Agent A/B/C" naming
+    if _EXPLICIT_AGENT_PATTERN.search(lowered):
+        found.append("explicit_agent_name")
+
+    # Rule 2: exact coordination phrases
+    for phrase in _EXPLICIT_MULTI_AGENT_PHRASES:
+        if phrase in lowered:
+            found.append(phrase)
+
+    # Rule 3: compound — attendance/attendee token + verification token
+    words = set(re.findall(r"[a-z]+", lowered))
+    has_attendance = bool(_ATTENDANCE_TOKENS & words)
+    has_attendance_support = bool(_ATTENDANCE_SUPPORT_TOKENS & words)
+    has_verification = bool(_VERIFICATION_TOKENS & words)
+    if has_verification:
+        matched_att = sorted(_ATTENDANCE_TOKENS & words)
+        matched_ver = sorted(_VERIFICATION_TOKENS & words)
+        if has_attendance:
+            for t in matched_att:
+                found.append(f"attendance_term: {t}")
+            for t in matched_ver:
+                found.append(f"verification_term: {t}")
+        elif has_attendance_support:
+            # "record" + "verify" is coordination only when in an occupancy context
+            matched_sup = sorted(_ATTENDANCE_SUPPORT_TOKENS & words)
+            occ_words = {"occupancy", "attendee", "attendees", "count", "present", "meeting", "conference"}
+            if words & occ_words:
+                for t in matched_sup:
+                    found.append(f"attendance_term: {t}")
+                for t in matched_ver:
+                    found.append(f"verification_term: {t}")
+
+    # Rule 4: meeting-readiness gate + auth/quorum/attendance term
+    for gate in _MEETING_READINESS_TOKENS:
+        if gate in lowered:
+            auth_matches = sorted(_MEETING_AUTH_TOKENS & words)
+            if auth_matches:
+                found.append(f"meeting_readiness: {gate}")
+                for t in auth_matches:
+                    found.append(f"meeting_auth_term: {t}")
+            break
+
+    return bool(found), found
+
+
 def _estimate_tool_calls(
     context_requirements: List[str],
     named_modalities: List[str],
@@ -253,7 +399,10 @@ def _estimate_tool_calls(
     requires_multi_timestamp_reasoning: bool,
     requires_diagnostic_reasoning: bool,
     requires_concordfs_trace_inspection: bool,
+    requires_explicit_multi_agent: bool = False,
 ) -> int:
+    if requires_explicit_multi_agent:
+        return max(3, len(context_requirements) + 2)
     if (
         len(context_requirements) == 1
         and not named_modalities

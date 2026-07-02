@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
@@ -52,7 +54,7 @@ class ResilientLLMClient(LLMClient):
             self.last_latency_ms = round((_time.monotonic() - start) * 1000.0, 2)
 
     def operational_metadata(self) -> Dict[str, Any]:
-        return {
+        metadata = {
             "model": self.model,
             "last_used": self.last_used,
             "last_latency_ms": self.last_latency_ms,
@@ -60,6 +62,10 @@ class ResilientLLMClient(LLMClient):
             "primary_calls": self.primary_calls,
             "fallback_calls": self.fallback_calls,
         }
+        request_metadata = getattr(self.primary, "last_request_metadata", None)
+        if isinstance(request_metadata, dict):
+            metadata["last_request"] = dict(request_metadata)
+        return metadata
 
 
 def _sanitize_error(exc: Exception) -> str:
@@ -177,6 +183,7 @@ class OpenAICompatibleLLMClient(LLMClient):
         self.model = model
         self.api_key = api_key
         self.timeout_seconds = timeout_seconds
+        self.last_request_metadata: Dict[str, Any] = {}
 
     @classmethod
     def from_environment(cls) -> "OpenAICompatibleLLMClient":
@@ -236,6 +243,11 @@ class OpenAICompatibleLLMClient(LLMClient):
         return cls(base_url=base_url, model=model, api_key=api_key, timeout_seconds=timeout_seconds)
 
     def complete_json(self, prompt: str) -> Dict[str, Any]:
+        request_started_at = datetime.now(timezone.utc).isoformat()
+        request_started_ms = time.monotonic() * 1000.0
+        first_response_at: str | None = None
+        first_response_ms: float | None = None
+        request_error: str | None = None
         payload = {
             "model": self.model,
             "messages": [
@@ -259,9 +271,30 @@ class OpenAICompatibleLLMClient(LLMClient):
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                first_response_at = datetime.now(timezone.utc).isoformat()
+                first_response_ms = time.monotonic() * 1000.0
                 body = response.read().decode("utf-8")
         except urllib.error.URLError as exc:
+            request_error = _sanitize_error(exc)
             raise RuntimeError("Real LLM request failed: {error}".format(error=exc)) from exc
+        finally:
+            request_finished_ms = time.monotonic() * 1000.0
+            self.last_request_metadata = {
+                "request_start": request_started_at,
+                "first_response_time": first_response_at,
+                "request_end": datetime.now(timezone.utc).isoformat(),
+                "total_duration_ms": round(request_finished_ms - request_started_ms, 2),
+                "time_to_first_response_ms": (
+                    round(first_response_ms - request_started_ms, 2)
+                    if first_response_ms is not None
+                    else None
+                ),
+                "model": self.model,
+                "provider": self.base_url,
+                "failed": request_error is not None,
+                "error": request_error,
+                "retry_count": 0,
+            }
 
         try:
             parsed = json.loads(body)
@@ -274,6 +307,8 @@ class OpenAICompatibleLLMClient(LLMClient):
                 raise ValueError("message content was not a string")
             action = json.loads(content)
         except Exception as exc:
+            self.last_request_metadata["failed"] = True
+            self.last_request_metadata["error"] = "invalid_response"
             raise RuntimeError("Real LLM response was not valid JSON AgentAction content.") from exc
 
         if not isinstance(action, dict):

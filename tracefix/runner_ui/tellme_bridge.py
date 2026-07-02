@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from tellme_harness import TellMeHarness
 from tellme_harness.config import DEFAULT_OPENAI_MODEL, get_llm_config
+from tracefix.pipeline_timing import PipelineTimingReport
 
 
 class TellMeBridge:
@@ -44,6 +47,8 @@ class TellMeBridge:
                 "Set OPENAI_API_KEY or TELLME_API_KEY."
             )
 
+        stage_started_at = datetime.now(timezone.utc).isoformat()
+        stage_started_ms = time.monotonic() * 1000.0
         harness = TellMeHarness(
             runs_root=self.runs_root,
             agent_backend_mode=backend_mode,
@@ -52,6 +57,8 @@ class TellMeBridge:
             execution_mode="planning_only",
         )
         answer = harness.handle_query(query, space_id=space_id, timestamp=timestamp)
+        stage_finished_at = datetime.now(timezone.utc).isoformat()
+        stage_duration_ms = time.monotonic() * 1000.0 - stage_started_ms
         answer_payload = answer.model_dump()
         llm_metadata = ((answer_payload.get("raw_outputs") or {}).get("llm_operational") or {})
         decomposition = llm_metadata.get("decomposition") if isinstance(llm_metadata, dict) else {}
@@ -62,6 +69,33 @@ class TellMeBridge:
                 "Check the API key, model, and network connection, or use Deterministic mode."
             )
         run_dir = Path(str(answer.raw_outputs.get("run_dir") or "")).resolve()
+        timing = PipelineTimingReport(
+            run_dir,
+            run_kind="tellme",
+            run_id=str(answer.query_id),
+            started_at=stage_started_at,
+            started_ms=stage_started_ms,
+        )
+        timing.stage(
+            "tellme_decomposition",
+            started_at=stage_started_at,
+            finished_at=stage_finished_at,
+            duration_ms=stage_duration_ms,
+            success=True,
+            model=selected_model if backend_mode == "llm" else None,
+            provider="openai_compatible" if backend_mode == "llm" else "deterministic",
+            retry_count=0,
+        )
+        request_metadata = decomposition.get("last_request") if isinstance(decomposition, dict) else None
+        if isinstance(request_metadata, dict):
+            timing.api_calls.append(
+                {
+                    "stage": "tellme_decomposition",
+                    **request_metadata,
+                    "observation_scope": "http_request",
+                }
+            )
+        timing.finalize()
         task_spec = answer_payload.get("tracefix_task_spec") or {}
         validation_policy = task_spec.get("validation_policy") if isinstance(task_spec, dict) else {}
         warnings = list(validation_policy.get("warnings") or []) if isinstance(validation_policy, dict) else []

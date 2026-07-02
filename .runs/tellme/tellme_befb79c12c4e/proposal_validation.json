@@ -1,0 +1,240 @@
+{
+  "errors": [],
+  "repaired": false,
+  "repairs": [],
+  "valid": true,
+  "validated_proposal": {
+    "ambiguity": null,
+    "answer_packet_requirements": {
+      "allowed_claims": [
+        "bounded_count",
+        "presence_state",
+        "timestamped_event_summary"
+      ],
+      "answer_type": "direct_answer",
+      "fallback_answer_type": "insufficient_evidence",
+      "forbidden_claims": [
+        "raw_sensor_access",
+        "face_identity",
+        "personal_identity",
+        "medical_diagnosis",
+        "unsupported_behavioral_inference"
+      ],
+      "must_include_confidence": true,
+      "must_include_evidence_refs": true,
+      "must_include_limitations": true,
+      "required_fields": [
+        "answer",
+        "confidence",
+        "evidence_refs",
+        "caveats",
+        "privacy_scope",
+        "limitations"
+      ]
+    },
+    "application_goal": {
+      "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
+      "goal_type": "occupancy_count",
+      "non_goals": [
+        "identify person",
+        "face recognition",
+        "medical diagnosis",
+        "infer cause or intent"
+      ],
+      "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
+      "user_intent": "occupancy_lookup"
+    },
+    "escalation_conditions": [
+      "insufficient_evidence",
+      "conflicting_structured_context",
+      "privacy_policy_denied"
+    ],
+    "evidence_card_requirements": {
+      "allowed_conclusion_types": [
+        "observed_state",
+        "bounded_count",
+        "presence_state"
+      ],
+      "badge_requirements": [
+        {
+          "badge_id": "card_type",
+          "label_template": "{card_type}",
+          "required": true,
+          "source": "query_analysis"
+        },
+        {
+          "badge_id": "modality",
+          "label_template": "{modalities}",
+          "required": false,
+          "source": "harness_output"
+        }
+      ],
+      "card_type": "descriptive",
+      "caveat_requirements": [
+        "Reflects structured context only; no causal interpretation."
+      ],
+      "claim_target": "observed_room_state",
+      "confidence_requirements": {
+        "confidence_kind": "sensor_confidence",
+        "explanation_required": true,
+        "label_bands": {
+          "high": [
+            0.8,
+            1.0
+          ],
+          "low": [
+            0.0,
+            0.5
+          ],
+          "moderate": [
+            0.5,
+            0.8
+          ]
+        },
+        "minimum_threshold": null,
+        "required_inputs": [
+          "sensor_confidence",
+          "evidence_count"
+        ],
+        "scoring_method": "bounded_sensor_confidence"
+      },
+      "evidence_requirements": [
+        {
+          "accepted_packet_types": [
+            "occupancy_context_packet",
+            "room_state_packet",
+            "motion_context_packet",
+            "audio_context_packet"
+          ],
+          "evidence_type": "structured_context",
+          "include_evidence_refs": true,
+          "include_modality": true,
+          "include_time_window": true,
+          "minimum_count": 1,
+          "required": true
+        }
+      ],
+      "fallback_card_type": "insufficient_evidence",
+      "forbidden_conclusion_types": [
+        "causal_effect",
+        "statistical_significance",
+        "causal_graph_claim",
+        "raw_sensor_access",
+        "face_identity",
+        "personal_identity",
+        "medical_diagnosis",
+        "unsupported_behavioral_inference",
+        "confirmed_injury",
+        "cause_or_intent_inference"
+      ],
+      "metric_requirements": [
+        {
+          "description": "The value observed in the time window (e.g. occupancy count or state).",
+          "display_label": "Observed value",
+          "metric_id": "observed_value",
+          "required": true,
+          "source": "harness_output",
+          "source_field": "value",
+          "unavailable_behavior": "show_na",
+          "value_type": "category"
+        },
+        {
+          "description": "Bounded window the observation covers.",
+          "display_label": "Time window",
+          "metric_id": "time_window",
+          "required": true,
+          "source": "harness_output",
+          "source_field": "timestamp",
+          "unavailable_behavior": "show_na",
+          "value_type": "range"
+        },
+        {
+          "description": "Sensor modalities that contributed.",
+          "display_label": "Modalities used",
+          "metric_id": "modalities_used",
+          "required": true,
+          "source": "aggregator",
+          "source_field": null,
+          "unavailable_behavior": "show_na",
+          "value_type": "category"
+        },
+        {
+          "description": "Number of supporting context packets.",
+          "display_label": "Evidence count",
+          "metric_id": "evidence_count",
+          "required": true,
+          "source": "aggregator",
+          "source_field": null,
+          "unavailable_behavior": "show_na",
+          "value_type": "integer"
+        },
+        {
+          "description": "Fraction of modalities in agreement.",
+          "display_label": "Sensor agreement",
+          "metric_id": "sensor_agreement",
+          "required": false,
+          "source": "aggregator",
+          "source_field": null,
+          "unavailable_behavior": "show_na",
+          "value_type": "percentage"
+        }
+      ],
+      "primary_question": "What did the structured context observe?",
+      "provenance_requirements": [
+        "List the harness/packet ids backing the observed value."
+      ],
+      "summary_requirements": [
+        "State the observed value and its bounded time window in one sentence."
+      ],
+      "title_template": "{primary_question}"
+    },
+    "evidence_plan": {
+      "conflicting_evidence_checks": [],
+      "minimum_sufficient_evidence": [
+        "video_findings_packet"
+      ],
+      "primary_evidence": [
+        "video_findings_packet"
+      ],
+      "supporting_evidence": [
+        "audio_context_packet"
+      ]
+    },
+    "inferred_user_goal": "Return a bounded occupancy count with confidence and evidence.",
+    "normalized_query": "determine whether the observed room occupancy matches the expected meeting attendance count. compare available occupancy evidence with expected attendance information, identify any mismatch or missing evidence, and generate a validated attendance verification report with confidence, evidence references, and limitations.",
+    "original_query": "Determine whether the observed room occupancy matches the expected meeting attendance count. Compare available occupancy evidence with expected attendance information, identify any mismatch or missing evidence, and generate a validated attendance verification report with confidence, evidence references, and limitations.",
+    "privacy_risk_notes": [
+      "Use CityOS structured context only.",
+      "Do not request raw sensor access, identity claims, unrestricted transcription, or medical diagnosis.",
+      "Do not request raw sensor access.",
+      "Do not identify a person, diagnose injury, or infer unsupported behavior."
+    ],
+    "proposed_harnesses": [
+      {
+        "expected_packet": "video_findings_packet",
+        "name": "video_context_harness",
+        "priority": "required",
+        "rationale": "Selected within the deterministic privacy and routing envelope.",
+        "role": "Summarize privacy-bounded camera-derived structured context."
+      },
+      {
+        "expected_packet": "audio_context_packet",
+        "name": "audio_context_harness",
+        "priority": "supporting",
+        "rationale": "Selected within the deterministic privacy and routing envelope.",
+        "role": "Retrieve microphone-derived speech, sound-level, or acoustic-event context."
+      }
+    ],
+    "reasoning_summary": "Deterministic template proposal generated for query tellme_befb79c12c4e.",
+    "referenced_context_apis": [],
+    "referenced_sensors": [],
+    "room_context_summary": "",
+    "task_category": "occupancy_count",
+    "uncertainty_analysis": [
+      "Mock CityOS structured context may be incomplete.",
+      "Confidence must remain bounded by available evidence."
+    ]
+  },
+  "validation_status": "accepted",
+  "warnings": []
+}

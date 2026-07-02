@@ -1,0 +1,100 @@
+{
+  "badges": [
+    {
+      "badge_id": "card_type",
+      "label": "descriptive",
+      "source": "query_analysis",
+      "tone": "info"
+    },
+    {
+      "badge_id": "modality",
+      "label": "{modalities}",
+      "source": "harness_output",
+      "tone": "info"
+    }
+  ],
+  "card_id": "card_task_3b78be55fb46",
+  "card_type": "descriptive",
+  "conclusion": "Pending harness execution.",
+  "conclusion_class": "observed_room_state",
+  "confidence": {
+    "availability": "dry_run_placeholder",
+    "confidence_kind": "sensor_confidence",
+    "explanation": "Populated only after harness execution.",
+    "inputs": [
+      "sensor_confidence",
+      "evidence_count"
+    ],
+    "label": null,
+    "score": null
+  },
+  "evidence_refs": [],
+  "evidence_summary": [
+    "State the observed value and its bounded time window in one sentence."
+  ],
+  "limitations": [
+    "Reflects structured context only; no causal interpretation."
+  ],
+  "metrics": [
+    {
+      "availability": "dry_run_placeholder",
+      "display_value": "\u2014",
+      "explanation": "The value observed in the time window (e.g. occupancy count or state).",
+      "label": "Observed value",
+      "metric_id": "observed_value",
+      "source": "harness_output",
+      "source_packet_ids": [],
+      "value": null
+    },
+    {
+      "availability": "dry_run_placeholder",
+      "display_value": "\u2014",
+      "explanation": "Bounded window the observation covers.",
+      "label": "Time window",
+      "metric_id": "time_window",
+      "source": "harness_output",
+      "source_packet_ids": [],
+      "value": null
+    },
+    {
+      "availability": "dry_run_placeholder",
+      "display_value": "\u2014",
+      "explanation": "Sensor modalities that contributed.",
+      "label": "Modalities used",
+      "metric_id": "modalities_used",
+      "source": "aggregator",
+      "source_packet_ids": [],
+      "value": null
+    },
+    {
+      "availability": "dry_run_placeholder",
+      "display_value": "\u2014",
+      "explanation": "Number of supporting context packets.",
+      "label": "Evidence count",
+      "metric_id": "evidence_count",
+      "source": "aggregator",
+      "source_packet_ids": [],
+      "value": null
+    },
+    {
+      "availability": "dry_run_placeholder",
+      "display_value": "\u2014",
+      "explanation": "Fraction of modalities in agreement.",
+      "label": "Sensor agreement",
+      "metric_id": "sensor_agreement",
+      "source": "aggregator",
+      "source_packet_ids": [],
+      "value": null
+    }
+  ],
+  "provenance": {
+    "mode": "dry_run",
+    "provenance_requirements": [
+      "List the harness/packet ids backing the observed value."
+    ]
+  },
+  "subtitle": "Dry-run preview \u2014 values populated only after harness execution.",
+  "task_id": "task_3b78be55fb46",
+  "title": "What did the structured context observe?",
+  "validation_status": "valid"
+}

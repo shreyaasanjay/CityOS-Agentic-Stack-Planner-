@@ -78,13 +78,24 @@ def decide_route(query: TellMeQuery, analysis: QueryAnalysis) -> RouteDecision:
     intent = _route_intent(analysis.intent)
 
     if score.hard_gate_tracefix or score.score >= 3:
+        trigger_terms = getattr(analysis, "trigger_terms_found", [])
+        explicit_agents = getattr(analysis, "requires_explicit_multi_agent", False)
+        if explicit_agents and trigger_terms:
+            rationale = (
+                f"Explicit multi-agent coordination detected "
+                f"(triggers: {', '.join(trigger_terms[:4])}). Requires TraceFix."
+            )
+        else:
+            rationale = "The query requires multi-step or multi-modal reasoning beyond one mock CityOS lookup."
         return RouteDecision(
             route="multi_agent",
             intent=intent,
-            rationale="The query requires multi-step or multi-modal reasoning beyond one mock CityOS lookup.",
+            rationale=rationale,
             time_window=time_window,
             requires_tracefix=True,
             caveats=["V0 only emits a TraceFixTaskSpec stub for complex queries."],
+            trigger_terms_found=trigger_terms,
+            explicit_agent_names_detected=explicit_agents,
         )
 
     selected_agent = _select_single_agent(analysis)
@@ -128,7 +139,8 @@ def infer_time_window(user_query: str, timestamp: Optional[str] = None) -> Optio
 def _is_hard_gate_tracefix(analysis: QueryAnalysis) -> bool:
     lowered = analysis.user_query.lower()
     return (
-        analysis.requires_identity_continuity
+        analysis.requires_explicit_multi_agent
+        or analysis.requires_identity_continuity
         or analysis.requires_diagnostic_reasoning
         or analysis.requires_concordfs_trace_inspection
         or "false positive" in lowered
@@ -143,6 +155,8 @@ def _is_hard_gate_tracefix(analysis: QueryAnalysis) -> bool:
 
 
 def _is_direct_lookup(analysis: QueryAnalysis) -> bool:
+    if analysis.requires_explicit_multi_agent:
+        return False
     return analysis.intent in (
         "historical_occupancy_count",
         "live_occupancy_count",
