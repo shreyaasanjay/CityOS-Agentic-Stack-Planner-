@@ -1,0 +1,93 @@
+{
+  "agents": [
+    {
+      "name": "answer_synthesis_harness",
+      "role": "Synthesize a final answer packet with caveats and evidence references."
+    },
+    {
+      "name": "occupancy_context_harness",
+      "role": "Retrieve occupancy-oriented structured context."
+    }
+  ],
+  "channels": [
+    {
+      "from": "occupancy_context_harness",
+      "label": "occupancy_findings",
+      "to": "answer_synthesis_harness"
+    }
+  ],
+  "notes": [
+    "Dry-run bundle only; do not invoke real TraceFix-main.",
+    "This bundle is an inspectable artifact representing future integration inputs.",
+    "Use only CityOS-approved structured context.",
+    "Do not use or request raw sensor data.",
+    "All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts."
+  ],
+  "output_contract": {
+    "allowed_claims": [
+      "bounded_count"
+    ],
+    "answer_type": "direct_answer",
+    "fallback_answer_type": "insufficient_evidence",
+    "field_types": {
+      "answer": "string",
+      "caveats": "array",
+      "confidence": "number",
+      "evidence_refs": "array",
+      "limitations": "array",
+      "privacy_scope": "string"
+    },
+    "forbidden_claims": [
+      "raw_sensor_access",
+      "face_identity",
+      "personal_identity",
+      "medical_diagnosis",
+      "unsupported_behavioral_inference"
+    ],
+    "must_include_confidence": true,
+    "must_include_evidence_refs": true,
+    "must_include_limitations": true,
+    "required_fields": [
+      "answer",
+      "confidence",
+      "evidence_refs",
+      "caveats",
+      "privacy_scope",
+      "limitations"
+    ]
+  },
+  "query_id": "tellme_8c95bbea5bb2",
+  "resources": [
+    {
+      "modalities": [
+        "video"
+      ],
+      "name": "cityos_structured_context",
+      "space_id": "smart_room_1",
+      "time_windows": [
+        {
+          "end": null,
+          "label": "latest",
+          "start": null
+        }
+      ],
+      "type": "structured_context_bundle"
+    },
+    {
+      "name": "tellme_query_logs",
+      "query_id": "tellme_8c95bbea5bb2",
+      "type": "local_query_run_directory"
+    }
+  ],
+  "task_description": "# TraceFix Dry-Run Task\n\n## User Query\nHow many people are in the room right now?\n\n## Scope\n- space_id: smart_room_1\n- privacy boundary: CityOS structured context only\n- raw sensor policy: no raw sensor data may be used; inputs are CityOS structured context, not raw sensor data\n\n## Time Windows\n- latest: start=n/a, end=n/a\n\n## Required Modalities\n- video\n\n## Candidate Harnesses\n- answer_synthesis_harness\n- occupancy_context_harness\n\n## Application Goal\n- failure_condition: Return insufficient_evidence when the bounded evidence is not enough.\n- goal_type: occupancy_count\n- non_goals: ['identify person', 'face recognition', 'medical diagnosis', 'infer cause or intent']\n- success_condition: Return a privacy-bounded answer with confidence and evidence references.\n- user_intent: live_occupancy_count\n\n## Evidence Plan\n- conflicting_evidence_checks: []\n- minimum_sufficient_evidence: ['occupancy_context_harness_packet']\n- primary_evidence: ['occupancy_context_harness_packet']\n- supporting_evidence: []\n\n## Answer Packet Requirements\n- allowed_claims: ['bounded_count']\n- answer_type: direct_answer\n- fallback_answer_type: insufficient_evidence\n- forbidden_claims: ['raw_sensor_access', 'face_identity', 'personal_identity', 'medical_diagnosis', 'unsupported_behavioral_inference']\n- must_include_confidence: True\n- must_include_evidence_refs: True\n- must_include_limitations: True\n- required_fields: ['answer', 'confidence', 'evidence_refs', 'caveats', 'privacy_scope', 'limitations']\n\n## Allowed Claims\n- bounded_count\n\n## Forbidden Claims\n- raw_sensor_access, face_identity, personal_identity, medical_diagnosis, unsupported_behavioral_inference\n\n## Expected Output Contract\n- required_fields: answer, confidence, evidence_refs, caveats, privacy_scope, limitations\n- field_types:\n  - answer: string\n  - caveats: array\n  - confidence: number\n  - evidence_refs: array\n  - limitations: array\n  - privacy_scope: string\n\n## Privacy Constraints\n- Use only CityOS-approved structured context.\n- Do not use or request raw sensor data.\n- All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts.",
+  "task_id": "task_8c95bbea5bb2",
+  "tool_manifest": {
+    "answer_synthesis_harness": [
+      "synthesize_answer_packet"
+    ],
+    "occupancy_context_harness": [
+      "get_occupancy_context"
+    ]
+  },
+  "user_query": "How many people are in the room right now?"
+}

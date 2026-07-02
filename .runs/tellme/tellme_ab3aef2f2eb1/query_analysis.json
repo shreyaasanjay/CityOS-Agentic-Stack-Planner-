@@ -1,0 +1,31 @@
+{
+  "answer_type": "count",
+  "confidence": 0.8,
+  "context_requirements": [
+    "occupancy",
+    "cross_modal_context"
+  ],
+  "estimated_tool_calls": 4,
+  "intent": "occupancy_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_ab3aef2f2eb1",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_explicit_multi_agent": true,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": true,
+  "requires_multi_timestamp_reasoning": false,
+  "requires_policy_review": false,
+  "risk_flags": [
+    "modality_disagreement"
+  ],
+  "space_scope": "single_space",
+  "time_scope": "unspecified",
+  "trigger_terms_found": [
+    "meeting attendance",
+    "attendance_term: attendance",
+    "verification_term: compare",
+    "verification_term: matches"
+  ],
+  "user_query": "Determine whether the observed room occupancy matches the expected meeting attendance count. Compare available occupancy evidence with expected attendance information, identify any mismatch or missing evidence, and generate a validated attendance verification report with confidence, evidence references, and limitations."
+}

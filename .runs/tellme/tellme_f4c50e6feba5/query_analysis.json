@@ -1,0 +1,29 @@
+{
+  "answer_type": "summary",
+  "confidence": 0.82,
+  "context_requirements": [
+    "occupancy"
+  ],
+  "estimated_tool_calls": 3,
+  "intent": "occupancy_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_f4c50e6feba5",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_explicit_multi_agent": true,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": false,
+  "requires_multi_timestamp_reasoning": true,
+  "requires_policy_review": false,
+  "risk_flags": [],
+  "space_scope": "single_space",
+  "time_scope": "unspecified",
+  "trigger_terms_found": [
+    "attendance record",
+    "attendance records",
+    "attendance_term: attendance",
+    "verification_term: discrepancies",
+    "verification_term: reconcile"
+  ],
+  "user_query": "Determine whether attendance can be verified for an active meeting. Independently evaluate room occupancy observations, expected attendance records, and badge check-in status. Reconcile discrepancies between the evidence sources and generate a final attendance decision with confidence and evidence references."
+}

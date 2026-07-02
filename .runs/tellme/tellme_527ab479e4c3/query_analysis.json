@@ -1,0 +1,21 @@
+{
+  "answer_type": "boolean",
+  "confidence": 0.92,
+  "context_requirements": [
+    "occupancy"
+  ],
+  "estimated_tool_calls": 1,
+  "intent": "occupancy_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_527ab479e4c3",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": false,
+  "requires_multi_timestamp_reasoning": false,
+  "requires_policy_review": false,
+  "risk_flags": [],
+  "space_scope": "single_space",
+  "time_scope": "unspecified",
+  "user_query": "What is the maximum number of people in the room at a given time frame"
+}

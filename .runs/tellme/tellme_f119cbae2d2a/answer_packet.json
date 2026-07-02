@@ -1,0 +1,585 @@
+{
+  "agent_plan": {},
+  "answer": "This query requires a future TraceFix multi-agent workflow and cannot be fully answered in V0.",
+  "basis": [],
+  "caveats": [
+    "Real TraceFix is not integrated yet in V0; TraceFix-main is not invoked.",
+    "The query has been converted into a TraceFixTaskSpec stub for future integration.",
+    "Even simple queries now stop at intent decomposition plus TraceFix dry-run packaging."
+  ],
+  "confidence": 0.0,
+  "error_message": null,
+  "evidence_refs": [],
+  "privacy_scope": "cityos_structured_context_only",
+  "query_id": "tellme_f119cbae2d2a",
+  "raw_outputs": {
+    "agent_backend_mode": "llm",
+    "evidence_card_preview": {
+      "card_type": "insufficient_evidence",
+      "metric_count": 3,
+      "validation_status": "valid"
+    },
+    "llm_operational": {
+      "agent_backend_mode": "llm",
+      "decomposition": {
+        "fallback_calls": 0,
+        "fallback_reason": null,
+        "last_latency_ms": 18118.3,
+        "last_request": {
+          "error": null,
+          "failed": false,
+          "first_response_time": "2026-07-01T18:24:37.812591+00:00",
+          "model": "gpt-4.1-mini",
+          "provider": "https://api.openai.com/v1",
+          "request_end": "2026-07-01T18:24:37.832273+00:00",
+          "request_start": "2026-07-01T18:24:19.714162+00:00",
+          "retry_count": 0,
+          "time_to_first_response_ms": 18098.44,
+          "total_duration_ms": 18118.1
+        },
+        "last_used": "primary",
+        "model": "gpt-4.1-mini",
+        "primary_calls": 1
+      },
+      "model": "gpt-4.1-mini",
+      "openai_key_configured": true,
+      "real_llm_requested": true
+    },
+    "logging_fallback_used": false,
+    "run_dir": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\.runs\\tellme\\tellme_f119cbae2d2a",
+    "tracefix_bundle_summary": {
+      "agent_names": [
+        "answer_synthesis_harness"
+      ],
+      "channel_count": 0,
+      "resource_count": 2,
+      "task_id": "task_f119cbae2d2a"
+    },
+    "tracefix_task_spec": {
+      "allowed_claims": [
+        "insufficient_evidence"
+      ],
+      "answer_packet_requirements": {
+        "allowed_claims": [
+          "insufficient_evidence"
+        ],
+        "answer_type": "insufficient_evidence",
+        "fallback_answer_type": "insufficient_evidence",
+        "forbidden_claims": [
+          "raw_sensor_access",
+          "face_identity",
+          "personal_identity",
+          "medical_diagnosis",
+          "unsupported_behavioral_inference",
+          "guessing"
+        ],
+        "must_include_confidence": true,
+        "must_include_evidence_refs": true,
+        "must_include_limitations": true,
+        "required_fields": [
+          "answer",
+          "confidence",
+          "evidence_refs",
+          "caveats",
+          "privacy_scope",
+          "limitations"
+        ]
+      },
+      "application_goal": {
+        "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
+        "goal_type": "unsupported",
+        "non_goals": [
+          "identify person",
+          "face recognition",
+          "medical diagnosis",
+          "infer cause or intent"
+        ],
+        "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
+        "user_intent": "general_lookup"
+      },
+      "candidate_harnesses": [
+        "answer_synthesis_harness"
+      ],
+      "caveats": [
+        "This is a stub only; TraceFix-main is not invoked in V0.",
+        "Real TraceFix multi-agent execution is not integrated yet.",
+        "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
+        "Mock CityOS structured context may be incomplete.",
+        "Confidence must remain bounded by available evidence.",
+        "Use CityOS structured context only.",
+        "Do not request raw sensor access, identity claims, unrestricted transcription, or medical diagnosis.",
+        "Do not request raw sensor access.",
+        "Do not identify a person, diagnose injury, or infer unsupported behavior."
+      ],
+      "escalation_conditions": [
+        "insufficient_evidence",
+        "conflicting_structured_context",
+        "privacy_policy_denied"
+      ],
+      "evidence_card_contract": {
+        "allowed_conclusion_types": [
+          "insufficient_evidence"
+        ],
+        "badge_requirements": [
+          {
+            "badge_id": "card_type",
+            "label_template": "{card_type}",
+            "required": true,
+            "source": "query_analysis"
+          }
+        ],
+        "card_type": "insufficient_evidence",
+        "caveat_requirements": [
+          "A stronger answer was not produced because the bounded evidence was insufficient."
+        ],
+        "claim_target": "insufficient_evidence",
+        "confidence_requirements": {
+          "confidence_kind": "composite_confidence",
+          "explanation_required": true,
+          "label_bands": {
+            "high": [
+              0.8,
+              1.0
+            ],
+            "low": [
+              0.0,
+              0.5
+            ],
+            "moderate": [
+              0.5,
+              0.8
+            ]
+          },
+          "minimum_threshold": null,
+          "required_inputs": [],
+          "scoring_method": "none"
+        },
+        "evidence_requirements": [],
+        "fallback_card_type": "insufficient_evidence",
+        "forbidden_conclusion_types": [
+          "personal_identity",
+          "face_identity",
+          "medical_diagnosis",
+          "confirmed_injury",
+          "cause_or_intent_inference",
+          "unsupported_behavioral_inference",
+          "raw_sensor_access",
+          "fabricated_confidence",
+          "guessing"
+        ],
+        "metric_requirements": [
+          {
+            "description": "What the system could establish, if anything.",
+            "display_label": "What was determined",
+            "metric_id": "what_determined",
+            "required": true,
+            "source": "aggregator",
+            "source_field": null,
+            "unavailable_behavior": "show_na",
+            "value_type": "text"
+          },
+          {
+            "description": "What evidence was missing or insufficient.",
+            "display_label": "Missing evidence",
+            "metric_id": "missing_evidence",
+            "required": true,
+            "source": "aggregator",
+            "source_field": null,
+            "unavailable_behavior": "show_na",
+            "value_type": "text"
+          },
+          {
+            "description": "Which harness or modality failed, if safe to disclose.",
+            "display_label": "Failed harness/modality",
+            "metric_id": "failed_modality",
+            "required": false,
+            "source": "tracefix_verification",
+            "source_field": null,
+            "unavailable_behavior": "omit",
+            "value_type": "text"
+          }
+        ],
+        "primary_question": "Could the system answer this from the available evidence?",
+        "provenance_requirements": [
+          "List which expected packets were missing or empty."
+        ],
+        "summary_requirements": [
+          "State what could and could not be determined; do not fabricate confidence."
+        ],
+        "title_template": "Insufficient evidence to answer confidently"
+      },
+      "evidence_plan": {
+        "conflicting_evidence_checks": [],
+        "minimum_sufficient_evidence": [
+          "video_findings_packet"
+        ],
+        "primary_evidence": [
+          "video_findings_packet"
+        ],
+        "supporting_evidence": []
+      },
+      "executable": false,
+      "forbidden_claims": [
+        "raw_sensor_access",
+        "face_identity",
+        "personal_identity",
+        "medical_diagnosis",
+        "unsupported_behavioral_inference",
+        "guessing"
+      ],
+      "output_contract": {
+        "allowed_claims": [
+          "insufficient_evidence"
+        ],
+        "answer_type": "insufficient_evidence",
+        "fallback_answer_type": "insufficient_evidence",
+        "field_types": {
+          "answer": "string",
+          "caveats": "array",
+          "confidence": "number",
+          "evidence_refs": "array",
+          "limitations": "array",
+          "privacy_scope": "string"
+        },
+        "forbidden_claims": [
+          "raw_sensor_access",
+          "face_identity",
+          "personal_identity",
+          "medical_diagnosis",
+          "unsupported_behavioral_inference",
+          "guessing"
+        ],
+        "must_include_confidence": true,
+        "must_include_evidence_refs": true,
+        "must_include_limitations": true,
+        "required_fields": [
+          "answer",
+          "confidence",
+          "evidence_refs",
+          "caveats",
+          "privacy_scope",
+          "limitations"
+        ]
+      },
+      "privacy_policy": {
+        "forbidden_inferences": [
+          "raw_sensor_access",
+          "face_identity",
+          "personal_identity",
+          "speaker_identification",
+          "unrestricted_transcription",
+          "medical_diagnosis",
+          "confirmed_injury",
+          "emotional_state_inference",
+          "unsupported_behavioral_inference"
+        ],
+        "identity_inference_allowed": false,
+        "policy_id": "smart_room_1_camera_audio_default",
+        "privacy_scope": "cityos_structured_context_only",
+        "raw_sensor_access_allowed": false
+      },
+      "query_id": "tellme_f119cbae2d2a",
+      "reason": "general_lookup",
+      "reasoning_summary": "Deterministic template proposal generated for query tellme_f119cbae2d2a.",
+      "required_modalities": [
+        "context"
+      ],
+      "route": "multi_agent",
+      "space_id": "smart_room_1",
+      "status": "stub",
+      "target_tracefix_path": "TraceFix-main/",
+      "task_id": "task_f119cbae2d2a",
+      "time_windows": [],
+      "user_query": "Determine whether a conference meeting may begin by confirming that the number of attendees physically present in the room matches the official attendance roster and that all required participants have checked in. Produce a validated meeting-readiness decision with supporting evidence.",
+      "validation_policy": {
+        "bounded_time_windows_required": true,
+        "llm_proposal_untrusted": true,
+        "must_preserve_forbidden_claims": true,
+        "repairs": [],
+        "schema_validation_required": true,
+        "validation_status": "accepted",
+        "warnings": [
+          "Proposal was marked unsupported and will compile to an insufficient-evidence TaskSpec."
+        ]
+      }
+    }
+  },
+  "route_decision": {
+    "caveats": [
+      "V0 only emits a TraceFixTaskSpec stub for complex queries."
+    ],
+    "explicit_agent_names_detected": true,
+    "intent": "general",
+    "rationale": "Explicit multi-agent coordination detected (triggers: attendance roster, meeting may begin, conference meeting may begin, attendance_term: attendance). Requires TraceFix.",
+    "required_tools": [],
+    "requires_tracefix": true,
+    "route": "multi_agent",
+    "selected_agent": null,
+    "selected_tool": null,
+    "time_window": null,
+    "trigger_terms_found": [
+      "attendance roster",
+      "meeting may begin",
+      "conference meeting may begin",
+      "attendance_term: attendance",
+      "attendance_term: attendees",
+      "attendance_term: roster",
+      "verification_term: confirming",
+      "verification_term: matches",
+      "meeting_readiness: meeting may begin",
+      "meeting_auth_term: attendance",
+      "meeting_auth_term: attendees",
+      "meeting_auth_term: roster"
+    ]
+  },
+  "selected_agent": null,
+  "status": "needs_tracefix",
+  "tracefix_task_spec": {
+    "allowed_claims": [
+      "insufficient_evidence"
+    ],
+    "answer_packet_requirements": {
+      "allowed_claims": [
+        "insufficient_evidence"
+      ],
+      "answer_type": "insufficient_evidence",
+      "fallback_answer_type": "insufficient_evidence",
+      "forbidden_claims": [
+        "raw_sensor_access",
+        "face_identity",
+        "personal_identity",
+        "medical_diagnosis",
+        "unsupported_behavioral_inference",
+        "guessing"
+      ],
+      "must_include_confidence": true,
+      "must_include_evidence_refs": true,
+      "must_include_limitations": true,
+      "required_fields": [
+        "answer",
+        "confidence",
+        "evidence_refs",
+        "caveats",
+        "privacy_scope",
+        "limitations"
+      ]
+    },
+    "application_goal": {
+      "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
+      "goal_type": "unsupported",
+      "non_goals": [
+        "identify person",
+        "face recognition",
+        "medical diagnosis",
+        "infer cause or intent"
+      ],
+      "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
+      "user_intent": "general_lookup"
+    },
+    "candidate_harnesses": [
+      "answer_synthesis_harness"
+    ],
+    "caveats": [
+      "This is a stub only; TraceFix-main is not invoked in V0.",
+      "Real TraceFix multi-agent execution is not integrated yet.",
+      "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
+      "Mock CityOS structured context may be incomplete.",
+      "Confidence must remain bounded by available evidence.",
+      "Use CityOS structured context only.",
+      "Do not request raw sensor access, identity claims, unrestricted transcription, or medical diagnosis.",
+      "Do not request raw sensor access.",
+      "Do not identify a person, diagnose injury, or infer unsupported behavior."
+    ],
+    "escalation_conditions": [
+      "insufficient_evidence",
+      "conflicting_structured_context",
+      "privacy_policy_denied"
+    ],
+    "evidence_card_contract": {
+      "allowed_conclusion_types": [
+        "insufficient_evidence"
+      ],
+      "badge_requirements": [
+        {
+          "badge_id": "card_type",
+          "label_template": "{card_type}",
+          "required": true,
+          "source": "query_analysis"
+        }
+      ],
+      "card_type": "insufficient_evidence",
+      "caveat_requirements": [
+        "A stronger answer was not produced because the bounded evidence was insufficient."
+      ],
+      "claim_target": "insufficient_evidence",
+      "confidence_requirements": {
+        "confidence_kind": "composite_confidence",
+        "explanation_required": true,
+        "label_bands": {
+          "high": [
+            0.8,
+            1.0
+          ],
+          "low": [
+            0.0,
+            0.5
+          ],
+          "moderate": [
+            0.5,
+            0.8
+          ]
+        },
+        "minimum_threshold": null,
+        "required_inputs": [],
+        "scoring_method": "none"
+      },
+      "evidence_requirements": [],
+      "fallback_card_type": "insufficient_evidence",
+      "forbidden_conclusion_types": [
+        "personal_identity",
+        "face_identity",
+        "medical_diagnosis",
+        "confirmed_injury",
+        "cause_or_intent_inference",
+        "unsupported_behavioral_inference",
+        "raw_sensor_access",
+        "fabricated_confidence",
+        "guessing"
+      ],
+      "metric_requirements": [
+        {
+          "description": "What the system could establish, if anything.",
+          "display_label": "What was determined",
+          "metric_id": "what_determined",
+          "required": true,
+          "source": "aggregator",
+          "source_field": null,
+          "unavailable_behavior": "show_na",
+          "value_type": "text"
+        },
+        {
+          "description": "What evidence was missing or insufficient.",
+          "display_label": "Missing evidence",
+          "metric_id": "missing_evidence",
+          "required": true,
+          "source": "aggregator",
+          "source_field": null,
+          "unavailable_behavior": "show_na",
+          "value_type": "text"
+        },
+        {
+          "description": "Which harness or modality failed, if safe to disclose.",
+          "display_label": "Failed harness/modality",
+          "metric_id": "failed_modality",
+          "required": false,
+          "source": "tracefix_verification",
+          "source_field": null,
+          "unavailable_behavior": "omit",
+          "value_type": "text"
+        }
+      ],
+      "primary_question": "Could the system answer this from the available evidence?",
+      "provenance_requirements": [
+        "List which expected packets were missing or empty."
+      ],
+      "summary_requirements": [
+        "State what could and could not be determined; do not fabricate confidence."
+      ],
+      "title_template": "Insufficient evidence to answer confidently"
+    },
+    "evidence_plan": {
+      "conflicting_evidence_checks": [],
+      "minimum_sufficient_evidence": [
+        "video_findings_packet"
+      ],
+      "primary_evidence": [
+        "video_findings_packet"
+      ],
+      "supporting_evidence": []
+    },
+    "executable": false,
+    "forbidden_claims": [
+      "raw_sensor_access",
+      "face_identity",
+      "personal_identity",
+      "medical_diagnosis",
+      "unsupported_behavioral_inference",
+      "guessing"
+    ],
+    "output_contract": {
+      "allowed_claims": [
+        "insufficient_evidence"
+      ],
+      "answer_type": "insufficient_evidence",
+      "fallback_answer_type": "insufficient_evidence",
+      "field_types": {
+        "answer": "string",
+        "caveats": "array",
+        "confidence": "number",
+        "evidence_refs": "array",
+        "limitations": "array",
+        "privacy_scope": "string"
+      },
+      "forbidden_claims": [
+        "raw_sensor_access",
+        "face_identity",
+        "personal_identity",
+        "medical_diagnosis",
+        "unsupported_behavioral_inference",
+        "guessing"
+      ],
+      "must_include_confidence": true,
+      "must_include_evidence_refs": true,
+      "must_include_limitations": true,
+      "required_fields": [
+        "answer",
+        "confidence",
+        "evidence_refs",
+        "caveats",
+        "privacy_scope",
+        "limitations"
+      ]
+    },
+    "privacy_policy": {
+      "forbidden_inferences": [
+        "raw_sensor_access",
+        "face_identity",
+        "personal_identity",
+        "speaker_identification",
+        "unrestricted_transcription",
+        "medical_diagnosis",
+        "confirmed_injury",
+        "emotional_state_inference",
+        "unsupported_behavioral_inference"
+      ],
+      "identity_inference_allowed": false,
+      "policy_id": "smart_room_1_camera_audio_default",
+      "privacy_scope": "cityos_structured_context_only",
+      "raw_sensor_access_allowed": false
+    },
+    "query_id": "tellme_f119cbae2d2a",
+    "reason": "general_lookup",
+    "reasoning_summary": "Deterministic template proposal generated for query tellme_f119cbae2d2a.",
+    "required_modalities": [
+      "context"
+    ],
+    "route": "multi_agent",
+    "space_id": "smart_room_1",
+    "status": "stub",
+    "target_tracefix_path": "TraceFix-main/",
+    "task_id": "task_f119cbae2d2a",
+    "time_windows": [],
+    "user_query": "Determine whether a conference meeting may begin by confirming that the number of attendees physically present in the room matches the official attendance roster and that all required participants have checked in. Produce a validated meeting-readiness decision with supporting evidence.",
+    "validation_policy": {
+      "bounded_time_windows_required": true,
+      "llm_proposal_untrusted": true,
+      "must_preserve_forbidden_claims": true,
+      "repairs": [],
+      "schema_validation_required": true,
+      "validation_status": "accepted",
+      "warnings": [
+        "Proposal was marked unsupported and will compile to an insufficient-evidence TaskSpec."
+      ]
+    }
+  }
+}

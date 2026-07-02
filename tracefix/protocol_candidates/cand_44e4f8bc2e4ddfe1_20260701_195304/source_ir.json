@@ -1,0 +1,61 @@
+{
+  "agents": [
+    {
+      "id": "occupancy_agent"
+    },
+    {
+      "id": "attendance_records_agent"
+    },
+    {
+      "id": "badge_check_in_agent"
+    },
+    {
+      "id": "calendar_updates_agent"
+    },
+    {
+      "id": "decision_reconciliation"
+    }
+  ],
+  "resources": [],
+  "channels": [
+    {
+      "id": "occupancy_agent_to_decision_reconciliation",
+      "from": "occupancy_agent",
+      "to": "decision_reconciliation",
+      "labels": [
+        "occupancy_evidence"
+      ]
+    },
+    {
+      "id": "attendance_records_agent_to_decision_reconciliation",
+      "from": "attendance_records_agent",
+      "to": "decision_reconciliation",
+      "labels": [
+        "attendance_records_evidence"
+      ]
+    },
+    {
+      "id": "badge_check_in_agent_to_decision_reconciliation",
+      "from": "badge_check_in_agent",
+      "to": "decision_reconciliation",
+      "labels": [
+        "badge_check_in_evidence"
+      ]
+    },
+    {
+      "id": "calendar_updates_agent_to_decision_reconciliation",
+      "from": "calendar_updates_agent",
+      "to": "decision_reconciliation",
+      "labels": [
+        "calendar_updates_evidence"
+      ]
+    }
+  ],
+  "state_tasks": {
+    "occupancy_agent_start": "Evaluate observed room occupancy independently.",
+    "attendance_records_agent_start": "Evaluate expected attendance records independently.",
+    "badge_check_in_agent_start": "Evaluate badge check-in status independently.",
+    "calendar_updates_agent_start": "Evaluate calendar participation updates independently.",
+    "decision_reconciliation_reconcile": "Reconcile all evidence, identify unresolved issues, and produce the final decision."
+  }
+}

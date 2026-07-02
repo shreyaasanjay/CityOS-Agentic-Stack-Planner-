@@ -1,0 +1,441 @@
+{
+  "allowed_claims": [
+    "insufficient_evidence"
+  ],
+  "ambiguity": {
+    "ambiguity_type": null,
+    "clarification_required": false,
+    "clarifying_question": null,
+    "is_ambiguous": false,
+    "reasons": []
+  },
+  "answer_packet_requirements": {
+    "allowed_claims": [
+      "insufficient_evidence"
+    ],
+    "answer_type": "insufficient_evidence",
+    "fallback_answer_type": "insufficient_evidence",
+    "forbidden_claims": [
+      "raw_sensor_access",
+      "face_identity",
+      "personal_identity",
+      "medical_diagnosis",
+      "unsupported_behavioral_inference",
+      "guessing"
+    ],
+    "must_include_confidence": true,
+    "must_include_evidence_refs": true,
+    "must_include_limitations": true,
+    "required_fields": [
+      "answer",
+      "confidence",
+      "evidence_refs",
+      "caveats",
+      "privacy_scope",
+      "limitations"
+    ]
+  },
+  "application_goal": {
+    "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
+    "goal_type": "unsupported",
+    "non_goals": [
+      "identify person",
+      "face recognition",
+      "medical diagnosis",
+      "infer cause or intent"
+    ],
+    "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
+    "user_intent": "general_lookup"
+  },
+  "brief_id": "brief_task_f2534bd733aa",
+  "candidate_harnesses": [
+    "answer_synthesis_harness"
+  ],
+  "caveats": [
+    "This is a stub only; TraceFix-main is not invoked in V0.",
+    "Real TraceFix multi-agent execution is not integrated yet.",
+    "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
+    "Mock CityOS structured context may be incomplete.",
+    "Confidence must remain bounded by available evidence.",
+    "Use CityOS structured context only.",
+    "Do not request raw sensor access, identity claims, unrestricted transcription, or medical diagnosis.",
+    "Do not request raw sensor access.",
+    "Do not identify a person, diagnose injury, or infer unsupported behavior."
+  ],
+  "escalation_conditions": [
+    "insufficient_evidence",
+    "conflicting_structured_context",
+    "privacy_policy_denied"
+  ],
+  "evidence_card_requirements": {
+    "allowed_conclusion_types": [
+      "insufficient_evidence"
+    ],
+    "badge_requirements": [
+      {
+        "badge_id": "card_type",
+        "label_template": "{card_type}",
+        "required": true,
+        "source": "query_analysis"
+      }
+    ],
+    "card_type": "insufficient_evidence",
+    "caveat_requirements": [
+      "A stronger answer was not produced because the bounded evidence was insufficient."
+    ],
+    "claim_target": "insufficient_evidence",
+    "confidence_requirements": {
+      "confidence_kind": "composite_confidence",
+      "explanation_required": true,
+      "label_bands": {
+        "high": [
+          0.8,
+          1.0
+        ],
+        "low": [
+          0.0,
+          0.5
+        ],
+        "moderate": [
+          0.5,
+          0.8
+        ]
+      },
+      "minimum_threshold": null,
+      "required_inputs": [],
+      "scoring_method": "none"
+    },
+    "evidence_requirements": [],
+    "fallback_card_type": "insufficient_evidence",
+    "forbidden_conclusion_types": [
+      "personal_identity",
+      "face_identity",
+      "medical_diagnosis",
+      "confirmed_injury",
+      "cause_or_intent_inference",
+      "unsupported_behavioral_inference",
+      "raw_sensor_access",
+      "fabricated_confidence",
+      "guessing"
+    ],
+    "metric_requirements": [
+      {
+        "description": "What the system could establish, if anything.",
+        "display_label": "What was determined",
+        "metric_id": "what_determined",
+        "required": true,
+        "source": "aggregator",
+        "source_field": null,
+        "unavailable_behavior": "show_na",
+        "value_type": "text"
+      },
+      {
+        "description": "What evidence was missing or insufficient.",
+        "display_label": "Missing evidence",
+        "metric_id": "missing_evidence",
+        "required": true,
+        "source": "aggregator",
+        "source_field": null,
+        "unavailable_behavior": "show_na",
+        "value_type": "text"
+      },
+      {
+        "description": "Which harness or modality failed, if safe to disclose.",
+        "display_label": "Failed harness/modality",
+        "metric_id": "failed_modality",
+        "required": false,
+        "source": "tracefix_verification",
+        "source_field": null,
+        "unavailable_behavior": "omit",
+        "value_type": "text"
+      }
+    ],
+    "primary_question": "Could the system answer this from the available evidence?",
+    "provenance_requirements": [
+      "List which expected packets were missing or empty."
+    ],
+    "summary_requirements": [
+      "State what could and could not be determined; do not fabricate confidence."
+    ],
+    "title_template": "Insufficient evidence to answer confidently"
+  },
+  "evidence_plan": {
+    "conflicting_evidence_checks": [],
+    "minimum_sufficient_evidence": [
+      "video_findings_packet"
+    ],
+    "primary_evidence": [
+      "video_findings_packet"
+    ],
+    "supporting_evidence": []
+  },
+  "executable": false,
+  "forbidden_claims": [
+    "raw_sensor_access",
+    "face_identity",
+    "personal_identity",
+    "medical_diagnosis",
+    "unsupported_behavioral_inference",
+    "guessing"
+  ],
+  "normalized_query": "determine whether a conference meeting may begin by confirming that the number of attendees physically present in the room matches the official attendance roster and that all required participants have checked in. produce a validated meeting-readiness decision with supporting evidence.",
+  "privacy_policy": {
+    "forbidden_inferences": [
+      "raw_sensor_access",
+      "face_identity",
+      "personal_identity",
+      "speaker_identification",
+      "unrestricted_transcription",
+      "medical_diagnosis",
+      "confirmed_injury",
+      "emotional_state_inference",
+      "unsupported_behavioral_inference"
+    ],
+    "identity_inference_allowed": false,
+    "policy_id": "smart_room_1_camera_audio_default",
+    "privacy_scope": "cityos_structured_context_only",
+    "raw_sensor_access_allowed": false
+  },
+  "query_id": "tellme_f2534bd733aa",
+  "reasoning_summary": "Deterministic template proposal generated for query tellme_f2534bd733aa.",
+  "required_modalities": [
+    "context"
+  ],
+  "room_capability_context": {
+    "available_context_apis": [
+      "cityos_context_lookup",
+      "get_acoustic_event_context",
+      "get_anonymous_track_context",
+      "get_audio_context",
+      "get_audio_level_context",
+      "get_audio_source_zone_context",
+      "get_camera_coverage_metadata",
+      "get_camera_occupancy_context",
+      "get_context_by_time_window",
+      "get_distress_keyword_context",
+      "get_entry_event_context",
+      "get_event_context",
+      "get_exit_event_context",
+      "get_impact_sound_context",
+      "get_microphone_coverage_metadata",
+      "get_motion_event_context",
+      "get_occupancy_context",
+      "get_posture_candidate_context",
+      "get_raw_audio_reference",
+      "get_raw_video_reference",
+      "get_room_state",
+      "get_speech_activity_context"
+    ],
+    "coverage_gaps": [],
+    "notes": [
+      "No primary sensor is available for this query; planning relies on general context."
+    ],
+    "privacy_policy": {
+      "forbidden_inferences": [
+        "raw_sensor_access",
+        "face_identity",
+        "personal_identity",
+        "speaker_identification",
+        "unrestricted_transcription",
+        "medical_diagnosis",
+        "confirmed_injury",
+        "emotional_state_inference",
+        "unsupported_behavioral_inference"
+      ],
+      "identity_inference_allowed": false,
+      "notes": [
+        "Default planning must prefer derived context over restricted raw access.",
+        "No face recognition, persistent identity, speaker identification, unrestricted transcription, or medical diagnosis.",
+        "A single weak modality cannot justify certainty claims."
+      ],
+      "policy_id": "smart_room_1_camera_audio_default",
+      "privacy_scope": "cityos_structured_context_only",
+      "raw_sensor_access_allowed": false
+    },
+    "query_id": "tellme_f2534bd733aa",
+    "relevant_sensors": [
+      {
+        "allowed_api_names": [
+          "get_camera_occupancy_context",
+          "get_entry_event_context",
+          "get_exit_event_context",
+          "get_anonymous_track_context",
+          "get_motion_event_context",
+          "get_camera_coverage_metadata"
+        ],
+        "available": true,
+        "blind_spots": [
+          "rear room",
+          "under tables",
+          "floor area outside doorway view"
+        ],
+        "coverage_zones": [
+          "entrance doorway",
+          "threshold",
+          "front-room edge"
+        ],
+        "limitations": [
+          "Anonymous tracks only; no face recognition.",
+          "Cannot verify events outside the doorway field of view."
+        ],
+        "modality": "video",
+        "reason": "Not directly targeted but available for corroboration.",
+        "relevance": "supporting",
+        "restricted_api_names": [
+          "get_raw_video_reference"
+        ],
+        "sensor_id": "camera_door_01",
+        "status": "online",
+        "supported_context_types": [
+          "occupancy",
+          "motion",
+          "events",
+          "tracks"
+        ]
+      },
+      {
+        "allowed_api_names": [
+          "get_camera_occupancy_context",
+          "get_motion_event_context",
+          "get_posture_candidate_context",
+          "get_camera_coverage_metadata"
+        ],
+        "available": true,
+        "blind_spots": [
+          "doorway threshold",
+          "areas blocked by furniture",
+          "under tables",
+          "close wall regions"
+        ],
+        "coverage_zones": [
+          "center room",
+          "seating area",
+          "presentation area"
+        ],
+        "limitations": [
+          "Occlusion from furniture can hide low-floor events.",
+          "Posture signals are candidate-level only."
+        ],
+        "modality": "video",
+        "reason": "Not directly targeted but available for corroboration.",
+        "relevance": "supporting",
+        "restricted_api_names": [
+          "get_raw_video_reference"
+        ],
+        "sensor_id": "camera_room_01",
+        "status": "online",
+        "supported_context_types": [
+          "occupancy",
+          "motion",
+          "events"
+        ]
+      },
+      {
+        "allowed_api_names": [
+          "get_speech_activity_context",
+          "get_acoustic_event_context",
+          "get_impact_sound_context",
+          "get_distress_keyword_context",
+          "get_audio_level_context",
+          "get_audio_source_zone_context",
+          "get_microphone_coverage_metadata",
+          "get_audio_context"
+        ],
+        "available": true,
+        "blind_spots": [],
+        "coverage_zones": [
+          "room-wide acoustic coverage"
+        ],
+        "limitations": [
+          "Source localization is coarse.",
+          "Overlapping speech reduces reliability.",
+          "HVAC noise can affect event confidence.",
+          "Cannot establish visual identity."
+        ],
+        "modality": "audio",
+        "reason": "Not directly targeted but available for corroboration.",
+        "relevance": "supporting",
+        "restricted_api_names": [
+          "get_raw_audio_reference",
+          "get_full_transcript_context"
+        ],
+        "sensor_id": "microphone_array_01",
+        "status": "online",
+        "supported_context_types": [
+          "audio",
+          "events"
+        ]
+      },
+      {
+        "allowed_api_names": [
+          "get_radar_context"
+        ],
+        "available": false,
+        "blind_spots": [
+          "entire room while offline"
+        ],
+        "coverage_zones": [
+          "n/a"
+        ],
+        "limitations": [
+          "Sensor offline in this primary mock room."
+        ],
+        "modality": "radar",
+        "reason": "Sensor is marked unavailable in the capability snapshot.",
+        "relevance": "unavailable",
+        "restricted_api_names": [],
+        "sensor_id": "radar_corner_01",
+        "status": "offline",
+        "supported_context_types": [
+          "motion",
+          "occupancy",
+          "events"
+        ]
+      },
+      {
+        "allowed_api_names": [
+          "get_wifi_context"
+        ],
+        "available": false,
+        "blind_spots": [
+          "entire room while offline"
+        ],
+        "coverage_zones": [
+          "n/a"
+        ],
+        "limitations": [
+          "Sensor offline in this primary mock room."
+        ],
+        "modality": "wifi",
+        "reason": "Sensor is marked unavailable in the capability snapshot.",
+        "relevance": "unavailable",
+        "restricted_api_names": [],
+        "sensor_id": "wifi_ap_01",
+        "status": "offline",
+        "supported_context_types": [
+          "occupancy",
+          "motion"
+        ]
+      }
+    ],
+    "snapshot_id": "cap_smart_room_1_cam_audio_v1",
+    "space_id": "smart_room_1",
+    "time_window": null
+  },
+  "route": "multi_agent",
+  "space_id": "smart_room_1",
+  "task_category": "unsupported",
+  "time_windows": [],
+  "user_query": "Determine whether a conference meeting may begin by confirming that the number of attendees physically present in the room matches the official attendance roster and that all required participants have checked in. Produce a validated meeting-readiness decision with supporting evidence.",
+  "validation_policy": {
+    "bounded_time_windows_required": true,
+    "llm_proposal_untrusted": true,
+    "must_preserve_forbidden_claims": true,
+    "repairs": [],
+    "schema_validation_required": true,
+    "validation_status": "accepted",
+    "warnings": [
+      "Proposal was marked unsupported and will compile to an insufficient-evidence TaskSpec."
+    ]
+  }
+}

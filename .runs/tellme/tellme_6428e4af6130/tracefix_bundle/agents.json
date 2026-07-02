@@ -1,0 +1,10 @@
+[
+  {
+    "name": "answer_synthesis_harness",
+    "role": "Synthesize a final answer packet with caveats and evidence references."
+  },
+  {
+    "name": "video_context_harness",
+    "role": "Summarize structured video-derived scene context."
+  }
+]

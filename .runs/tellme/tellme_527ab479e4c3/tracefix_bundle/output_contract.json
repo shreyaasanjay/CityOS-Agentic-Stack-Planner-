@@ -1,0 +1,35 @@
+{
+  "allowed_claims": [
+    "bounded_count",
+    "presence_state",
+    "timestamped_event_summary"
+  ],
+  "answer_type": "direct_answer",
+  "fallback_answer_type": "insufficient_evidence",
+  "field_types": {
+    "answer": "string",
+    "caveats": "array",
+    "confidence": "number",
+    "evidence_refs": "array",
+    "limitations": "array",
+    "privacy_scope": "string"
+  },
+  "forbidden_claims": [
+    "raw_sensor_access",
+    "face_identity",
+    "personal_identity",
+    "medical_diagnosis",
+    "unsupported_behavioral_inference"
+  ],
+  "must_include_confidence": true,
+  "must_include_evidence_refs": true,
+  "must_include_limitations": true,
+  "required_fields": [
+    "answer",
+    "confidence",
+    "evidence_refs",
+    "caveats",
+    "privacy_scope",
+    "limitations"
+  ]
+}

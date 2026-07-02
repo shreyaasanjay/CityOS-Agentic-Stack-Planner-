@@ -180,9 +180,49 @@ button {
 }
 
 .workflow-switch {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.workflow-switch .mode-button {
+  min-width: 0;
+  padding: 6px;
+  line-height: 1.2;
+}
+
+.optional-label {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.api-key-status {
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.api-key-status.detected {
+  color: #b5efd0;
+  border-color: rgba(95, 175, 136, 0.45);
+  background: var(--green-soft);
+}
+
+.api-key-status.missing {
+  color: #f2d59d;
+  border-color: rgba(214, 163, 75, 0.45);
+  background: var(--amber-soft);
+}
+
+.environment-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .sidebar-section {
@@ -310,17 +350,38 @@ textarea:focus {
 }
 
 .mode-button {
+  position: relative;
   flex: 1;
   min-height: 36px;
   color: #c8d2ce;
   border-color: var(--line-strong);
   background: var(--panel);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease, background 0.18s ease;
 }
 
 .mode-button.active {
   color: #fff;
   border-color: var(--green);
   background: var(--green-soft);
+}
+
+.mode-button.ready:not(.active) {
+  color: #f6f8f7;
+  border-color: rgba(255, 255, 255, 0.58);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 16px rgba(255, 255, 255, 0.22);
+}
+
+.mode-button.ready:not(.active)::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 0 9px rgba(255, 255, 255, 0.75);
 }
 
 .mode-button.legacy {
@@ -393,6 +454,112 @@ textarea:focus {
   margin: 0;
   font-size: 28px;
   line-height: 1.12;
+}
+
+.tellme-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tellme-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tellme-card,
+.tellme-detail-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.tellme-card {
+  min-height: 132px;
+  padding: 14px;
+}
+
+.tellme-card > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tellme-card strong {
+  display: block;
+  margin-top: 12px;
+  color: var(--ink);
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.tellme-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.status-text.pass {
+  color: #8bd8ad;
+}
+
+.status-text.fail {
+  color: #f19a8d;
+}
+
+.message-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.message-card.success {
+  color: #b5efd0;
+  border-color: rgba(95, 175, 136, 0.45);
+  background: var(--green-soft);
+}
+
+.message-card.warning {
+  color: #f2d59d;
+  border-color: rgba(214, 163, 75, 0.45);
+  background: var(--amber-soft);
+}
+
+.message-card.error {
+  color: #f3b2aa;
+  border-color: rgba(208, 95, 95, 0.45);
+  background: var(--red-soft);
+}
+
+.tellme-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tellme-detail-card {
+  padding: 14px;
+}
+
+.tellme-detail-card .output-view {
+  min-height: 430px;
+  max-height: 58vh;
+  margin-top: 10px;
 }
 
 .status-badge {
@@ -677,6 +844,19 @@ textarea:focus {
   color: var(--ink);
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.synth-task-text {
+  max-height: 3.6em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  cursor: help;
+}
+
+#synthBenchmarkField.hidden {
+  display: none;
 }
 
 .synth-output-heading {
@@ -1130,6 +1310,11 @@ textarea:focus {
   .usage-detail-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
+
+  .tellme-summary-grid,
+  .tellme-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 820px) {
@@ -1153,6 +1338,11 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .tellme-summary-grid,
+  .tellme-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
   .run-header,
   .panel-heading {
     flex-direction: column;
@@ -1162,7 +1352,16 @@ textarea:focus {
 
 @media (max-width: 520px) {
   .field-row,
-  .metric-strip {
+  .metric-strip,
+  .workflow-switch {
     grid-template-columns: 1fr;
   }
+}
+
+.synth-build-panel summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
 }

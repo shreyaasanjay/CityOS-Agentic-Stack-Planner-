@@ -1,0 +1,91 @@
+{
+  "agents": [
+    {
+      "id": "DEVELOPER_A"
+    },
+    {
+      "id": "DEVELOPER_B"
+    },
+    {
+      "id": "DEVELOPER_C"
+    }
+  ],
+  "resources": [
+    {
+      "id": "AUTH_MODULE",
+      "type": "Lock"
+    },
+    {
+      "id": "DATABASE_MODULE",
+      "type": "Lock"
+    },
+    {
+      "id": "API_MODULE",
+      "type": "Lock"
+    }
+  ],
+  "channels": [
+    {
+      "id": "A_to_B",
+      "from": "DEVELOPER_A",
+      "to": "DEVELOPER_B",
+      "labels": [
+        "status_report"
+      ]
+    },
+    {
+      "id": "A_to_C",
+      "from": "DEVELOPER_A",
+      "to": "DEVELOPER_C",
+      "labels": [
+        "status_report"
+      ]
+    },
+    {
+      "id": "B_to_A",
+      "from": "DEVELOPER_B",
+      "to": "DEVELOPER_A",
+      "labels": [
+        "status_report"
+      ]
+    },
+    {
+      "id": "B_to_C",
+      "from": "DEVELOPER_B",
+      "to": "DEVELOPER_C",
+      "labels": [
+        "status_report"
+      ]
+    },
+    {
+      "id": "C_to_A",
+      "from": "DEVELOPER_C",
+      "to": "DEVELOPER_A",
+      "labels": [
+        "status_report"
+      ]
+    },
+    {
+      "id": "C_to_B",
+      "from": "DEVELOPER_C",
+      "to": "DEVELOPER_B",
+      "labels": [
+        "status_report"
+      ]
+    }
+  ],
+  "agent_resources": {
+    "DEVELOPER_A": [
+      "AUTH_MODULE",
+      "DATABASE_MODULE"
+    ],
+    "DEVELOPER_B": [
+      "DATABASE_MODULE",
+      "API_MODULE"
+    ],
+    "DEVELOPER_C": [
+      "AUTH_MODULE",
+      "API_MODULE"
+    ]
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "schema_version": "0.1",
+  "run_kind": "tellme",
+  "run_id": "tellme_7aced5a004fe",
+  "run_dir": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\.runs\\tellme\\tellme_7aced5a004fe",
+  "started_at": "2026-07-01T17:31:25.997798+00:00",
+  "finished_at": "2026-07-01T17:31:50.842883+00:00",
+  "complete": true,
+  "total_wall_clock_ms": 24845.01,
+  "stages": [
+    {
+      "stage": "tellme_decomposition",
+      "queued_at": null,
+      "started_at": "2026-07-01T17:31:25.997798+00:00",
+      "finished_at": "2026-07-01T17:31:50.841484+00:00",
+      "duration_ms": 24843.68,
+      "success": true,
+      "error": null,
+      "model": "gpt-4.1-mini",
+      "provider": "openai_compatible",
+      "retry_count": 0
+    }
+  ],
+  "api_calls": [
+    {
+      "stage": "tellme_decomposition",
+      "request_start": "2026-07-01T17:31:26.001734+00:00",
+      "first_response_time": "2026-07-01T17:31:50.795093+00:00",
+      "request_end": "2026-07-01T17:31:50.815305+00:00",
+      "total_duration_ms": 24813.52,
+      "time_to_first_response_ms": 24793.33,
+      "model": "gpt-4.1-mini",
+      "provider": "https://api.openai.com/v1",
+      "failed": false,
+      "error": null,
+      "retry_count": 0,
+      "observation_scope": "http_request"
+    }
+  ],
+  "repair": {
+    "total_attempts": 0,
+    "attempts": [],
+    "repair_time_seconds": 0.0,
+    "stop_reason": null,
+    "recommendation": null,
+    "config": {}
+  },
+  "summary": {
+    "slowest_stage": "tellme_decomposition",
+    "slowest_stage_duration_ms": 24843.68,
+    "api_call_count": 1,
+    "retry_count": 0,
+    "rate_limit_events": 0,
+    "total_repair_attempts": 0,
+    "repair_stop_reason": null,
+    "suspected_bottleneck": "external_model_or_orchestration",
+    "confidence": "medium",
+    "recommended_next_fix": "Compare API wait and deterministic stage durations in this report."
+  },
+  "limitations": [
+    "OpenCode timing observes the subprocess and its first JSON event, not provider first-token telemetry.",
+    "A long time-to-first-event can indicate OpenCode startup, provider queueing, or model latency."
+  ]
+}

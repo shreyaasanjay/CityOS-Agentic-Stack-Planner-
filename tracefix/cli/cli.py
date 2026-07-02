@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 from tracefix.textio import safe_read_json, safe_read_text
@@ -229,6 +230,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     from tracefix.pipeline.pipeline.tlc_runner import run_tlc
     from tracefix.pipeline.pipeline.trace_parser import parse_trace
     from tracefix.pipeline.pipeline.error_formatter import format_tlc_error
+    from tracefix.repair_progress import RepairProgressTracker
 
     as_json = getattr(args, "json", False)
     search_dir = Path(args.dir)
@@ -259,6 +261,46 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
     tla_content = safe_read_text(tla_path)
     cfg_content = safe_read_text(cfg_path)
+    repair_tracker = RepairProgressTracker(search_dir)
+    repair_context = repair_tracker.begin(tla_content)
+    if repair_context.blocked:
+        message = repair_tracker.stop_message(repair_context.stop_reason)
+        if as_json:
+            print(json.dumps({
+                "verdict": "repair_stopped",
+                "error": message,
+                "repair": {
+                    "attempt": repair_context.attempt,
+                    "stop_reason": repair_context.stop_reason,
+                },
+            }))
+        else:
+            print(message)
+        return 1
+    verification_started_ms = time.monotonic() * 1000.0
+
+    def _finish_repair(
+        *,
+        success: bool,
+        error_category: str = "",
+        error_text: str = "",
+        progress_level: int,
+    ):
+        return repair_tracker.finish(
+            repair_context,
+            success=success,
+            error_category=error_category,
+            error_text=error_text,
+            progress_level=progress_level,
+            verification_duration_ms=time.monotonic() * 1000.0 - verification_started_ms,
+        )
+
+    def _repair_payload(decision) -> dict:
+        return {
+            "attempt": decision.attempt,
+            "stop_reason": decision.stop_reason,
+            "recommendation": decision.recommendation,
+        }
 
     print("TRACEFIX VERIFY ENV")
     print("TLA_VERIFY_JAVA =", os.getenv("TLA_VERIFY_JAVA"))
@@ -283,12 +325,19 @@ def cmd_verify(args: argparse.Namespace) -> int:
         error_path.write_text(f"# PlusCal Translation Error\n\n{pcal_result.error_message}")
         archived = (None if getattr(args, "no_history", False)
                     else _save_attempt_history(search_dir))
+        repair_decision = _finish_repair(
+            success=False,
+            error_category="pcal_error",
+            error_text=pcal_result.error_message,
+            progress_level=1,
+        )
         if as_json:
             print(json.dumps({
                 "verdict": "fail", "violation_type": "pcal_error",
                 "error": pcal_result.error_message,
                 "files": {"error": str(error_path)},
                 "archived": str(archived) if archived else None,
+                "repair": _repair_payload(repair_decision),
             }))
         else:
             print("FAIL — PlusCal syntax error:")
@@ -296,6 +345,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
             print(f"\nSaved: {error_path}")
             if archived:
                 print(f"Archived: {archived}")
+            if repair_decision.stop:
+                print(repair_tracker.stop_message(repair_decision.stop_reason))
         return 1
 
     # Save translated TLA+ (PlusCal source + generated TLA+ translation block)
@@ -327,6 +378,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
 
     if tlc_result.success:
         stats = tlc_result.stats or {}
+        repair_decision = _finish_repair(
+            success=True,
+            progress_level=3,
+        )
         if as_json:
             print(json.dumps({
                 "verdict": "pass", "violation_type": None,
@@ -334,6 +389,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 "distinct_states": stats.get("distinct_states"),
                 "elapsed_seconds": stats.get("elapsed_seconds"),
                 "files": {"translated": str(translated_path), "log": str(log_path)},
+                "repair": _repair_payload(repair_decision),
             }))
         else:
             print("PASS")
@@ -355,6 +411,12 @@ def cmd_verify(args: argparse.Namespace) -> int:
         error_path.write_text(error_md)
         archived = (None if getattr(args, "no_history", False)
                     else _save_attempt_history(search_dir))
+        repair_decision = _finish_repair(
+            success=False,
+            error_category=tlc_result.violation_type or "tlc_error",
+            error_text=error_md,
+            progress_level=2,
+        )
         if as_json:
             print(json.dumps({
                 "verdict": "fail",
@@ -363,6 +425,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
                 "files": {"translated": str(translated_path), "log": str(log_path),
                           "error": str(error_path)},
                 "archived": str(archived) if archived else None,
+                "repair": _repair_payload(repair_decision),
             }))
         else:
             print(f"FAIL — {tlc_result.violation_type or 'unknown error'}")
@@ -370,6 +433,8 @@ def cmd_verify(args: argparse.Namespace) -> int:
             print(f"\nSaved: {translated_path}, {log_path}, {error_path}")
             if archived:
                 print(f"Archived: {archived}")
+            if repair_decision.stop:
+                print(repair_tracker.stop_message(repair_decision.stop_reason))
         return 1
 
 

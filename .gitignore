@@ -23,3 +23,5 @@ logs/
 # land in tracefix.pipeline/. Never commit generated artifacts.
 workspace/
 tracefix.pipeline/
+# Server PID files (runtime artifacts, never commit)
+.tracefix-ui/*.pid

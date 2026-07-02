@@ -1,0 +1,21 @@
+{
+  "answer_type": "boolean",
+  "confidence": 0.82,
+  "context_requirements": [
+    "general_context"
+  ],
+  "estimated_tool_calls": 3,
+  "intent": "general_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_d0b4300288c2",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": false,
+  "requires_multi_timestamp_reasoning": true,
+  "requires_policy_review": false,
+  "risk_flags": [],
+  "space_scope": "single_space",
+  "time_scope": "multi_timestamp",
+  "user_query": "Turn off the lights in the conference room after 7 PM unless someone is still present."
+}

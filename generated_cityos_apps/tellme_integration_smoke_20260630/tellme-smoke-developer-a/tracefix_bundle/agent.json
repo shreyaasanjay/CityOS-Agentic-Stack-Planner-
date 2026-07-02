@@ -1,0 +1,54 @@
+{
+  "name": "DEVELOPER_A",
+  "role": "DEVELOPER_A",
+  "prompt_path": null,
+  "inputs": [
+    "B_to_A",
+    "C_to_A"
+  ],
+  "outputs": [
+    "A_to_B",
+    "A_to_C"
+  ],
+  "tools": [],
+  "required_context": [],
+  "concordfs_channels": [
+    {
+      "channel": "B_to_A",
+      "direction": "inbound",
+      "path": "messages/DEVELOPER_A/inbox/*.json"
+    },
+    {
+      "channel": "C_to_A",
+      "direction": "inbound",
+      "path": "messages/DEVELOPER_A/inbox/*.json"
+    },
+    {
+      "channel": "A_to_B",
+      "direction": "outbound",
+      "path": "messages/DEVELOPER_A/outbox/*.json"
+    },
+    {
+      "channel": "A_to_C",
+      "direction": "outbound",
+      "path": "messages/DEVELOPER_A/outbox/*.json"
+    }
+  ],
+  "resources": [
+    {
+      "id": "AUTH_MODULE",
+      "type": "Lock"
+    },
+    {
+      "id": "DATABASE_MODULE",
+      "type": "Lock"
+    },
+    {
+      "id": "API_MODULE",
+      "type": "Lock"
+    }
+  ],
+  "notes": [
+    "CityOS Synthesizer should turn this agent into one CityOS app/container."
+  ]
+}

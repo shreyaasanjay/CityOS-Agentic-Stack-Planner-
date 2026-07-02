@@ -1,0 +1,8 @@
+{
+  "answer_synthesis_harness": [
+    "synthesize_answer_packet"
+  ],
+  "video_context_harness": [
+    "get_video_context"
+  ]
+}

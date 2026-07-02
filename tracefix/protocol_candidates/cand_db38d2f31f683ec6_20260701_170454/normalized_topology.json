@@ -1,0 +1,31 @@
+{
+  "agents": [
+    "A",
+    "B",
+    "C"
+  ],
+  "edges": [
+    {
+      "from": "A",
+      "to": "B"
+    },
+    {
+      "from": "B",
+      "to": "C"
+    },
+    {
+      "from": "C",
+      "to": "A"
+    }
+  ],
+  "resources": [
+    "R1",
+    "R2",
+    "R3"
+  ],
+  "shape": "ring",
+  "agent_count": 3,
+  "channel_count": 3,
+  "resource_count": 3,
+  "topology_hash": "db38d2f31f683ec6"
+}

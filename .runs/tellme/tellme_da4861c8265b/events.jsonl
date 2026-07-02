@@ -1,0 +1,12 @@
+{"event": "query_analyzed", "intent": "occupancy_lookup", "query_id": "tellme_da4861c8265b"}
+{"event": "route_decided", "query_id": "tellme_da4861c8265b", "route": "single_agent"}
+{"event": "execution_plan_created", "plan_type": "tracefix", "query_id": "tellme_da4861c8265b"}
+{"agent_backend_mode": "deterministic", "event": "agent_backend_selected", "query_id": "tellme_da4861c8265b"}
+{"event": "cityos_capabilities_discovered", "query_id": "tellme_da4861c8265b", "snapshot_id": "cap_smart_room_1_cam_audio_v1"}
+{"clarification_required": false, "event": "execution_brief_compiled", "executable": true, "query_id": "tellme_da4861c8265b"}
+{"event": "proposal_validated", "query_id": "tellme_da4861c8265b", "repaired": false, "validation_status": "accepted"}
+{"event": "intent_decomposed", "query_id": "tellme_da4861c8265b"}
+{"agent_count": 2, "bundle_dir": "tracefix_bundle", "channel_count": 1, "event": "tracefix_bundle_written", "query_id": "tellme_da4861c8265b", "task_id": "task_da4861c8265b"}
+{"card_type": "descriptive", "event": "evidence_card_preview_created", "query_id": "tellme_da4861c8265b"}
+{"event": "tracefix_stub_created", "query_id": "tellme_da4861c8265b"}
+{"event": "answer_returned", "query_id": "tellme_da4861c8265b", "status": "needs_tracefix"}

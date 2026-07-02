@@ -1,0 +1,8 @@
+{
+  "created_at": "2026-07-01T19:32:55.636619+00:00",
+  "intent": "general",
+  "query_id": "tellme_6ea77c5b7267",
+  "space_id": "smart_room_1",
+  "timestamp": null,
+  "user_query": "Perform a comprehensive attendance verification and discrepancy analysis for an active conference meeting. Evaluate observed occupancy information, compare it with expected attendance records and attendance updates, reconcile conflicting evidence sources, identify missing or insufficient evidence, determine the most reliable attendance assessment, and generate a final validated report containing confidence scores, evidence references, limitations, unresolved discrepancies, and a recommendation on whether attendance can be considered verified."
+}

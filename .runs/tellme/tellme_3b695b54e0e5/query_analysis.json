@@ -1,0 +1,34 @@
+{
+  "answer_type": "summary",
+  "confidence": 0.7,
+  "context_requirements": [
+    "occupancy",
+    "cross_modal_context"
+  ],
+  "estimated_tool_calls": 4,
+  "intent": "occupancy_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_3b695b54e0e5",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_explicit_multi_agent": true,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": true,
+  "requires_multi_timestamp_reasoning": true,
+  "requires_policy_review": false,
+  "risk_flags": [
+    "modality_disagreement"
+  ],
+  "space_scope": "single_space",
+  "time_scope": "unspecified",
+  "trigger_terms_found": [
+    "meeting may begin",
+    "conference meeting may begin",
+    "attendance_term: attendance",
+    "verification_term: compare",
+    "verification_term: discrepancies",
+    "meeting_readiness: meeting may begin",
+    "meeting_auth_term: attendance"
+  ],
+  "user_query": "Determine whether a conference meeting may begin. Compare observed room occupancy with expected attendance information, identify any discrepancies between the two sources, and generate a final attendance verification report explaining whether attendance can be validated, including confidence, evidence references, limitations, and unresolved issues."
+}

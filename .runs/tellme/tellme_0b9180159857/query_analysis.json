@@ -1,0 +1,26 @@
+{
+  "answer_type": "summary",
+  "confidence": 0.92,
+  "context_requirements": [
+    "occupancy"
+  ],
+  "estimated_tool_calls": 3,
+  "intent": "occupancy_lookup",
+  "named_modalities": [],
+  "query_id": "tellme_0b9180159857",
+  "requires_concordfs_trace_inspection": false,
+  "requires_diagnostic_reasoning": false,
+  "requires_explicit_multi_agent": true,
+  "requires_identity_continuity": false,
+  "requires_multi_modal_reconciliation": false,
+  "requires_multi_timestamp_reasoning": false,
+  "requires_policy_review": false,
+  "risk_flags": [],
+  "space_scope": "single_space",
+  "time_scope": "unspecified",
+  "trigger_terms_found": [
+    "attendance_term: records",
+    "verification_term: reconcile"
+  ],
+  "user_query": "Perform a room operational audit. Independently evaluate occupancy observations, equipment readiness, maintenance records, badge access activity, and calendar scheduling information. Reconcile conflicting evidence and generate a final operational assessment with confidence, evidence references, and unresolved issues."
+}

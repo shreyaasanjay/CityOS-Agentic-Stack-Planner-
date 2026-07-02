@@ -1,0 +1,8 @@
+{
+  "answer_synthesis_harness": [
+    "synthesize_answer_packet"
+  ],
+  "general_context_harness": [
+    "cityos_context_lookup"
+  ]
+}

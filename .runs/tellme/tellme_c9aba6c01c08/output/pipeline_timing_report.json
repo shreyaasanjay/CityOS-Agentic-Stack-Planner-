@@ -1,0 +1,48 @@
+{
+  "schema_version": "0.1",
+  "run_kind": "tellme",
+  "run_id": "tellme_c9aba6c01c08",
+  "run_dir": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\.runs\\tellme\\tellme_c9aba6c01c08",
+  "started_at": "2026-07-01T16:42:21.895515+00:00",
+  "finished_at": "2026-07-01T16:42:21.921966+00:00",
+  "complete": true,
+  "total_wall_clock_ms": 26.38,
+  "stages": [
+    {
+      "stage": "tellme_decomposition",
+      "queued_at": null,
+      "started_at": "2026-07-01T16:42:21.895515+00:00",
+      "finished_at": "2026-07-01T16:42:21.920438+00:00",
+      "duration_ms": 24.92,
+      "success": true,
+      "error": null,
+      "provider": "deterministic",
+      "retry_count": 0
+    }
+  ],
+  "api_calls": [],
+  "repair": {
+    "total_attempts": 0,
+    "attempts": [],
+    "repair_time_seconds": 0.0,
+    "stop_reason": null,
+    "recommendation": null,
+    "config": {}
+  },
+  "summary": {
+    "slowest_stage": "tellme_decomposition",
+    "slowest_stage_duration_ms": 24.92,
+    "api_call_count": 0,
+    "retry_count": 0,
+    "rate_limit_events": 0,
+    "total_repair_attempts": 0,
+    "repair_stop_reason": null,
+    "suspected_bottleneck": "internal_or_unknown",
+    "confidence": "low",
+    "recommended_next_fix": "Run a model-backed design trial to collect API and formal verification timings."
+  },
+  "limitations": [
+    "OpenCode timing observes the subprocess and its first JSON event, not provider first-token telemetry.",
+    "A long time-to-first-event can indicate OpenCode startup, provider queueing, or model latency."
+  ]
+}

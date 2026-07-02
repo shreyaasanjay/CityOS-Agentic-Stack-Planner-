@@ -1,0 +1,27 @@
+{
+  "candidate_id": "cand_69219f9917f5fdc6_20260702_004440",
+  "source_workspace": "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_204438",
+  "source_task_text": "TeLLMe structured smart-room application requirements.\nTreat this as compile-time input to TraceFix planning and verification.\nGenerate a complete multi-agent topology with explicit communication channels.\nDo not execute production agents or bypass PlusCal/TLC verification.\n\nStructured task specification:\n{\n  \"task_id\": \"task_310712c5bc32\",\n  \"query_id\": \"tellme_310712c5bc32\",\n  \"user_query\": \"Determine whether attendance can be verified for an active meeting. Independently evaluate room occupan",
+  "created_at": "2026-07-02T00:44:40.291467+00:00",
+  "last_seen_at": "2026-07-02T13:45:31.786035+00:00",
+  "agents_count": 4,
+  "channels_count": 3,
+  "resources_count": 0,
+  "normalized_topology_hash": "69219f9917f5fdc6",
+  "tlc_passed": true,
+  "pluscal_passed": true,
+  "used_opencode_fallback": false,
+  "matched_existing_template": true,
+  "suggested_pattern_name": "star_4",
+  "promotion_status": "candidate",
+  "usage_count": 3,
+  "observed_workspaces": [
+    "C:\\Users\\razer\\Downloads\\New folder\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_204438",
+    "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260701_220254",
+    "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260702_094528"
+  ],
+  "observed_tasks": [
+    "TeLLMe structured smart-room application requirements.\nTreat this as compile-time input to TraceFix planning and verification.\nGenerate a complete multi-agent topology with explicit communication channels.\nDo not execute production agents or bypass PlusCal/TLC verification.\n\nStructured task specific"
+  ],
+  "notes": ""
+}

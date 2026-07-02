@@ -1,0 +1,7 @@
+[
+  {
+    "from": "occupancy_context_harness",
+    "label": "occupancy_findings",
+    "to": "answer_synthesis_harness"
+  }
+]
