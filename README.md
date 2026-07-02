@@ -1,15 +1,16 @@
-# Smart Room Agentic PLanner
+# Smart Room Agentic Planner
 
 The agentic planner turns a natural-language multi-agent question into a verified CityOS module plan and deployable apps.
 
 The end-to-end flow is:
 
 1. TeLLMe decomposes the user intent into structured application requirements.
-2. TraceFix generates an agent/resource/channel protocol.
-3. TraceFix verifies the protocol with TLA+/PlusCal and TLC.
-4. TraceFix exports `spec/cityos_module_plan.json`.
-5. CityOS Synthesizer packages the verified plan into one CityOS app per agent plus one monitor app.
-6. CityOS Runtime OS runs the generated apps.
+2. From the user intent, TeLLMe will decide if a multi-agent protocol layer (TraceFix) is required
+3. TraceFix generates an agent/resource/channel protocol.
+4. TraceFix verifies the protocol with TLA+/PlusCal and TLC.
+5. TraceFix exports `spec/cityos_module_plan.json`.
+6. CityOS Synthesizer packages the verified plan into one CityOS app per agent plus one monitor app.
+7. CityOS Runtime OS runs the generated apps.
 
 TraceFix is the planner and verifier. It does not run production CityOS agents itself.
 
@@ -34,15 +35,19 @@ python -m venv .venv
 python -m pip install -e ".[test,agentic,opencode]"
 python -m pip install -r local-ui\requirements-ui.txt
 
-Copy the environment template if you want CLI runs to auto-load keys:
+## Copy the environment template if you want CLI runs to auto-load keys:
+
 Copy-Item .env.example .env
-Then fill in any keys you need:
+
+## Then fill in any keys you need:
 OPENAI_API_KEY=
 OPENROUTER_API_KEY=
 ANTHROPIC_API_KEY=
-The local UI can also accept API keys directly in the browser. Keys entered there are passed only to the spawned run process and are not written to disk.
-Start The Local UI
-Start the main integrated runner:
+
+## The local UI can also accept API keys directly in the browser. Keys entered there are passed only to the spawned run process and are not written to disk.
+
+## Start The Local UI
+## Start the main integrated runner:
 .\local-ui\start-runner.ps1 -Port 8788 -Open
 Open:
 http://127.0.0.1:8788/
