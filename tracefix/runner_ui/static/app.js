@@ -19,7 +19,11 @@ const state = {
   },
 };
 
+const THEME_STORAGE_KEY = "tracefix-runner-theme";
+
 const els = {
+  themeToggle: document.querySelector("#themeToggle"),
+  themeToggleText: document.querySelector("#themeToggleText"),
   form: document.querySelector("#runForm"),
   provider: document.querySelector("#provider"),
   providerFields: document.querySelector("#providerFields"),
@@ -70,6 +74,7 @@ const els = {
   usageOutputTokens: document.querySelector("#usageOutputTokens"),
   usageTotalTokens: document.querySelector("#usageTotalTokens"),
   usageCost: document.querySelector("#usageCost"),
+  usageModelBreakdown: document.querySelector("#usageModelBreakdown"),
   usageDesignTokens: document.querySelector("#usageDesignTokens"),
   usageDesignCost: document.querySelector("#usageDesignCost"),
   usageRepairTokens: document.querySelector("#usageRepairTokens"),
@@ -173,7 +178,51 @@ async function postJson(url, payload) {
   return data;
 }
 
+function readStoredTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === "light" || stored === "dark" ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function getPreferredTheme() {
+  return readStoredTheme() || (window.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "light" : "dark");
+}
+
+function writeStoredTheme(theme) {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Theme preference is non-critical; blocked storage should not affect the runner.
+  }
+}
+
+function applyTheme(theme) {
+  const normalized = theme === "light" ? "light" : "dark";
+  const nextMode = normalized === "light" ? "dark" : "light";
+  const label = `Switch to ${nextMode} mode`;
+
+  document.documentElement.dataset.theme = normalized;
+  if (els.themeToggle) {
+    els.themeToggle.setAttribute("aria-label", label);
+    els.themeToggle.title = label;
+  }
+  if (els.themeToggleText) {
+    els.themeToggleText.textContent = nextMode === "light" ? "Light" : "Dark";
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  const next = current === "light" ? "dark" : "light";
+  writeStoredTheme(next);
+  applyTheme(next);
+}
+
 function bindEvents() {
+  els.themeToggle?.addEventListener("click", toggleTheme);
   document.querySelectorAll("[data-workflow]").forEach((button) => {
     button.addEventListener("click", async () => {
       state.workflow = button.dataset.workflow;
@@ -801,8 +850,9 @@ function renderUsage() {
   const cost = Number(usage.estimated_cost_usd || 0);
   const estimated = usage.estimated !== false;
   const source = usage.source || "no_usage_metadata";
-  const hasUsage = totalTokens > 0;
-  const hasCost = usage.cost_known !== false && source !== "no_usage_metadata";
+  const hasZeroUsage = source === "deterministic_no_llm";
+  const hasUsage = totalTokens > 0 || hasZeroUsage;
+  const hasCost = hasUsage && usage.cost_known !== false && source !== "no_usage_metadata";
   els.llmCost.textContent = hasCost ? `${estimated ? "~" : ""}${formatMoney(cost)}` : "Unavailable";
   els.llmTokenSummary.textContent = hasUsage
     ? `${formatCompactTokens(totalTokens)} tokens`
@@ -816,6 +866,7 @@ function renderUsage() {
   els.usageOutputTokens.textContent = hasUsage ? formatNumber(usage.output_tokens || 0) : "Unavailable";
   els.usageTotalTokens.textContent = hasUsage ? formatNumber(totalTokens) : "Unavailable";
   els.usageCost.textContent = hasCost ? `${estimated ? "~" : ""}${formatMoney(cost)}` : "Unavailable";
+  renderModelBreakdown(usage.model_breakdown || [], hasUsage);
 
   const phases = usage.phases || {};
   renderPhaseUsage("Design", phases.design, els.usageDesignTokens, els.usageDesignCost);
@@ -832,6 +883,21 @@ function renderPhaseUsage(_label, phase, tokenEl, costEl) {
   const data = phase || {};
   tokenEl.textContent = formatNumber(data.total_tokens || 0);
   costEl.textContent = data.cost_known === false ? "Unavailable" : formatMoney(data.estimated_cost_usd || 0);
+}
+
+function renderModelBreakdown(entries, hasUsage) {
+  const rows = Array.isArray(entries) ? entries : [];
+  if (!hasUsage || !rows.length) {
+    els.usageModelBreakdown.innerHTML = `<dt>No model usage</dt><dd>${hasUsage ? "0" : "Unavailable"}</dd>`;
+    return;
+  }
+  els.usageModelBreakdown.innerHTML = rows.map((entry) => {
+    const component = entry.component || "LLM";
+    const model = entry.model || "unknown";
+    const tokens = formatNumber(entry.total_tokens || 0);
+    const cost = entry.cost_known === false ? "cost unavailable" : formatMoney(entry.estimated_cost_usd || 0);
+    return `<dt>${escapeHtml(component)}<small>${escapeHtml(model)}</small></dt><dd>${tokens} tok<br><small>${escapeHtml(cost)}</small></dd>`;
+  }).join("");
 }
 
 function renderOutput() {
@@ -1137,6 +1203,7 @@ function formatMoney(value) {
 }
 
 function sourceLabel(source, estimated, costKnown) {
+  if (source === "deterministic_no_llm") return "No LLM call used by this run";
   if (source === "session_json") return estimated ? "Session metadata, estimated cost" : "Session metadata";
   if (source === "json_usage_event") return estimated ? "API usage metadata, estimated cost" : "API usage metadata";
   if (source?.startsWith("stdout")) return "Parsed from run output, estimated";
@@ -1154,6 +1221,7 @@ function escapeHtml(text) {
 }
 
 async function init() {
+  applyTheme(getPreferredTheme());
   await loadUiInfo();
   bindEvents();
   updateKeyFields();

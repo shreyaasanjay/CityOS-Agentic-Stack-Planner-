@@ -4,18 +4,38 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TraceFix Intermediary Planner</title>
-    <link rel="stylesheet" href="/static/styles.css?v=tracefix-runner-ui-20260630-og-ui-v6-benchmark-workspaces" />
+    <script>
+      (() => {
+        const key = "tracefix-runner-theme";
+        let stored = null;
+        try {
+          stored = localStorage.getItem(key);
+        } catch {
+          stored = null;
+        }
+        const prefersLight = window.matchMedia?.("(prefers-color-scheme: light)")?.matches;
+        const theme = stored === "light" || stored === "dark" ? stored : prefersLight ? "light" : "dark";
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+    <link rel="stylesheet" href="/static/styles.css?v=tracefix-runner-ui-20260702-theme-toggle-beige-dark-text" />
   </head>
   <body>
     <main class="runner-shell">
       <section class="control-panel">
         <div class="brand-row">
-          <div class="brand-mark">TF</div>
-          <div>
-            <h1>TraceFix Intermediary Planner</h1>
-            <p>Generate verified intermediary expressions for CityOS synthesis</p>
-            <p id="uiBuildStamp" class="build-stamp">UI build loading...</p>
+          <div class="brand-identity">
+            <div class="brand-mark">TF</div>
+            <div class="brand-copy">
+              <h1>TraceFix Intermediary Planner</h1>
+              <p>Generate verified intermediary expressions for CityOS synthesis</p>
+              <p id="uiBuildStamp" class="build-stamp">UI build loading...</p>
+            </div>
           </div>
+          <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to light mode" title="Switch to light mode">
+            <span class="theme-toggle-icon" aria-hidden="true"></span>
+            <span id="themeToggleText">Light</span>
+          </button>
         </div>
 
         <div class="workflow-switch" role="group" aria-label="Workflow">
@@ -244,6 +264,12 @@
               </dl>
             </div>
             <div>
+              <h4>Model Breakdown</h4>
+              <dl id="usageModelBreakdown" class="usage-model-breakdown">
+                <dt>No model usage</dt><dd>0</dd>
+              </dl>
+            </div>
+            <div>
               <h4>Design Phase</h4>
               <dl>
                 <dt>Tokens</dt><dd id="usageDesignTokens">0</dd>
@@ -377,6 +403,6 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=tracefix-runner-ui-20260630-og-ui-v6-benchmark-workspaces" type="module"></script>
+    <script src="/static/app.js?v=tracefix-runner-ui-20260702-theme-toggle-beige-dark-text" type="module"></script>
   </body>
 </html>

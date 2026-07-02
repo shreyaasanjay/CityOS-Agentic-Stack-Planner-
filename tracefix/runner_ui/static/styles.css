@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #111315;
   --panel: #1b1e21;
   --panel-soft: #202428;
@@ -17,6 +18,28 @@
   --success: #5faf88;
   --dark: #15181b;
   --shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #ece3d4;
+  --panel: #fbf6ec;
+  --panel-soft: #f4ebdc;
+  --ink: #25211b;
+  --muted: #74695c;
+  --line: #d8cbb8;
+  --line-strong: #bdad98;
+  --green: #2f6f5f;
+  --green-soft: rgba(47, 111, 95, 0.14);
+  --blue: #435f93;
+  --blue-soft: rgba(67, 95, 147, 0.14);
+  --red: #9c3d32;
+  --red-soft: rgba(156, 61, 50, 0.13);
+  --amber: #9a6a18;
+  --amber-soft: rgba(154, 106, 24, 0.14);
+  --success: #2f6f5f;
+  --dark: #f1e7d7;
+  --shadow: 0 14px 34px rgba(61, 47, 30, 0.12);
 }
 
 * {
@@ -63,9 +86,22 @@ button {
 
 .brand-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
   margin-bottom: 20px;
+}
+
+.brand-identity {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 12px;
+}
+
+.brand-copy {
+  min-width: 0;
 }
 
 .brand-mark {
@@ -98,6 +134,43 @@ button {
   font-size: 10px;
   line-height: 1.25;
   overflow-wrap: anywhere;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 7px;
+  min-width: 72px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible {
+  border-color: var(--green);
+  color: var(--green);
+  outline: 0;
+}
+
+.theme-toggle-icon {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-shadow: inset -4px -3px 0 currentColor;
+}
+
+:root[data-theme="light"] .theme-toggle-icon {
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(47, 111, 95, 0.12);
 }
 
 .run-form {
@@ -443,7 +516,7 @@ textarea:focus {
 
 .usage-detail-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
 }
 
@@ -479,6 +552,15 @@ textarea:focus {
   color: var(--ink);
   font-size: 12px;
   font-weight: 800;
+}
+
+.usage-model-breakdown dt small,
+.usage-model-breakdown dd small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .visual-grid {
@@ -896,6 +978,130 @@ textarea:focus {
 .toast.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+:root[data-theme="light"] .brand-mark {
+  color: #2f6f5f;
+}
+
+:root[data-theme="light"] .brand-row .build-stamp {
+  color: #7b6d5d;
+}
+
+:root[data-theme="light"] .sidebar-section summary,
+:root[data-theme="light"] .sidebar-section h2,
+:root[data-theme="light"] .usage-detail-grid h4 {
+  color: #332b21;
+}
+
+:root[data-theme="light"] label {
+  color: #3f3529;
+}
+
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea {
+  color: var(--ink);
+  background: #fbf6ec;
+  color-scheme: light;
+}
+
+:root[data-theme="light"] select option {
+  color: var(--ink);
+  background-color: #fbf6ec;
+}
+
+:root[data-theme="light"] select option:checked {
+  color: #241c14;
+  background-color: #dbeae4;
+}
+
+:root[data-theme="light"] select option:hover,
+:root[data-theme="light"] select option:focus {
+  color: var(--ink);
+  background-color: #eee2cf;
+}
+
+:root[data-theme="light"] .mode-button {
+  color: #66594b;
+}
+
+:root[data-theme="light"] .mode-button.active,
+:root[data-theme="light"] .primary-button,
+:root[data-theme="light"] .tab.active {
+  color: #241c14;
+  border-color: var(--green);
+  background: #dbeae4;
+}
+
+:root[data-theme="light"] .secondary-button {
+  color: var(--ink);
+  background: #fbf6ec;
+}
+
+:root[data-theme="light"] .run-panel {
+  background: var(--bg);
+}
+
+:root[data-theme="light"] .status-badge.idle {
+  color: #6a5e50;
+  background: #e4d8c6;
+}
+
+:root[data-theme="light"] .status-badge.running,
+:root[data-theme="light"] .status-badge.completed {
+  color: #275d4f;
+}
+
+:root[data-theme="light"] .status-badge.failed {
+  color: #8b2d2d;
+}
+
+:root[data-theme="light"] .status-badge.incomplete {
+  color: #6d4e08;
+}
+
+:root[data-theme="light"] .check-item {
+  background: #fbf6ec;
+}
+
+:root[data-theme="light"] .check-item > span {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .check-item.ok > span,
+:root[data-theme="light"] .synth-result-strip strong,
+:root[data-theme="light"] .synth-app-meta small {
+  color: var(--success);
+}
+
+:root[data-theme="light"] .check-item.missing > span {
+  color: var(--red);
+}
+
+:root[data-theme="light"] .check-item.optional > span {
+  color: var(--amber);
+}
+
+:root[data-theme="light"] .synth-app-meta code {
+  border-color: var(--line);
+  color: var(--ink);
+  background: #fbf6ec;
+}
+
+:root[data-theme="light"] .topology-graph {
+  background: linear-gradient(180deg, #fbf6ec 0%, #efe5d5 100%);
+}
+
+:root[data-theme="light"] .output-view {
+  color: #25211b;
+  background: #fbf6ec;
+}
+
+:root[data-theme="light"] .toast {
+  color: #241c14;
+  border: 1px solid var(--line-strong);
+  background: #efe5d5;
 }
 
 @media (max-width: 1120px) {

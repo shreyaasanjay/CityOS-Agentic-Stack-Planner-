@@ -91,6 +91,18 @@ def _blank_phase() -> dict[str, Any]:
     return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "estimated_cost_usd": 0.0}
 
 
+def _clean_component(component: str) -> str:
+    value = (component or "").strip()
+    if not value:
+        return "TraceFix"
+    lowered = value.lower()
+    if lowered == "tellme":
+        return "TeLLMe"
+    if lowered == "tracefix":
+        return "TraceFix"
+    return value
+
+
 def _usage_payload(model: str = "") -> dict[str, Any]:
     return {
         "model": _display_model(model),
@@ -102,6 +114,7 @@ def _usage_payload(model: str = "") -> dict[str, Any]:
         "estimated": True,
         "source": "no_usage_metadata",
         "phases": {phase: _blank_phase() for phase in _USAGE_PHASES},
+        "model_breakdown": [],
         "session_totals": {"total_runs": 0, "total_tokens": 0, "total_cost_usd": 0.0},
     }
 
@@ -139,6 +152,30 @@ def _persist_workspace_usage(workspace: Path | None, usage: dict[str, Any], run_
         runs.append({"run_id": run_id, "ended_at": datetime.now().isoformat(timespec="seconds"), **usage})
         existing["runs"] = runs[-50:]
     path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+
+
+def _workspace_has_no_llm_calls(workspace: Path | None) -> bool:
+    if workspace is None:
+        return False
+    report = _read_json(workspace / "output" / "pipeline_timing_report.json")
+    if not isinstance(report, dict):
+        report = _read_json(workspace / "pipeline_timing_report.json")
+    if not isinstance(report, dict):
+        return False
+    api_calls = report.get("api_calls")
+    if isinstance(api_calls, list) and api_calls:
+        return False
+    fast_path = report.get("single_agent_fast_path")
+    if isinstance(fast_path, dict) and fast_path.get("used") is True:
+        return True
+    stages = report.get("stages")
+    if isinstance(stages, list):
+        for stage in stages:
+            if not isinstance(stage, dict):
+                continue
+            if stage.get("stage") in {"single_agent_fast_path", "deterministic_runtime_prompt"} and stage.get("success") is True:
+                return True
+    return False
 
 
 def _subprocess_python() -> str:
@@ -674,10 +711,57 @@ class UsageState:
     source: str = "no_usage_metadata"
     active_phase: str = "design"
     phases: dict[str, dict[str, Any]] = field(default_factory=lambda: {phase: _blank_phase() for phase in _USAGE_PHASES})
+    model_breakdown: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def set_model(self, model: str) -> None:
         if model:
             self.model = _display_model(model)
+
+    def _record_model_usage(
+        self,
+        *,
+        component: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float | None,
+        source: str,
+        replace: bool = False,
+    ) -> None:
+        component_label = _clean_component(component)
+        model_label = _display_model(model or self.model)
+        key = f"{component_label}\0{model_label}"
+        entry = self.model_breakdown.get(key)
+        if entry is None or replace:
+            entry = {
+                "component": component_label,
+                "model": model_label,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+                "estimated_cost_usd": 0.0,
+                "cost_known": False,
+                "estimated": True,
+                "source": source,
+            }
+            self.model_breakdown[key] = entry
+        entry["input_tokens"] = int(entry.get("input_tokens") or 0) + input_tokens
+        entry["output_tokens"] = int(entry.get("output_tokens") or 0) + output_tokens
+        entry["total_tokens"] = int(entry["input_tokens"]) + int(entry["output_tokens"])
+        entry["source"] = source
+        if cost_usd is not None:
+            try:
+                parsed_cost = float(cost_usd)
+            except (TypeError, ValueError):
+                parsed_cost = 0.0
+            entry["estimated_cost_usd"] = round(float(entry.get("estimated_cost_usd") or 0.0) + parsed_cost, 6)
+            entry["cost_known"] = True
+            entry["estimated"] = False
+        else:
+            estimated_cost, known = _estimate_llm_cost(model_label, int(entry["input_tokens"]), int(entry["output_tokens"]))
+            entry["estimated_cost_usd"] = estimated_cost
+            entry["cost_known"] = known
+            entry["estimated"] = True
 
     def set_phase_from_line(self, line: str) -> None:
         clean = line.lower()
@@ -695,6 +779,7 @@ class UsageState:
         output_tokens: int = 0,
         cost_usd: float | None = None,
         model: str = "",
+        component: str = "TraceFix",
         source: str = "usage_metadata",
     ) -> bool:
         input_tokens = max(0, int(input_tokens or 0))
@@ -704,6 +789,14 @@ class UsageState:
         self.set_model(model)
         self.input_tokens += input_tokens
         self.output_tokens += output_tokens
+        self._record_model_usage(
+            component=component,
+            model=model or self.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+            source=source,
+        )
         if cost_usd is not None:
             try:
                 parsed_cost = float(cost_usd)
@@ -733,11 +826,18 @@ class UsageState:
         input_tokens = int(stats.get("prompt_tokens") or 0)
         output_tokens = int(stats.get("completion_tokens") or 0)
         cost = stats.get("estimated_cost_usd")
-        if input_tokens < self.input_tokens or output_tokens < self.output_tokens:
-            return False
         self.set_model(model)
         self.input_tokens = input_tokens
         self.output_tokens = output_tokens
+        self._record_model_usage(
+            component="TraceFix",
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost,
+            source="session_json",
+            replace=True,
+        )
         if cost is not None:
             self.exact_cost_usd = float(cost)
             self.cost_known = bool(stats.get("cost_known", True))
@@ -748,6 +848,19 @@ class UsageState:
         phase["total_tokens"] = input_tokens + output_tokens
         phase["estimated_cost_usd"] = float(cost or _estimate_llm_cost(self.model, input_tokens, output_tokens)[0])
         phase["cost_known"] = self.cost_known
+        return True
+
+    def mark_no_llm_calls(self) -> bool:
+        if self.input_tokens or self.output_tokens:
+            return False
+        if self.source == "deterministic_no_llm":
+            return False
+        self.exact_cost_usd = 0.0
+        self.cost_known = True
+        self.source = "deterministic_no_llm"
+        for phase in self.phases.values():
+            phase["estimated_cost_usd"] = 0.0
+            phase["cost_known"] = True
         return True
 
     def parse_line(self, line: str) -> bool:
@@ -768,16 +881,35 @@ class UsageState:
             cost = estimated_cost
             estimated = True
             known = price_known
-        data = _usage_payload(self.model)
+        breakdown = [
+            {key: value for key, value in entry.items() if not key.startswith("_")}
+            for entry in self.model_breakdown.values()
+        ]
+        breakdown.sort(key=lambda item: (str(item.get("component") or ""), str(item.get("model") or "")))
+        if breakdown:
+            total = sum(int(item.get("total_tokens") or 0) for item in breakdown)
+            input_total = sum(int(item.get("input_tokens") or 0) for item in breakdown)
+            output_total = sum(int(item.get("output_tokens") or 0) for item in breakdown)
+            cost = round(sum(float(item.get("estimated_cost_usd") or 0.0) for item in breakdown), 6)
+            known = all(item.get("cost_known") is not False for item in breakdown)
+            estimated = any(item.get("estimated") is not False for item in breakdown)
+            models = {str(item.get("model") or "unknown") for item in breakdown}
+            display_model = next(iter(models)) if len(models) == 1 else "Mixed models"
+        else:
+            input_total = self.input_tokens
+            output_total = self.output_tokens
+            display_model = self.model
+        data = _usage_payload(display_model)
         data.update({
-            "input_tokens": self.input_tokens,
-            "output_tokens": self.output_tokens,
+            "input_tokens": input_total,
+            "output_tokens": output_total,
             "total_tokens": total,
             "estimated_cost_usd": cost,
             "cost_known": known,
             "estimated": estimated,
             "source": self.source,
             "phases": self.phases,
+            "model_breakdown": breakdown,
         })
         if session_totals:
             data["session_totals"] = {
@@ -803,6 +935,7 @@ def _parse_usage_line(line: str) -> dict[str, Any] | None:
                 "output_tokens": int(output_tokens or 0),
                 "cost_usd": data.get("cost") or data.get("cost_usd") or data.get("estimated_cost_usd"),
                 "model": str(data.get("model") or ""),
+                "component": str(data.get("component") or data.get("stage") or data.get("phase") or ""),
                 "source": "json_usage_event",
             }
 
@@ -901,6 +1034,8 @@ class RunState:
             return False
         session = _read_json(self.workspace / "session.json")
         changed = self.usage.merge_session_stats(session)
+        if not changed and _workspace_has_no_llm_calls(self.workspace):
+            changed = self.usage.mark_no_llm_calls()
         if changed:
             _persist_workspace_usage(self.workspace, self.usage.snapshot(_load_usage_totals(self.root)), self.id, final=False)
         return changed
