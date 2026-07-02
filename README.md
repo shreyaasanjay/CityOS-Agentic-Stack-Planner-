@@ -1,229 +1,145 @@
-# TraceFix: Repairing Agent Coordination Protocols with TLA+ Counterexamples
+# Smart Room Agentic PLanner
 
-A research platform for verifying LLM-based Multi-Agent Systems (MAS) using TLA+ formal methods. LLMs design coordination protocols as an Intermediate Representation (IR), which compiles to TLA+ specs verified by the TLC model checker. A repair loop fixes violations automatically.
+The agentic planner turns a natural-language multi-agent question into a verified CityOS module plan and deployable apps.
 
-> Reference implementation accompanying the ACM CAIS 2026 paper **[*TraceFix: Repairing Agent Coordination Protocols with TLA+ Counterexamples*](https://arxiv.org/abs/2605.07935)** — 🏆 **ACM CAIS 2026 Best Paper Award**.
+The end-to-end flow is:
 
-## Demo
+1. TeLLMe decomposes the user intent into structured application requirements.
+2. TraceFix generates an agent/resource/channel protocol.
+3. TraceFix verifies the protocol with TLA+/PlusCal and TLC.
+4. TraceFix exports `spec/cityos_module_plan.json`.
+5. CityOS Synthesizer packages the verified plan into one CityOS app per agent plus one monitor app.
+6. CityOS Runtime OS runs the generated apps.
 
+TraceFix is the planner and verifier. It does not run production CityOS agents itself.
 
+## Requirements
 
-https://github.com/user-attachments/assets/08c126f2-baf1-42cf-84a6-c969d150d3bc
+- Python 3.11+
+- Java 17 for TLC
+- `lib/tla2tools.jar`
+- OpenCode CLI for LLM design runs
+- LLM API keys as needed:
+  - TeLLMe: OpenAI key, commonly `gpt-4.1`
+  - TraceFix: OpenRouter key, commonly GLM 5.2
+  - Optional: Anthropic, Ollama
 
+## First-Time Setup
 
+From the repo root:
 
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[test,agentic,opencode]"
+python -m pip install -r local-ui\requirements-ui.txt
 
-## Core Idea
+Copy the environment template if you want CLI runs to auto-load keys:
+Copy-Item .env.example .env
+Then fill in any keys you need:
+OPENAI_API_KEY=
+OPENROUTER_API_KEY=
+ANTHROPIC_API_KEY=
+The local UI can also accept API keys directly in the browser. Keys entered there are passed only to the spawned run process and are not written to disk.
+Start The Local UI
+Start the main integrated runner:
+.\local-ui\start-runner.ps1 -Port 8788 -Open
+Open:
+http://127.0.0.1:8788/
+To start every local UI:
+.\local-ui\start-both.ps1 -Open
+This starts:
+Viewer:      http://127.0.0.1:8787/
+Runner:      http://127.0.0.1:8788/
+Synthesizer: http://127.0.0.1:8790/
+Stop local UIs with:
+.\local-ui\stop-ui.ps1
+End-To-End UI Flow
+Open the runner at http://127.0.0.1:8788/.
+Choose the workflow you want:TraceFix Planner to generate or export a verified intermediary plan.
+CityOS Synthesizer to package a verified workspace into CityOS app folders.
 
-LangGraph-style centralized orchestration avoids concurrency — but also limits scalability. This project targets **independent concurrent agents** with shared resources and message channels, where coordination bugs (deadlocks, race conditions, liveness failures) are real risks.
+Enter the required API keys.
+Pick provider/model settings.Use OpenAI or TeLLMe-facing settings for TeLLMe decomposition.
+Use OpenRouter/GLM 5.2 or the desired TraceFix model for verification.
 
-**The pipeline:**
-1. LLM generates an Intermediate Representation (IR) describing agents, resources, and channels
-2. IR compiles to a TLA+ specification via PlusCal
-3. TLC model checker exhaustively explores all interleavings
-4. If verification fails, the counterexample trace guides LLM repair
-5. Post-verification, state machines are extracted, per-agent prompts are generated, and a verified intermediary expression is emitted
+Choose either a benchmark task or a custom task.
+Click Generate Verified Plan.
+Wait for TraceFix to finish:IR generation
+PlusCal/TLA+ generation
+TLC verification
+repair loop if needed
+state extraction
+prompt generation
+CityOS module plan export
 
-TLC doesn't check business logic — it checks coordination: *"Can two agents hold the same lock? Can the system deadlock? Does every agent eventually terminate?"*
+Check the output tabs:Log
+IR
+Intermediary Plan
+Protocol
+States
+TLC Error
 
-## 🚧 Ongoing Updates
+Check LLM Usage for token and cost reporting.Mixed model runs show model breakdowns, for example TeLLMe gpt-4.1 and TraceFix glm-5.2.
+Deterministic/no-LLM runs show zero tokens instead of unavailable usage.
 
-Actively in progress — porting TraceFix onto a more robust harness and generalizing it beyond the bundled benchmarks:
-
-- **A stronger agent harness**
-- **More general tasks**
-- **Simpler MAS building**
-
-## Project Structure
-
-```
-.
-├── tracefix/                       # Main package
-│   ├── pipeline/                   # Agentic verification pipeline (IR → PlusCal → TLA+)
-│   ├── cli/                        # CLI tool: tla-verify-pluscal
-│   └── runtime/
-│       ├── enforcement/            # Architecture A: runtime enforcement engine
-│       ├── monitoring/             # Architecture B: runtime monitoring engine
-│       └── baselines/
-│           ├── shared_chat/        # Baseline: shared-chat (no protocol)
-│           └── null_monitor/       # Baseline: null-monitor (no protocol)
-├── benchmark/                      # 48 coordination tasks (16 scenarios × 3 difficulties)
-├── lib/                            # tla2tools.jar (download separately, see Requirements)
-├── .claude/skills/                 # Claude Code interactive skills
-├── pyproject.toml
-└── LICENSE
-```
-
-Run the pipeline to generate verified workspaces (`ir.json`, `Protocol.tla`, `states.json`, per-agent prompts) and a verified intermediary expression (`spec/cityos_module_plan.json`) locally — see Quick Start.
-
-For the TraceFix to CityOS boundary, see [docs/CITYOS_MODULE_PLAN.md](docs/CITYOS_MODULE_PLAN.md). TraceFix emits the verified blueprint; CityOS Synthesizer later builds one CityOS app/container per agent and one separate monitor app/container; CityOS Runtime OS executes and enforces lifecycle, permissions, sensors, privacy, ConcordFS communication, and monitoring.
-
-## Verification Pipeline
-
-**`tracefix/pipeline/`** — Agentic pipeline (IR → PlusCal → TLA+)
-- `pipeline/pluscal_generator.py` → `pluscal_compiler.py` → `pluscal_parser.py` (tree-sitter)
-- TLC state space optimizations: ChannelBound CONSTRAINT, agent-specific Next formula, string messages, multi-core TLC (`-workers auto`), safety-only verification
-- One channel per directed (from, to) pair — `labels` field distinguishes message types
-
-**`tracefix/cli/`** — CLI tool (installed via `pip install -e .`)
-- Commands: `validate`, `scaffold`, `verify`, `extract-states`
-
-## Benchmarks
-
-**`benchmark/`** — 16 scenarios × 3 difficulties = 48 coordination tasks
-
-| # | Scenario | # | Scenario |
-|---|----------|---|----------|
-| 1 | Shared Codebase Development | 9 | Dining Philosophers |
-| 2 | Smart Building | 10 | Parallel Build |
-| 3 | Research Writing | 11 | Flexible Manufacturing |
-| 4 | Code Collaboration | 12 | Collaborative Kitchen |
-| 5 | Medical Consultation | 13 | Pharmaceutical Lab |
-| 6 | Codebase Development | 14 | Drug Discovery Pipeline |
-| 7 | Document Co-authoring | 15 | Semiconductor Fabrication |
-| 8 | API System Development | 16 | CI/CD Pipeline |
-
-Each task has `description.md`, `tools.json` (per-agent tool schemas), and `metadata.json`. Scenarios 12–16 include simulation environments with failure injection (`--difficulty 0-3`).
-
-## Local Runtime Architectures
-
-These are legacy/local-development runners and benchmark harnesses. They consume the same TLC-verified spec and provide fine-grained locking (agents run in parallel, blocking only at contention) — unlike LangGraph's global serialization. They are useful for debugging and experiments, but they are not the CityOS production execution path.
-
-**`tracefix/runtime/enforcement/`** — **Enforcement**: Runtime mediator structurally prevents coordination violations. Agents are unaware of locks/channels.
-
-**`tracefix/runtime/monitoring/`** — **Monitoring + correction**: Agents autonomously call coordination tools (`acquire_lock`, `send_message`, etc.); the monitor validates every operation against the verified state machine (`states.json`). On an out-of-order call it **corrects** the agent — the op is blocked before any effect and the legal next actions are returned as guidance (e.g. "do `acquire_lock("DOC")` instead") — and after a bounded number of unrecovered corrections the agent fails honestly (never loops forever, never fakes success).
-
-**`tracefix/runtime/baselines/shared_chat/`** and **`tracefix/runtime/baselines/null_monitor/`** — Baselines without protocol monitoring, for comparison experiments.
-
-## Orchestration Workflow
-
-```
-Task Description
-    ↓
-Phase 1: Structured Analysis → ir.json
-    ↓
-    tla-verify-pluscal scaffold ir.json → Protocol.tla + Protocol.cfg
-    ↓
-Phase 2: Write PlusCal Process Bodies
-    ↓
-Phase 2.5: Semantic Fidelity Check
-    ↓
-Phase 3: tla-verify-pluscal verify . → TLC (repair loop on failure)
-    ↓
-Phase 4: tla-verify-pluscal extract-states . → states.json
-    ↓
-Phase 5: Generate per-agent prompts → prompts/runtime_a/ + prompts/runtime_b/
-    ↓
-Phase 6: Emit verified intermediary expression → spec/cityos_module_plan.json
-```
-
-### Using Claude Code (Recommended)
-
-```
-> /tla-verify-pluscal
-"Design a protocol for task 3E (Two-Author Research Report)"
-```
-
-### Using CLI Directly
-
-```bash
-pip install -e .
-tla-verify-pluscal validate ir.json
-tla-verify-pluscal scaffold ir.json -o workspace/my_task/
-# (edit Protocol.tla to fill in process bodies)
-tla-verify-pluscal verify workspace/my_task/
-tla-verify-pluscal extract-states workspace/my_task/
-```
-
-### Output Artifacts
-
-```
-workspace/my_task/
-├── ir.json              # IR specification (agents, resources, channels)
-├── Protocol.tla         # PlusCal source + translated TLA+
-├── Protocol.cfg         # TLC configuration
-├── states.json          # Extracted state machine for runtime
-├── summary.json         # Repair tracking
-└── prompts/
-    ├── runtime_a/       # Per-agent prompts for enforcement runtime
-    └── runtime_b/       # Per-agent prompts for monitoring runtime
-```
-
-## Quick Start
-
-```bash
-# Setup
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[test]"        # package + test deps (pytest, pytest-asyncio)
-pip install openai anthropic    # LLM providers (pipeline + runtimes)
-
-# Run tests
-pytest tracefix/pipeline/tests/ -v             # Pipeline tests
-pytest tracefix/runtime/enforcement/tests/ -v                 # Runtime A tests
-pytest tracefix/runtime/monitoring/tests/ -v                 # Runtime B tests
-pytest benchmark/tests/ -v                 # Benchmark tests
-
-# Run the agentic verification pipeline (produces a verified workspace/ )
-python -m tracefix.pipeline --benchmark 3E --verbose
-
-# Export a verified intermediary expression from a generated workspace
-tracefix export-cityos-plan --workspace workspace/3E
-
-# Legacy local debug only: run agents with monitoring against the generated workspace
-python -m tracefix.runtime.monitoring run --task 3E --workspace workspace/3E --verbose
-
-# ...add --live to watch the coordination in real time in your browser during the run
-# (D3 + live SSE at http://localhost:8765; a static run_trace.html is also saved + opened)
-python -m tracefix.runtime.monitoring run --task 3E --workspace workspace/3E --verbose --live
-
-# Baseline runtimes (no protocol monitoring)
-python -m tracefix.runtime.baselines.shared_chat run --task 3E --verbose
-python -m tracefix.runtime.baselines.null_monitor run --task 3E --verbose
-```
-
-**Requirements:**
-- Python 3.11+ (3.13 tested)
-- Java 17 (for TLC): any `java` 17 on your `PATH` works, or override with `TLA_VERIFY_JAVA` / `--java-path` (on macOS it also auto-detects Homebrew's `/opt/homebrew/opt/openjdk@17/bin/java`)
-- `lib/tla2tools.jar` v1.8.0 (not in git, download from [TLA+ releases](https://github.com/tlaplus/tlaplus/releases))
-- API keys in `.env`: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
-
-## Verified Properties
-
-TLC exhaustively checks these properties on every generated specification:
-
-| Property | What it verifies |
-|----------|-----------------|
-| Deadlock freedom | No reachable state where all agents are stuck |
-| Mutual exclusion | No lock held by two agents simultaneously |
-| Termination | All agents eventually reach their terminal state |
-| No orphan locks | All locks freed when protocol completes |
-| Channel drainage | All messages consumed when protocol completes |
-| Type invariant | All variables maintain valid types throughout execution |
-
-## IR Schema
-
-The IR has 3 top-level sections: `agents`, `resources`, `channels`.
-
-- **Resources**: `Lock` (mutual exclusion) or `Counter` (non-negative integer). Counter = shared resource pool (API rate limits, GPU slots), NOT loop bounds.
-- **Channels**: Unbounded FIFO queues between agents. One channel per directed (from, to) pair; `labels` field distinguishes message types.
-
-Agent behavior is expressed as PlusCal process bodies. State machines are extracted post-verification into `states.json`, which is the ground truth for runtime monitoring and prompt generation.
-
-## Citation
-
-If you use TraceFix in your research, please cite:
-
-```bibtex
-@inproceedings{xia2026tracefix,
-  title     = {TraceFix: Repairing Agent Coordination Protocols with TLA+ Counterexamples},
-  author    = {Xia, Shuren and Li, Qiwei and Ehsan, Taqiya and Ortiz, Jorge},
-  booktitle = {ACM Conference on AI and Agentic Systems (CAIS '26)},
-  year      = {2026},
-  doi       = {10.1145/3786335.3813159},
-  url       = {https://arxiv.org/abs/2605.07935}
-}
-```
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+Switch to CityOS Synthesizer.
+Pick the verified workspace.
+Confirm readiness checks pass.
+Choose the output directory/package prefix.
+Click Generate CityOS Artifacts.
+Use the generated app folders from:
+workspace/<run_id>/output/cityos_synthesis/
+CLI Flow
+Generate a verified workspace from a natural-language task:
+tracefix design "Design a smart room application with independent agents for occupancy, lighting, badge access, and monitoring" --model <model-name> --verbose
+Export or regenerate the CityOS module plan:
+tracefix export-cityos-plan --workspace workspace/<generated_workspace>
+Run the legacy local debug runner only when needed:
+tracefix run --local-dev --workspace workspace/<generated_workspace>
+Main Outputs
+A successful run creates a workspace containing:
+workspace/<run_id>/
+  spec/
+    ir.json
+    Protocol.tla
+    Protocol.cfg
+    states.json
+    summary.json
+    cityos_module_plan.json
+  prompts/
+    runtime_a/
+    runtime_b/
+  llm_usage.json
+  output/
+    cityos_synthesis/
+The most important handoff file is:
+spec/cityos_module_plan.json
+CityOS Synthesizer consumes that file and writes Docker-buildable CityOS app packages.
+Theme Toggle
+The runner UI supports dark mode and a beige light mode. Use the theme button in the header to switch modes. The preference is saved locally in the browser.
+Troubleshooting
+If the UI cannot start, check:
+.tracefix-ui\logs\runner.out.log
+.tracefix-ui\logs\runner.err.log
+If TLC cannot run, check Java and tla2tools.jar.
+If an LLM request times out, verify:
+the API key is correct
+the selected model exists for that provider
+network access is available
+provider/model settings match the intended stage
+If CityOS synthesis is not ready, make sure the workspace contains:
+spec/ir.json
+spec/states.json
+spec/cityos_module_plan.json
+prompts/runtime_b/
+Project Structure
+tracefix/
+  pipeline/              Agentic IR -> PlusCal -> TLA+ verification
+  runtime/               CLI, CityOS plan export, local runtimes
+  runner_ui/             Integrated local planner and synthesizer UI
+  cityos_synth_ui/       Standalone CityOS synthesis UI
+benchmark/               Benchmark coordination tasks
+local-ui/                PowerShell scripts for local UI startup
+docs/                    CityOS handoff and architecture notes
+workspace/               Generated run workspaces
