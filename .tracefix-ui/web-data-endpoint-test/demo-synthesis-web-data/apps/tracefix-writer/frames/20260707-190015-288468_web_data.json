@@ -1,0 +1,14 @@
+{
+  "kind": "agent",
+  "agent": "WRITER",
+  "task_id": "endpoint_demo",
+  "stream": "web_data",
+  "input_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test\\demo-synthesis-web-data\\source_data\\20260707-190015-276089_web_payload.json",
+  "input_exists": true,
+  "input_size_bytes": 528,
+  "timestamp": "2026-07-07T19:00:15.286631+00:00",
+  "recorded_at": "2026-07-07T19:00:15.288468Z",
+  "bundle": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test\\tracefix-writer\\tracefix_bundle",
+  "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test\\tracefix-writer\\tracefix_bundle\\workspace",
+  "record_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test\\demo-synthesis-web-data\\apps\\tracefix-writer\\frames\\20260707-190015-288468_web_data.json"
+}

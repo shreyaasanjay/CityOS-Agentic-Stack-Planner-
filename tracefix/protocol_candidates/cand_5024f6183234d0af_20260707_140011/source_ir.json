@@ -1,0 +1,30 @@
+{
+  "agents": [
+    {
+      "id": "video_context"
+    },
+    {
+      "id": "audio_context"
+    }
+  ],
+  "resources": [
+    {
+      "id": "video_context_resource",
+      "type": "Lock"
+    },
+    {
+      "id": "audio_context_resource",
+      "type": "Lock"
+    }
+  ],
+  "channels": [
+    {
+      "id": "video_context_to_audio_context",
+      "from": "video_context",
+      "to": "audio_context",
+      "labels": [
+        "handoff"
+      ]
+    }
+  ]
+}

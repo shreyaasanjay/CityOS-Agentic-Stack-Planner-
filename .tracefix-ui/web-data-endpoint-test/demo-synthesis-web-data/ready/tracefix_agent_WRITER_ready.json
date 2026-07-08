@@ -1,0 +1,15 @@
+{
+  "kind": "agent",
+  "agent": "WRITER",
+  "task_id": "endpoint_demo",
+  "runtime_mode": "web_data",
+  "bundle": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test\\tracefix-writer\\tracefix_bundle",
+  "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test\\tracefix-writer\\tracefix_bundle\\workspace",
+  "output_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test\\demo-synthesis-web-data\\apps\\tracefix-writer",
+  "plan_version": "0.1",
+  "autorun": false,
+  "startup_configured": false,
+  "handler_configured": false,
+  "prompt_path": null,
+  "started_at": "2026-07-07T19:04:50.062584Z"
+}

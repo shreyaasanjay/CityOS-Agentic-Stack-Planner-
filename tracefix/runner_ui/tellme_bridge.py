@@ -221,6 +221,31 @@ class TellMeBridge:
         state["cityos"] = result
         self._write_json(self.current_path, state)
 
+
+    def record_web_data_answer(self, result: dict[str, Any]) -> None:
+        state = self.current()
+        if not state:
+            return
+        tellme = state.get("tellme") if isinstance(state.get("tellme"), dict) else None
+        if tellme is None:
+            return
+        answer = result.get("answer") if isinstance(result.get("answer"), dict) else None
+        if answer is not None:
+            tellme["answer_summary"] = answer.get("text") or ""
+            chat_answer = answer.get("chatAnswer") or answer.get("chat_answer") or ""
+            if chat_answer:
+                tellme["chat_answer"] = chat_answer
+            tellme["web_data_answer"] = answer
+        if result.get("answerPath"):
+            tellme["web_data_answer_path"] = str(result.get("answerPath"))
+        if result.get("payload"):
+            payload = result.get("payload") if isinstance(result.get("payload"), dict) else {}
+            tellme["web_data_snapshot_summary"] = payload.get("snapshotSummary")
+            tellme["web_data_payload_path"] = payload.get("payloadPath")
+        tellme["web_data_source_url"] = result.get("sourceUrl")
+        tellme["web_data_source_kind"] = result.get("sourceKind")
+        state["tellme"] = tellme
+        self._write_json(self.current_path, state)
     def artifact_paths(self, data: dict[str, Any] | None = None) -> list[str]:
         current_data = data or ((self.current() or {}).get("tellme") or {})
         run_dir_raw = str(current_data.get("run_dir") or "")

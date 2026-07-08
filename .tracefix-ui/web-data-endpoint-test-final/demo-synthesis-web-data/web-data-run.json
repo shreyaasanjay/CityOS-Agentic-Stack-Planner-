@@ -1,0 +1,42 @@
+{
+  "ok": true,
+  "sourceUrl": "data:application/json,%7B%22occupied%22%3Atrue%7D",
+  "manifestPath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test-final\\demo-synthesis.json",
+  "outputRoot": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test-final\\demo-synthesis-web-data",
+  "startedAt": "2026-07-07T19:07:23.876457+00:00",
+  "finishedAt": "2026-07-07T19:07:23.900530+00:00",
+  "payload": {
+    "url": "data:application/json,%7B%22occupied%22%3Atrue%7D",
+    "status": null,
+    "reason": "",
+    "contentType": "application/json",
+    "headers": {
+      "Content-type": "application/json",
+      "Content-length": "17"
+    },
+    "payloadPath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test-final\\demo-synthesis-web-data\\source_data\\20260707-190723-892458_web_payload.json",
+    "sizeBytes": 17,
+    "fetchedAt": "2026-07-07T19:07:23.876457+00:00",
+    "writtenAt": "2026-07-07T19:07:23.893461+00:00",
+    "metadataPath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test-final\\demo-synthesis-web-data\\source_data\\20260707-190723-892458_web_payload_metadata.json"
+  },
+  "runs": [
+    {
+      "app": {
+        "name": "tracefix-writer",
+        "kind": "agent",
+        "agent": "WRITER",
+        "path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test-final\\tracefix-writer"
+      },
+      "status": "completed",
+      "outputDir": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test-final\\demo-synthesis-web-data\\apps\\tracefix-writer",
+      "readyPath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test-final\\demo-synthesis-web-data\\ready\\tracefix_agent_WRITER_ready.json",
+      "framesDir": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test-final\\demo-synthesis-web-data\\apps\\tracefix-writer\\frames",
+      "frameRecords": [
+        "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test-final\\demo-synthesis-web-data\\apps\\tracefix-writer\\frames\\20260707-190723-899526_web_data.json"
+      ],
+      "handlerRecords": [],
+      "handlerConfigured": false
+    }
+  ]
+}

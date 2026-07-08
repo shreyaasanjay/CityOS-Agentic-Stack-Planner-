@@ -1,0 +1,21 @@
+{
+  "agents": [
+    "A",
+    "B"
+  ],
+  "edges": [
+    {
+      "from": "A",
+      "to": "B"
+    }
+  ],
+  "resources": [
+    "R1",
+    "R2"
+  ],
+  "shape": "sequential_handoff",
+  "agent_count": 2,
+  "channel_count": 1,
+  "resource_count": 2,
+  "topology_hash": "5024f6183234d0af"
+}

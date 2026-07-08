@@ -29,6 +29,9 @@ const state = {
     selected: null,
     result: null,
     workspaceType: "custom",
+    cityosRoot: "",
+    appsDir: "",
+    webDataUrl: "http://feruzgay.local:4000/api/v1",
   },
 };
 
@@ -45,6 +48,7 @@ const els = {
   tellmeKeyStatus: document.querySelector("#tellmeKeyStatus"),
   tellmeQuery: document.querySelector("#tellmeQuery"),
   tellmeSpaceId: document.querySelector("#tellmeSpaceId"),
+  tellmeWebDataUrl: document.querySelector("#tellmeWebDataUrl"),
   tellmeTimestamp: document.querySelector("#tellmeTimestamp"),
   tellmeProcess: document.querySelector("#tellmeProcess"),
   tellmeRunAll: document.querySelector("#tellmeRunAll"),
@@ -69,6 +73,7 @@ const els = {
   tellmeIntent: document.querySelector("#tellmeIntent"),
   tellmeTaskSpec: document.querySelector("#tellmeTaskSpec"),
   tellmeAnswer: document.querySelector("#tellmeAnswer"),
+  tellmeChatAnswer: document.querySelector("#tellmeChatAnswer"),
   form: document.querySelector("#runForm"),
   provider: document.querySelector("#provider"),
   providerFields: document.querySelector("#providerFields"),
@@ -146,11 +151,15 @@ const els = {
   synthBenchmarkSelect: document.querySelector("#synthBenchmarkSelect"),
   synthWorkspaceSelect: document.querySelector("#synthWorkspaceSelect"),
   synthWorkspacePath: document.querySelector("#synthWorkspacePath"),
+  synthCityOSRoot: document.querySelector("#synthCityOSRoot"),
+  synthWebDataUrl: document.querySelector("#synthWebDataUrl"),
   synthOutputDir: document.querySelector("#synthOutputDir"),
   synthPackageName: document.querySelector("#synthPackageName"),
   synthOverwrite: document.querySelector("#synthOverwrite"),
   synthRefresh: document.querySelector("#synthRefresh"),
   synthGenerate: document.querySelector("#synthGenerate"),
+  synthBuildCityOS: document.querySelector("#synthBuildCityOS"),
+  synthRunWebData: document.querySelector("#synthRunWebData"),
   synthStatus: document.querySelector("#synthStatus"),
   synthChecklist: document.querySelector("#synthChecklist"),
   synthWorkspaceTypeDisplay: document.querySelector("#synthWorkspaceTypeDisplay"),
@@ -300,8 +309,13 @@ function bindEvents() {
     updateTellMeTracefixFields();
   });
 
+  els.tellmeWebDataUrl?.addEventListener("input", () => {
+    if (els.synthWebDataUrl) els.synthWebDataUrl.value = els.tellmeWebDataUrl.value;
+    state.synth.webDataUrl = els.tellmeWebDataUrl.value.trim() || state.synth.webDataUrl;
+  });
+
   els.tellmeRunAll.addEventListener("click", async () => {
-    await processTellMeAndTraceFix();
+    await processTellMeFullPipeline();
   });
 
   els.tellmeToTracefix.addEventListener("click", async () => {
@@ -443,6 +457,14 @@ function bindEvents() {
 
   els.synthGenerate.addEventListener("click", async () => {
     await synthesizeCityOSArtifacts();
+  });
+
+  els.synthBuildCityOS.addEventListener("click", async () => {
+    await buildCityOSArtifacts();
+  });
+
+  els.synthRunWebData?.addEventListener("click", async () => {
+    await runWebDataApps();
   });
 
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -787,6 +809,205 @@ async function processTellMeAndTraceFix() {
   await startTraceFixFromTellMe();
 }
 
+function appendTellMeMessage(kind, text) {
+  const safeKind = ["success", "warning", "error", "info"].includes(kind) ? kind : "info";
+  els.tellmeMessages.insertAdjacentHTML("beforeend", `<div class="message-card ${safeKind}">${escapeHtml(text)}</div>`);
+}
+
+function pipelineWebDataUrl() {
+  const fromTellMe = els.tellmeWebDataUrl?.value?.trim() || "";
+  const fromSynth = els.synthWebDataUrl?.value?.trim() || "";
+  const url = fromTellMe || fromSynth || state.synth.webDataUrl || "http://feruzgay.local:4000/api/v1";
+  if (els.tellmeWebDataUrl) els.tellmeWebDataUrl.value = url;
+  if (els.synthWebDataUrl) els.synthWebDataUrl.value = url;
+  state.synth.webDataUrl = url;
+  return url;
+}
+
+async function refreshTellMeCurrentFromServer() {
+  const response = await getJson("/api/tellme/current");
+  if (response.ok && response.data) {
+    state.tellme.current = response.data;
+    state.tellme.runId = response.run_id;
+    renderTellMe(response.data, response.errors, response.warnings);
+  }
+  return response.data || null;
+}
+
+async function processTellMeFullPipeline() {
+  const originalText = els.tellmeRunAll.textContent;
+  els.tellmeRunAll.textContent = "Running Full Pipeline...";
+  els.tellmeRunAll.disabled = true;
+  els.tellmeProcess.disabled = true;
+  els.tellmeToTracefix.disabled = true;
+  try {
+    const data = await processTellMeQuery();
+    els.tellmeRunAll.disabled = true;
+    els.tellmeProcess.disabled = true;
+    els.tellmeToTracefix.disabled = true;
+    if (!data) return;
+    if (data.status === "not_answerable") {
+      showToast("TeLLMe blocked this request");
+      return;
+    }
+
+    appendTellMeMessage("info", "TraceFix verification is running from the TeLLMe task spec...");
+    const tracefixRun = await startTraceFixFromTellMe({ waitForCompletion: true, stayOnTellMe: true });
+    const workspace = tracefixRun?.artifacts?.workspace || state.artifacts?.workspace || currentWorkspacePath();
+    if (!workspace) throw new Error("TraceFix completed but did not return a workspace for CityOS synthesis.");
+
+    appendTellMeMessage("info", "CityOS synthesis is generating app bundles for the verified workspace...");
+    state.synth.workspaceType = "custom";
+    if (els.synthWorkspacePath) els.synthWorkspacePath.value = workspace;
+    pipelineWebDataUrl();
+    await loadSynthConfig({ preferCurrent: true });
+    if (els.synthWorkspacePath) els.synthWorkspacePath.value = workspace;
+    await loadSynthWorkspace(workspace);
+
+    const cityosResponse = await postJson("/api/cityos/synthesize", {
+      workspace,
+      cityosRoot: els.synthCityOSRoot?.value || state.synth.cityosRoot || "",
+      appsDir: els.synthOutputDir?.value || state.synth.appsDir || "",
+      packageName: els.synthPackageName?.value || "",
+      overwrite: els.synthOverwrite?.checked || false,
+    });
+    const cityosResult = cityosResponse.data || cityosResponse;
+    state.synth.result = cityosResult;
+    state.synth.selected = cityosResult.summary || state.synth.selected;
+    if (cityosResult.summary) renderSynthSummary(cityosResult.summary);
+    renderSynthArtifacts(cityosResult);
+
+    appendTellMeMessage("info", "Smartroom web-data apps are fetching the API data and producing the final answer...");
+    const webResult = await postJson("/api/synth/run-web-data", {
+      manifestPath: cityosResult.manifestPath,
+      sourceUrl: pipelineWebDataUrl(),
+      sourceMode: "auto",
+      timeoutSeconds: 30,
+    });
+    state.synth.webDataResult = webResult;
+    await refreshTellMeCurrentFromServer();
+    appendTellMeMessage(webResult.ok ? "success" : "warning", webResult.ok
+      ? "Full pipeline complete. The Answer Summary now contains the latest smartroom result."
+      : "Full pipeline finished, but one or more generated apps reported errors. Check the CityOS Synthesizer output.");
+    showToast(webResult.ok ? "Full pipeline complete" : "Pipeline finished with app errors");
+  } catch (error) {
+    appendTellMeMessage("error", error.message);
+    showToast(error.message);
+  } finally {
+    els.tellmeRunAll.textContent = originalText;
+    els.tellmeRunAll.disabled = false;
+    els.tellmeProcess.disabled = false;
+    els.tellmeToTracefix.disabled = !state.tellme.current || state.tellme.current.status === "not_answerable";
+    updateWorkflowReadiness();
+  }
+}
+
+function formatCameraNameForAnswer(name) {
+  return String(name || "camera").replace(/cam(\d+)/i, "cam $1");
+}
+
+function personCountLabel(value) {
+  const count = Number(value);
+  if (!Number.isFinite(count)) return `${value} people`;
+  return `${count} ${count === 1 ? "person" : "people"}`;
+}
+
+function renderTellMeChatAnswer(data) {
+  if (!data) return "No answer yet. Run the full pipeline to generate a data-backed response.";
+  const answer = data.web_data_answer || data.answer_packet?.answer || null;
+  const chatAnswer = data.chat_answer || answer?.chatAnswer || answer?.chat_answer || "";
+  if (chatAnswer) return chatAnswer;
+
+  const cameras = Array.isArray(answer?.cameras) ? answer.cameras : [];
+  if (!cameras.length) {
+    return "No smartroom camera result is available yet. Run the web data apps after synthesis to generate the answer.";
+  }
+  const cameraParts = [];
+  const latestParts = [];
+  const peaks = [];
+  cameras.forEach((camera) => {
+    const name = formatCameraNameForAnswer(camera.camera);
+    if (camera.peakPeople !== null && camera.peakPeople !== undefined) {
+      const peak = Number(camera.peakPeople);
+      if (Number.isFinite(peak)) {
+        peaks.push(peak);
+        cameraParts.push(`${name} peaked at ${personCountLabel(peak)}`);
+      }
+    }
+    if (camera.lastPeople !== null && camera.lastPeople !== undefined) {
+      latestParts.push(`${name} most recently showed ${personCountLabel(camera.lastPeople)}`);
+    }
+  });
+  if (!cameraParts.length) {
+    return "I found the latest smartroom recording, but there was not enough occupancy data to summarize yet.";
+  }
+  const overallPeak = peaks.length ? Math.max(...peaks) : null;
+  const recording = answer?.recording ? [answer.recording.day, answer.recording.rec].filter(Boolean).join(" / ") : "";
+  let text = recording ? `For the latest recording (${recording}), ` : "For the latest recording, ";
+  text += `${cameraParts.join(", and ")}.`;
+  if (overallPeak !== null) text += ` Across the observed time window, the peak occupancy was ${personCountLabel(overallPeak)} overall.`;
+  if (latestParts.length) text += ` At the latest observed moment, ${latestParts.join(", and ")}.`;
+  return text;
+}
+
+function renderTellMeAnswerSummary(data) {
+  if (!data) return "No answer summary yet.";
+  const lines = [];
+  const answer = data.web_data_answer || data.answer_packet?.answer || null;
+  const answerText = data.answer_summary || answer?.text || answer?.answer || "";
+  if (answerText) {
+    lines.push("Answer Summary");
+    lines.push(answerText);
+  } else {
+    const route = data.route_decision || {};
+    const spec = data.tracefix_task_spec || {};
+    const goal = spec.application_goal || {};
+    lines.push("Answer Summary");
+    lines.push(route.requires_tracefix === true || data.status === "needs_tracefix"
+      ? "Ready for TraceFix verification. Run the generated apps against the smartroom API to produce the final data-backed answer."
+      : "TeLLMe produced a privacy-bounded answer plan.");
+    if (data.query) lines.push(`Request: ${data.query}`);
+    if (goal.goal_type || goal.user_intent) {
+      lines.push(`Goal: ${goal.goal_type || goal.user_intent}`);
+    }
+  }
+
+  if (data.web_data_snapshot_summary) {
+    const snapshot = data.web_data_snapshot_summary;
+    lines.push("");
+    lines.push("Smartroom Snapshot");
+    if (snapshot.selectedRecording || snapshot.selectedDay) {
+      lines.push(`Recording: ${[snapshot.selectedDay, snapshot.selectedRecording].filter(Boolean).join(" / ")}`);
+    }
+    if (Array.isArray(snapshot.cameras) && snapshot.cameras.length) {
+      lines.push(`Cameras: ${snapshot.cameras.join(", ")}`);
+    }
+    if (snapshot.recordingCount !== undefined) lines.push(`Recordings available: ${snapshot.recordingCount}`);
+    if (snapshot.errors) lines.push(`API errors: ${snapshot.errors}`);
+  }
+
+  if (answer?.cameras?.length) {
+    lines.push("");
+    lines.push("Camera Results");
+    answer.cameras.forEach((camera) => {
+      const details = [];
+      if (camera.peakPeople !== null && camera.peakPeople !== undefined) details.push(`peak ${camera.peakPeople}`);
+      if (camera.lastPeople !== null && camera.lastPeople !== undefined) details.push(`latest ${camera.lastPeople}`);
+      if (camera.actions?.length) details.push(`actions ${camera.actions.join(", ")}`);
+      if (camera.framePath) details.push(`frame ${camera.framePath}`);
+      lines.push(`- ${camera.camera || "camera"}: ${details.join("; ") || "no summarized result"}`);
+    });
+  }
+
+  if (data.web_data_answer_path) {
+    lines.push("");
+    lines.push(`Answer file: ${data.web_data_answer_path}`);
+  }
+  if (data.web_data_payload_path) {
+    lines.push(`Payload file: ${data.web_data_payload_path}`);
+  }
+  return lines.join("\n");
+}
 function renderTellMe(data, errors = [], warnings = []) {
   const route = data?.route_decision || {};
   const privacy = data?.privacy_guardrail || {};
@@ -803,7 +1024,8 @@ function renderTellMe(data, errors = [], warnings = []) {
   els.tellmeRunId.textContent = data?.query_id || "No run yet";
   els.tellmeIntent.textContent = data ? JSON.stringify(data.intent_decomposition || data.execution_brief || {}, null, 2) : "No intent decomposition yet.";
   els.tellmeTaskSpec.textContent = data ? JSON.stringify(spec, null, 2) : "No TraceFix task spec yet.";
-  els.tellmeAnswer.textContent = data ? JSON.stringify(data.answer_packet || {}, null, 2) : "No answer packet yet.";
+  els.tellmeAnswer.textContent = renderTellMeAnswerSummary(data);
+  if (els.tellmeChatAnswer) els.tellmeChatAnswer.textContent = renderTellMeChatAnswer(data);
   els.tellmeToTracefix.disabled = !data || !Object.keys(spec).length || data.status === "not_answerable";
 
   const messages = [
@@ -848,7 +1070,9 @@ function traceFixProviderPayload() {
   };
 }
 
-async function startTraceFixFromTellMe() {
+async function startTraceFixFromTellMe(options = {}) {
+  const waitForCompletion = options.waitForCompletion === true;
+  const stayOnTellMe = options.stayOnTellMe === true;
   resetRunUi();
   try {
     const response = await postJson("/api/tracefix/from-tellme", traceFixProviderPayload());
@@ -856,10 +1080,12 @@ async function startTraceFixFromTellMe() {
     state.runId = run.id;
     state.taskMode = "custom";
     state.runMode = "design";
-    state.workflow = "planner";
+    if (!stayOnTellMe) {
+      state.workflow = "planner";
+    }
     markWorkflowSeen("planner");
     document.querySelectorAll("[data-workflow]").forEach((button) => {
-      button.classList.toggle("active", button.dataset.workflow === "planner");
+      button.classList.toggle("active", button.dataset.workflow === state.workflow);
     });
     document.querySelectorAll("[data-task-mode]").forEach((button) => {
       button.classList.toggle("active", button.dataset.taskMode === "custom");
@@ -867,23 +1093,39 @@ async function startTraceFixFromTellMe() {
     els.benchmarkField.classList.add("hidden");
     els.customTaskField.classList.remove("hidden");
     // Store the real task spec text returned by the server so that any
-    // subsequent "Generate Verified Plan" press sends the actual spec —
+    // subsequent "Generate Verified Plan" press sends the actual spec,
     // not just the human-readable placeholder.
     const actualTaskText = run.tellme_task_text || "";
     state.tellme.taskText = actualTaskText;
     els.customTask.value = actualTaskText || "Loaded automatically from the current TeLLMe task spec.";
-    updateWorkflow();
+    if (!stayOnTellMe) {
+      updateWorkflow();
+    } else {
+      updateWorkflowReadiness();
+    }
     els.startRun.disabled = true;
     els.stopRun.disabled = false;
     els.runTitle.textContent = "Designing TeLLMe application";
     els.runMeta.textContent = `${els.provider.value} / ${els.model.value}`;
     setStatus("running");
-    connectEvents(run.id);
+    const completion = waitForCompletion
+      ? { settled: false, promise: null, resolve: null, reject: null }
+      : null;
+    if (completion) {
+      completion.promise = new Promise((resolve, reject) => {
+        completion.resolve = resolve;
+        completion.reject = reject;
+      });
+    }
+    connectEvents(run.id, completion);
+    return completion ? await completion.promise : run;
   } catch (error) {
     setStatus("failed");
     appendTimeline("error", error.message);
     renderOutput();
     showToast(error.message);
+    if (waitForCompletion) throw error;
+    return null;
   }
 }
 
@@ -901,6 +1143,12 @@ async function loadSynthConfig(options = {}) {
     params.set("workspaceType", state.synth.workspaceType);
     const data = await getJson(`/api/synth/config?${params}`);
     state.synth.workspaces = data.workspaces || [];
+    state.synth.cityosRoot = data.cityosRoot || "";
+    state.synth.appsDir = data.appsDir || "";
+    state.synth.webDataUrl = data.webDataUrl || state.synth.webDataUrl;
+    if (els.synthCityOSRoot && !els.synthCityOSRoot.value) els.synthCityOSRoot.value = state.synth.cityosRoot;
+    if (els.synthWebDataUrl && !els.synthWebDataUrl.value) els.synthWebDataUrl.value = state.synth.webDataUrl;
+    if (els.tellmeWebDataUrl && !els.tellmeWebDataUrl.value) els.tellmeWebDataUrl.value = state.synth.webDataUrl;
     renderSynthWorkspaceOptions();
     const workspacePaths = new Set(state.synth.workspaces.map((workspace) => workspace.path));
     let current = options.preferCurrent === false ? "" : (els.synthWorkspacePath.value || state.artifacts.workspace || "");
@@ -1000,7 +1248,7 @@ function renderSynthSummary(summary) {
 
   els.synthWorkspaceDisplay.textContent = summary.name || summary.path;
   els.synthPlanDisplay.textContent = summary.hasPlan ? summary.planPath : "Missing spec/cityos_module_plan.json";
-  els.synthOutputDir.value = summary.outputDir || "";
+  els.synthOutputDir.value = state.synth.appsDir || summary.outputDir || "";
   els.synthAgentsDisplay.textContent = String((summary.agents || []).length);
   els.synthChannelsDisplay.textContent = String((summary.channels || []).length);
   els.synthResourcesDisplay.textContent = String((summary.resources || []).length);
@@ -1033,6 +1281,8 @@ async function synthesizeCityOSArtifacts() {
       workspace: workspacePath,
       packageName: els.synthPackageName.value,
       overwrite: els.synthOverwrite.checked,
+      cityosRoot: els.synthCityOSRoot.value,
+      appsDir: els.synthOutputDir.value,
     });
     state.synth.result = result;
     state.synth.selected = result.summary;
@@ -1050,13 +1300,120 @@ async function synthesizeCityOSArtifacts() {
   }
 }
 
+async function buildCityOSArtifacts() {
+  const manifestPath = state.synth.result?.manifestPath || els.synthManifestPath.textContent.trim();
+  if (!manifestPath || manifestPath === "No synthesis yet") {
+    showToast("Generate CityOS artifacts first");
+    return;
+  }
+  els.synthBuildCityOS.disabled = true;
+  els.synthOutputStatus.textContent = "Building in CityOS...";
+  const prior = els.synthOutput.textContent || "";
+  els.synthOutput.textContent = `${prior}${prior ? "\n\n" : ""}Running Docker builds from CityOS root...\n`;
+  try {
+    const result = await postJson("/api/synth/build-cityos", {
+      manifestPath,
+      cityosRoot: els.synthCityOSRoot.value,
+      timeoutSeconds: 1800,
+    });
+    els.synthOutputStatus.textContent = result.ok ? "Built in CityOS" : "Build failed";
+    els.synthOutput.textContent = `${els.synthOutput.textContent}\n${renderCityOSBuildResult(result)}`;
+    showToast(result.ok ? "CityOS Docker build complete" : "CityOS build failed");
+  } catch (error) {
+    els.synthOutputStatus.textContent = "Build failed";
+    els.synthOutput.textContent = `${els.synthOutput.textContent}\n${error.message}\n`;
+    showToast(error.message);
+  } finally {
+    els.synthBuildCityOS.disabled = !(state.synth.result?.apps || []).length;
+  }
+}
+
+async function runWebDataApps() {
+  const manifestPath = state.synth.result?.manifestPath || els.synthManifestPath.textContent.trim();
+  if (!manifestPath || manifestPath === "No synthesis yet") {
+    showToast("Generate CityOS artifacts first");
+    return;
+  }
+  const sourceUrl = els.synthWebDataUrl?.value?.trim() || state.synth.webDataUrl || "http://feruzgay.local:4000/api/v1";
+  els.synthRunWebData.disabled = true;
+  els.synthOutputStatus.textContent = "Running web data apps...";
+  const prior = els.synthOutput.textContent || "";
+  els.synthOutput.textContent = `${prior}${prior ? "\n\n" : ""}Fetching web data and feeding generated apps...\n`;
+  try {
+    const result = await postJson("/api/synth/run-web-data", {
+      manifestPath,
+      sourceUrl,
+      sourceMode: "auto",
+      timeoutSeconds: 30,
+    });
+    els.synthOutputStatus.textContent = result.ok ? "Web data run complete" : "Web data run failed";
+    els.synthOutput.textContent = `${els.synthOutput.textContent}\n${renderWebDataRunResult(result)}`;
+    await refreshTellMeCurrentFromServer();
+    showToast(result.ok ? "Web data apps completed" : "Web data apps reported errors");
+  } catch (error) {
+    els.synthOutputStatus.textContent = "Web data run failed";
+    els.synthOutput.textContent = `${els.synthOutput.textContent}\n${error.message}\n`;
+    showToast(error.message);
+  } finally {
+    els.synthRunWebData.disabled = !(state.synth.result?.apps || []).length;
+  }
+}
+
+function renderWebDataRunResult(result) {
+  const lines = [];
+  lines.push("Web Data App Run");
+  lines.push(`Source: ${result.sourceUrl || "unknown"}`);
+  if (result.sourceKind) lines.push(`Kind: ${result.sourceKind}`);
+  lines.push(`Manifest: ${result.manifestPath || "unknown"}`);
+  lines.push(`Output: ${result.outputRoot || "unknown"}`);
+  if (result.payload?.payloadPath) lines.push(`Payload: ${result.payload.payloadPath}`);
+  if (result.payload?.snapshotSummary) lines.push(`Snapshot: ${JSON.stringify(result.payload.snapshotSummary)}`);
+  if (result.answer?.text) lines.push(`Answer: ${result.answer.text}`);
+  if (result.answerPath) lines.push(`Answer file: ${result.answerPath}`);
+  if (result.resultPath) lines.push(`Result: ${result.resultPath}`);
+  lines.push("");
+  (result.runs || []).forEach((run) => {
+    lines.push(`- ${run.app?.name || "app"}: ${run.status}`);
+    if (run.readyPath) lines.push(`  ready: ${run.readyPath}`);
+    if (run.framesDir) lines.push(`  frames: ${run.framesDir}`);
+    (run.frameRecords || []).forEach((record) => lines.push(`  frame: ${record}`));
+    (run.handlerRecords || []).forEach((record) => lines.push(`  handler: ${record}`));
+    if (run.error) lines.push(`  error: ${run.error}`);
+  });
+  return lines.join("\n");
+}
+function renderCityOSBuildResult(result) {
+  const lines = [];
+  lines.push("CityOS Docker Build");
+  lines.push(`CityOS root: ${result.cityosRoot || "unknown"}`);
+  lines.push(`Manifest: ${result.manifestPath || "unknown"}`);
+  if (result.resultPath) lines.push(`Result: ${result.resultPath}`);
+  lines.push("");
+  (result.runs || []).forEach((run) => {
+    lines.push(`- ${run.app?.name || "app"}: ${run.status}${run.returncode !== null && run.returncode !== undefined ? ` (${run.returncode})` : ""}`);
+    lines.push(`  cwd: ${run.cwd}`);
+    lines.push(`  command: ${run.commandText || (run.command || []).join(" ")}`);
+    if (run.error) lines.push(`  error: ${run.error}`);
+    if (run.stdout) lines.push(indentBlock("stdout", run.stdout));
+    if (run.stderr) lines.push(indentBlock("stderr", run.stderr));
+  });
+  return lines.join("\n");
+}
+
+function indentBlock(label, text) {
+  const trimmed = String(text || "").trimEnd();
+  if (!trimmed) return `  ${label}:`;
+  return `  ${label}:\n${trimmed.split("\n").map((line) => `    ${line}`).join("\n")}`;
+}
 function renderSynthArtifacts(result) {
   const apps = result?.apps || [];
+  if (els.synthBuildCityOS) els.synthBuildCityOS.disabled = !apps.length;
+  if (els.synthRunWebData) els.synthRunWebData.disabled = !apps.length;
   els.synthAppCount.textContent = String(apps.length);
   els.synthManifestPath.textContent = result?.manifestPath || "No synthesis yet";
   els.synthAppsDirLabel.textContent = result?.appsDir || "No output yet";
   els.synthAppsStatus.textContent = apps.length
-    ? `${apps.length} app${apps.length === 1 ? "" : "s"} ready for CityOS`
+    ? `${apps.length} app${apps.length === 1 ? "" : "s"} ready to run`
     : "No apps generated";
 
   if (!apps.length) {
@@ -1077,7 +1434,7 @@ function renderSynthArtifacts(result) {
         </div>
         <div class="synth-app-meta">
           <small>${escapeHtml(agentLabel)}</small>
-          <code>${escapeHtml(app.buildCommand || `just build ${app.name}`)}</code>
+          <code>${escapeHtml(app.buildCommand || `just build app=${app.name}`)}</code>
           <code>${escapeHtml(dockerBuildCommand(app))}</code>
         </div>
       </article>
@@ -1086,7 +1443,7 @@ function renderSynthArtifacts(result) {
 
   const commands = [];
   commands.push("# From your CityOS root:");
-  apps.forEach((app) => commands.push(app.buildCommand || `just build ${app.name}`));
+  apps.forEach((app) => commands.push(app.buildCommand || `just build app=${app.name}`));
   commands.push("");
   commands.push("# Direct Docker builds:");
   apps.forEach((app) => commands.push(dockerBuildCommand(app)));
@@ -1095,10 +1452,10 @@ function renderSynthArtifacts(result) {
 }
 
 function dockerBuildCommand(app) {
-  const imageName = `cityos-${String(app.name || "tracefix-app").toLowerCase()}:latest`;
-  return `docker build -t ${imageName} ${shellQuote(app.path || ".")}`;
+  const appName = String(app.name || "tracefix-app").toLowerCase();
+  const imageName = `cityos-${appName}:latest`;
+  return `docker build -f apps/${appName}/Dockerfile -t ${imageName} .`;
 }
-
 function shellQuote(value) {
   const text = String(value || ".");
   if (/^[A-Za-z0-9_./:\\-]+$/.test(text)) return text;
@@ -1273,9 +1630,15 @@ function resetRunUi() {
   updateWorkflowReadiness();
 }
 
-function connectEvents(runId) {
+function connectEvents(runId, completion = null) {
   const source = new EventSource(`/api/runs/${runId}/events`);
   state.eventSource = source;
+  const settleCompletion = (ok, value) => {
+    if (!completion || completion.settled) return;
+    completion.settled = true;
+    if (ok) completion.resolve?.(value);
+    else completion.reject?.(value instanceof Error ? value : new Error(String(value || "TraceFix run failed")));
+  };
   source.addEventListener("tracefix", async (message) => {
     const event = JSON.parse(message.data);
     handleRunEvent(event);
@@ -1284,17 +1647,23 @@ function connectEvents(runId) {
       state.eventSource = null;
       els.startRun.disabled = false;
       els.stopRun.disabled = true;
-      await refreshRun();
+      const latestRun = await refreshRun();
       // If TraceFix completed with a workspace, prime the CityOS Synthesizer to
       // show it as a custom workspace so the user can synthesize without switching tabs.
       if (event.status === "completed" && state.artifacts?.workspace) {
         state.synth.workspaceType = "custom";
+      }
+      if (event.status === "completed") {
+        settleCompletion(true, latestRun || { artifacts: state.artifacts });
+      } else {
+        settleCompletion(false, new Error(`TraceFix ended with status: ${event.status}`));
       }
     }
   });
   source.onerror = () => {
     source.close();
     state.eventSource = null;
+    settleCompletion(false, new Error("TraceFix event stream closed before completion."));
   };
 }
 
@@ -1365,7 +1734,7 @@ function setStatus(status) {
 }
 
 async function refreshRun() {
-  if (!state.runId) return;
+  if (!state.runId) return null;
   const run = await getJson(`/api/runs/${state.runId}`);
   state.artifacts = run.artifacts || {};
   state.usage = run.usage || state.usage;
@@ -1375,6 +1744,7 @@ async function refreshRun() {
   renderArtifacts();
   renderUsage();
   renderOutput();
+  return run;
 }
 
 function renderArtifacts() {
