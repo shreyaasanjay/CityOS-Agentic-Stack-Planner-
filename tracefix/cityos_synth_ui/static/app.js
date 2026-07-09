@@ -75,7 +75,7 @@ async function loadConfig() {
   const config = await getJson("/api/config");
   els.cityosRoot.value = config.cityosRoot || "";
   els.appsDir.value = config.appsDir || "";
-  els.webDataUrl.value = config.webDataUrl || "http://feruzgay.local:4000/api/v1";
+  els.webDataUrl.value = config.webDataUrl || "https://smartroom-mirror.vercel.app/api/v1";
   state.workspaces = config.workspaces || [];
   renderWorkspaces();
 }

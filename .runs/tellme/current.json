@@ -1,12 +1,12 @@
 {
-  "run_id": "tellme_362c5e59d6c0",
+  "run_id": "tellme_dcb1dfa52bf9",
   "tellme": {
-    "query_id": "tellme_362c5e59d6c0",
-    "query": "How many people are in the room in total?",
-    "mode": "deterministic",
+    "query_id": "tellme_dcb1dfa52bf9",
+    "query": "How many people are in the room on June 24th?",
+    "mode": "llm",
     "model": "gpt-4.1-mini",
-    "api_key_detected": false,
-    "llm_timeout_seconds": null,
+    "api_key_detected": true,
+    "llm_timeout_seconds": 120,
     "status": "needs_tracefix",
     "route_decision": {
       "route": "single_agent",
@@ -54,7 +54,9 @@
       "needs_temporal_consistency": false,
       "output_contract": {
         "allowed_claims": [
-          "bounded_count"
+          "bounded_count",
+          "presence_state",
+          "timestamped_event_summary"
         ],
         "answer_type": "direct_answer",
         "fallback_answer_type": "insufficient_evidence",
@@ -86,7 +88,7 @@
         ]
       },
       "plan_type": "tracefix",
-      "query_id": "tellme_362c5e59d6c0",
+      "query_id": "tellme_dcb1dfa52bf9",
       "required_harnesses": [
         "occupancy_context_harness"
       ],
@@ -98,10 +100,10 @@
         "Real TraceFix multi-agent execution is not integrated yet.",
         "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
         "No available sensor supports 'room_state' context for this space.",
-        "The current run is dry-run only; no measured runtime retrieval occurs.",
-        "Occupancy is anonymous and bounded by camera coverage.",
-        "No identity or raw media access is permitted.",
+        "Mock CityOS structured context may be incomplete.",
+        "Confidence must remain bounded by available evidence.",
         "Use CityOS structured context only.",
+        "Do not request raw sensor access, identity claims, unrestricted transcription, or medical diagnosis.",
         "Do not request raw sensor access.",
         "Do not identify a person, diagnose injury, or infer unsupported behavior."
       ],
@@ -109,7 +111,9 @@
     },
     "execution_brief": {
       "allowed_claims": [
-        "bounded_count"
+        "bounded_count",
+        "presence_state",
+        "timestamped_event_summary"
       ],
       "ambiguity": {
         "ambiguity_type": null,
@@ -120,7 +124,9 @@
       },
       "answer_packet_requirements": {
         "allowed_claims": [
-          "bounded_count"
+          "bounded_count",
+          "presence_state",
+          "timestamped_event_summary"
         ],
         "answer_type": "direct_answer",
         "fallback_answer_type": "insufficient_evidence",
@@ -144,7 +150,7 @@
         ]
       },
       "application_goal": {
-        "failure_condition": "Return insufficient_evidence when the bounded evidence is not enough.",
+        "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
         "goal_type": "occupancy_count",
         "non_goals": [
           "identify person",
@@ -152,10 +158,10 @@
           "medical diagnosis",
           "infer cause or intent"
         ],
-        "success_condition": "Return a privacy-bounded answer with confidence and evidence references.",
+        "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
         "user_intent": "occupancy_lookup"
       },
-      "brief_id": "brief_task_362c5e59d6c0",
+      "brief_id": "brief_task_dcb1dfa52bf9",
       "candidate_harnesses": [
         "occupancy_context_harness",
         "answer_synthesis_harness"
@@ -165,10 +171,10 @@
         "Real TraceFix multi-agent execution is not integrated yet.",
         "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
         "No available sensor supports 'room_state' context for this space.",
-        "The current run is dry-run only; no measured runtime retrieval occurs.",
-        "Occupancy is anonymous and bounded by camera coverage.",
-        "No identity or raw media access is permitted.",
+        "Mock CityOS structured context may be incomplete.",
+        "Confidence must remain bounded by available evidence.",
         "Use CityOS structured context only.",
+        "Do not request raw sensor access, identity claims, unrestricted transcription, or medical diagnosis.",
         "Do not request raw sensor access.",
         "Do not identify a person, diagnose injury, or infer unsupported behavior."
       ],
@@ -319,10 +325,10 @@
       "evidence_plan": {
         "conflicting_evidence_checks": [],
         "minimum_sufficient_evidence": [
-          "occupancy_context_harness_packet"
+          "occupancy_context_packet"
         ],
         "primary_evidence": [
-          "occupancy_context_harness_packet"
+          "occupancy_context_packet"
         ],
         "supporting_evidence": []
       },
@@ -334,7 +340,7 @@
         "medical_diagnosis",
         "unsupported_behavioral_inference"
       ],
-      "normalized_query": "how many people are in the room in total?",
+      "normalized_query": "how many people are in the room on june 24th?",
       "privacy_policy": {
         "forbidden_inferences": [
           "raw_sensor_access",
@@ -352,8 +358,8 @@
         "privacy_scope": "cityos_structured_context_only",
         "raw_sensor_access_allowed": false
       },
-      "query_id": "tellme_362c5e59d6c0",
-      "reasoning_summary": "FakeLLM semantic proposal for deterministic demo mode using only discovered sensors and APIs.",
+      "query_id": "tellme_dcb1dfa52bf9",
+      "reasoning_summary": "Deterministic template proposal generated for query tellme_dcb1dfa52bf9.",
       "required_modalities": [
         "video"
       ],
@@ -408,7 +414,7 @@
           "privacy_scope": "cityos_structured_context_only",
           "raw_sensor_access_allowed": false
         },
-        "query_id": "tellme_362c5e59d6c0",
+        "query_id": "tellme_dcb1dfa52bf9",
         "relevant_sensors": [
           {
             "allowed_api_names": [
@@ -582,7 +588,7 @@
       "space_id": "smart_room_1",
       "task_category": "occupancy_count",
       "time_windows": [],
-      "user_query": "How many people are in the room in total?",
+      "user_query": "How many people are in the room on June 24th?",
       "validation_policy": {
         "bounded_time_windows_required": true,
         "llm_proposal_untrusted": true,
@@ -594,9 +600,9 @@
       }
     },
     "tracefix_task_spec": {
-      "task_id": "task_362c5e59d6c0",
-      "query_id": "tellme_362c5e59d6c0",
-      "user_query": "How many people are in the room in total?",
+      "task_id": "task_dcb1dfa52bf9",
+      "query_id": "tellme_dcb1dfa52bf9",
+      "user_query": "How many people are in the room on June 24th?",
       "space_id": "smart_room_1",
       "route": "single_agent",
       "time_windows": [],
@@ -610,8 +616,8 @@
       "application_goal": {
         "goal_type": "occupancy_count",
         "user_intent": "occupancy_lookup",
-        "success_condition": "Return a privacy-bounded answer with confidence and evidence references.",
-        "failure_condition": "Return insufficient_evidence when the bounded evidence is not enough.",
+        "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
+        "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
         "non_goals": [
           "identify person",
           "face recognition",
@@ -621,11 +627,11 @@
       },
       "evidence_plan": {
         "primary_evidence": [
-          "occupancy_context_harness_packet"
+          "occupancy_context_packet"
         ],
         "supporting_evidence": [],
         "minimum_sufficient_evidence": [
-          "occupancy_context_harness_packet"
+          "occupancy_context_packet"
         ],
         "conflicting_evidence_checks": []
       },
@@ -640,7 +646,9 @@
           "limitations"
         ],
         "allowed_claims": [
-          "bounded_count"
+          "bounded_count",
+          "presence_state",
+          "timestamped_event_summary"
         ],
         "forbidden_claims": [
           "raw_sensor_access",
@@ -813,7 +821,9 @@
         "answer_type": "direct_answer",
         "fallback_answer_type": "insufficient_evidence",
         "allowed_claims": [
-          "bounded_count"
+          "bounded_count",
+          "presence_state",
+          "timestamped_event_summary"
         ],
         "forbidden_claims": [
           "raw_sensor_access",
@@ -865,9 +875,11 @@
         "unsupported_behavioral_inference"
       ],
       "allowed_claims": [
-        "bounded_count"
+        "bounded_count",
+        "presence_state",
+        "timestamped_event_summary"
       ],
-      "reasoning_summary": "FakeLLM semantic proposal for deterministic demo mode using only discovered sensors and APIs.",
+      "reasoning_summary": "Deterministic template proposal generated for query tellme_dcb1dfa52bf9.",
       "executable": true,
       "reason": "occupancy_lookup",
       "target_tracefix_path": "TraceFix-main/",
@@ -877,10 +889,10 @@
         "Real TraceFix multi-agent execution is not integrated yet.",
         "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
         "No available sensor supports 'room_state' context for this space.",
-        "The current run is dry-run only; no measured runtime retrieval occurs.",
-        "Occupancy is anonymous and bounded by camera coverage.",
-        "No identity or raw media access is permitted.",
+        "Mock CityOS structured context may be incomplete.",
+        "Confidence must remain bounded by available evidence.",
         "Use CityOS structured context only.",
+        "Do not request raw sensor access, identity claims, unrestricted transcription, or medical diagnosis.",
         "Do not request raw sensor access.",
         "Do not identify a person, diagnose injury, or infer unsupported behavior."
       ]
@@ -912,7 +924,9 @@
       ],
       "output_contract": {
         "allowed_claims": [
-          "bounded_count"
+          "bounded_count",
+          "presence_state",
+          "timestamped_event_summary"
         ],
         "answer_type": "direct_answer",
         "fallback_answer_type": "insufficient_evidence",
@@ -943,7 +957,7 @@
           "limitations"
         ]
       },
-      "query_id": "tellme_362c5e59d6c0",
+      "query_id": "tellme_dcb1dfa52bf9",
       "resources": [
         {
           "modalities": [
@@ -956,12 +970,12 @@
         },
         {
           "name": "tellme_query_logs",
-          "query_id": "tellme_362c5e59d6c0",
+          "query_id": "tellme_dcb1dfa52bf9",
           "type": "local_query_run_directory"
         }
       ],
-      "task_description": "# TraceFix Dry-Run Task\n\n## User Query\nHow many people are in the room in total?\n\n## Scope\n- space_id: smart_room_1\n- privacy boundary: CityOS structured context only\n- raw sensor policy: no raw sensor data may be used; inputs are CityOS structured context, not raw sensor data\n\n## Time Windows\n- none specified\n\n## Required Modalities\n- video\n\n## Candidate Harnesses\n- answer_synthesis_harness\n- occupancy_context_harness\n\n## Application Goal\n- failure_condition: Return insufficient_evidence when the bounded evidence is not enough.\n- goal_type: occupancy_count\n- non_goals: ['identify person', 'face recognition', 'medical diagnosis', 'infer cause or intent']\n- success_condition: Return a privacy-bounded answer with confidence and evidence references.\n- user_intent: occupancy_lookup\n\n## Evidence Plan\n- conflicting_evidence_checks: []\n- minimum_sufficient_evidence: ['occupancy_context_harness_packet']\n- primary_evidence: ['occupancy_context_harness_packet']\n- supporting_evidence: []\n\n## Answer Packet Requirements\n- allowed_claims: ['bounded_count']\n- answer_type: direct_answer\n- fallback_answer_type: insufficient_evidence\n- forbidden_claims: ['raw_sensor_access', 'face_identity', 'personal_identity', 'medical_diagnosis', 'unsupported_behavioral_inference']\n- must_include_confidence: True\n- must_include_evidence_refs: True\n- must_include_limitations: True\n- required_fields: ['answer', 'confidence', 'evidence_refs', 'caveats', 'privacy_scope', 'limitations']\n\n## Allowed Claims\n- bounded_count\n\n## Forbidden Claims\n- raw_sensor_access, face_identity, personal_identity, medical_diagnosis, unsupported_behavioral_inference\n\n## Expected Output Contract\n- required_fields: answer, confidence, evidence_refs, caveats, privacy_scope, limitations\n- field_types:\n  - answer: string\n  - caveats: array\n  - confidence: number\n  - evidence_refs: array\n  - limitations: array\n  - privacy_scope: string\n\n## Privacy Constraints\n- Use only CityOS-approved structured context.\n- Do not use or request raw sensor data.\n- All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts.",
-      "task_id": "task_362c5e59d6c0",
+      "task_description": "# TraceFix Dry-Run Task\n\n## User Query\nHow many people are in the room on June 24th?\n\n## Scope\n- space_id: smart_room_1\n- privacy boundary: CityOS structured context only\n- raw sensor policy: no raw sensor data may be used; inputs are CityOS structured context, not raw sensor data\n\n## Time Windows\n- none specified\n\n## Required Modalities\n- video\n\n## Candidate Harnesses\n- answer_synthesis_harness\n- occupancy_context_harness\n\n## Application Goal\n- failure_condition: Return insufficient_evidence or escalate when the structured context is inadequate.\n- goal_type: occupancy_count\n- non_goals: ['identify person', 'face recognition', 'medical diagnosis', 'infer cause or intent']\n- success_condition: Return a privacy-bounded answer packet with confidence and evidence refs.\n- user_intent: occupancy_lookup\n\n## Evidence Plan\n- conflicting_evidence_checks: []\n- minimum_sufficient_evidence: ['occupancy_context_packet']\n- primary_evidence: ['occupancy_context_packet']\n- supporting_evidence: []\n\n## Answer Packet Requirements\n- allowed_claims: ['bounded_count', 'presence_state', 'timestamped_event_summary']\n- answer_type: direct_answer\n- fallback_answer_type: insufficient_evidence\n- forbidden_claims: ['raw_sensor_access', 'face_identity', 'personal_identity', 'medical_diagnosis', 'unsupported_behavioral_inference']\n- must_include_confidence: True\n- must_include_evidence_refs: True\n- must_include_limitations: True\n- required_fields: ['answer', 'confidence', 'evidence_refs', 'caveats', 'privacy_scope', 'limitations']\n\n## Allowed Claims\n- bounded_count, presence_state, timestamped_event_summary\n\n## Forbidden Claims\n- raw_sensor_access, face_identity, personal_identity, medical_diagnosis, unsupported_behavioral_inference\n\n## Expected Output Contract\n- required_fields: answer, confidence, evidence_refs, caveats, privacy_scope, limitations\n- field_types:\n  - answer: string\n  - caveats: array\n  - confidence: number\n  - evidence_refs: array\n  - limitations: array\n  - privacy_scope: string\n\n## Privacy Constraints\n- Use only CityOS-approved structured context.\n- Do not use or request raw sensor data.\n- All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts.",
+      "task_id": "task_dcb1dfa52bf9",
       "tool_manifest": {
         "answer_synthesis_harness": [
           "synthesize_answer_packet"
@@ -970,10 +984,10 @@
           "get_occupancy_context"
         ]
       },
-      "user_query": "How many people are in the room in total?"
+      "user_query": "How many people are in the room on June 24th?"
     },
     "answer_packet": {
-      "query_id": "tellme_362c5e59d6c0",
+      "query_id": "tellme_dcb1dfa52bf9",
       "status": "needs_tracefix",
       "answer": "This query requires a future TraceFix multi-agent workflow and cannot be fully answered in V0.",
       "confidence": 0.0,
@@ -1005,20 +1019,40 @@
       },
       "agent_plan": {},
       "raw_outputs": {
-        "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_362c5e59d6c0",
+        "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_dcb1dfa52bf9",
         "logging_fallback_used": false,
         "llm_operational": {
-          "agent_backend_mode": "deterministic",
-          "real_llm_requested": false,
-          "openai_key_configured": false,
-          "model": null,
-          "timeout_seconds": null
+          "agent_backend_mode": "llm",
+          "real_llm_requested": true,
+          "openai_key_configured": true,
+          "model": "gpt-4.1-mini",
+          "timeout_seconds": 120,
+          "decomposition": {
+            "model": "gpt-4.1-mini",
+            "last_used": "primary",
+            "last_latency_ms": 18125.0,
+            "fallback_reason": null,
+            "primary_calls": 1,
+            "fallback_calls": 0,
+            "last_request": {
+              "request_start": "2026-07-09T16:27:13.551879+00:00",
+              "first_response_time": "2026-07-09T16:27:31.674152+00:00",
+              "request_end": "2026-07-09T16:27:31.675148+00:00",
+              "total_duration_ms": 18125.0,
+              "time_to_first_response_ms": 18125.0,
+              "model": "gpt-4.1-mini",
+              "provider": "https://api.openai.com/v1",
+              "failed": false,
+              "error": null,
+              "retry_count": 0
+            }
+          }
         },
-        "agent_backend_mode": "deterministic",
+        "agent_backend_mode": "llm",
         "tracefix_task_spec": {
-          "task_id": "task_362c5e59d6c0",
-          "query_id": "tellme_362c5e59d6c0",
-          "user_query": "How many people are in the room in total?",
+          "task_id": "task_dcb1dfa52bf9",
+          "query_id": "tellme_dcb1dfa52bf9",
+          "user_query": "How many people are in the room on June 24th?",
           "space_id": "smart_room_1",
           "route": "single_agent",
           "time_windows": [],
@@ -1032,8 +1066,8 @@
           "application_goal": {
             "goal_type": "occupancy_count",
             "user_intent": "occupancy_lookup",
-            "success_condition": "Return a privacy-bounded answer with confidence and evidence references.",
-            "failure_condition": "Return insufficient_evidence when the bounded evidence is not enough.",
+            "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
+            "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
             "non_goals": [
               "identify person",
               "face recognition",
@@ -1043,11 +1077,11 @@
           },
           "evidence_plan": {
             "primary_evidence": [
-              "occupancy_context_harness_packet"
+              "occupancy_context_packet"
             ],
             "supporting_evidence": [],
             "minimum_sufficient_evidence": [
-              "occupancy_context_harness_packet"
+              "occupancy_context_packet"
             ],
             "conflicting_evidence_checks": []
           },
@@ -1062,7 +1096,9 @@
               "limitations"
             ],
             "allowed_claims": [
-              "bounded_count"
+              "bounded_count",
+              "presence_state",
+              "timestamped_event_summary"
             ],
             "forbidden_claims": [
               "raw_sensor_access",
@@ -1235,7 +1271,9 @@
             "answer_type": "direct_answer",
             "fallback_answer_type": "insufficient_evidence",
             "allowed_claims": [
-              "bounded_count"
+              "bounded_count",
+              "presence_state",
+              "timestamped_event_summary"
             ],
             "forbidden_claims": [
               "raw_sensor_access",
@@ -1287,9 +1325,11 @@
             "unsupported_behavioral_inference"
           ],
           "allowed_claims": [
-            "bounded_count"
+            "bounded_count",
+            "presence_state",
+            "timestamped_event_summary"
           ],
-          "reasoning_summary": "FakeLLM semantic proposal for deterministic demo mode using only discovered sensors and APIs.",
+          "reasoning_summary": "Deterministic template proposal generated for query tellme_dcb1dfa52bf9.",
           "executable": true,
           "reason": "occupancy_lookup",
           "target_tracefix_path": "TraceFix-main/",
@@ -1299,16 +1339,16 @@
             "Real TraceFix multi-agent execution is not integrated yet.",
             "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
             "No available sensor supports 'room_state' context for this space.",
-            "The current run is dry-run only; no measured runtime retrieval occurs.",
-            "Occupancy is anonymous and bounded by camera coverage.",
-            "No identity or raw media access is permitted.",
+            "Mock CityOS structured context may be incomplete.",
+            "Confidence must remain bounded by available evidence.",
             "Use CityOS structured context only.",
+            "Do not request raw sensor access, identity claims, unrestricted transcription, or medical diagnosis.",
             "Do not request raw sensor access.",
             "Do not identify a person, diagnose injury, or infer unsupported behavior."
           ]
         },
         "tracefix_bundle_summary": {
-          "task_id": "task_362c5e59d6c0",
+          "task_id": "task_dcb1dfa52bf9",
           "agent_names": [
             "answer_synthesis_harness",
             "occupancy_context_harness"
@@ -1323,9 +1363,9 @@
         }
       },
       "tracefix_task_spec": {
-        "task_id": "task_362c5e59d6c0",
-        "query_id": "tellme_362c5e59d6c0",
-        "user_query": "How many people are in the room in total?",
+        "task_id": "task_dcb1dfa52bf9",
+        "query_id": "tellme_dcb1dfa52bf9",
+        "user_query": "How many people are in the room on June 24th?",
         "space_id": "smart_room_1",
         "route": "single_agent",
         "time_windows": [],
@@ -1339,8 +1379,8 @@
         "application_goal": {
           "goal_type": "occupancy_count",
           "user_intent": "occupancy_lookup",
-          "success_condition": "Return a privacy-bounded answer with confidence and evidence references.",
-          "failure_condition": "Return insufficient_evidence when the bounded evidence is not enough.",
+          "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
+          "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
           "non_goals": [
             "identify person",
             "face recognition",
@@ -1350,11 +1390,11 @@
         },
         "evidence_plan": {
           "primary_evidence": [
-            "occupancy_context_harness_packet"
+            "occupancy_context_packet"
           ],
           "supporting_evidence": [],
           "minimum_sufficient_evidence": [
-            "occupancy_context_harness_packet"
+            "occupancy_context_packet"
           ],
           "conflicting_evidence_checks": []
         },
@@ -1369,7 +1409,9 @@
             "limitations"
           ],
           "allowed_claims": [
-            "bounded_count"
+            "bounded_count",
+            "presence_state",
+            "timestamped_event_summary"
           ],
           "forbidden_claims": [
             "raw_sensor_access",
@@ -1542,7 +1584,9 @@
           "answer_type": "direct_answer",
           "fallback_answer_type": "insufficient_evidence",
           "allowed_claims": [
-            "bounded_count"
+            "bounded_count",
+            "presence_state",
+            "timestamped_event_summary"
           ],
           "forbidden_claims": [
             "raw_sensor_access",
@@ -1594,9 +1638,11 @@
           "unsupported_behavioral_inference"
         ],
         "allowed_claims": [
-          "bounded_count"
+          "bounded_count",
+          "presence_state",
+          "timestamped_event_summary"
         ],
-        "reasoning_summary": "FakeLLM semantic proposal for deterministic demo mode using only discovered sensors and APIs.",
+        "reasoning_summary": "Deterministic template proposal generated for query tellme_dcb1dfa52bf9.",
         "executable": true,
         "reason": "occupancy_lookup",
         "target_tracefix_path": "TraceFix-main/",
@@ -1606,60 +1652,1067 @@
           "Real TraceFix multi-agent execution is not integrated yet.",
           "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
           "No available sensor supports 'room_state' context for this space.",
-          "The current run is dry-run only; no measured runtime retrieval occurs.",
-          "Occupancy is anonymous and bounded by camera coverage.",
-          "No identity or raw media access is permitted.",
+          "Mock CityOS structured context may be incomplete.",
+          "Confidence must remain bounded by available evidence.",
           "Use CityOS structured context only.",
+          "Do not request raw sensor access, identity claims, unrestricted transcription, or medical diagnosis.",
           "Do not request raw sensor access.",
           "Do not identify a person, diagnose injury, or infer unsupported behavior."
         ]
       },
       "error_message": null
     },
-    "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_362c5e59d6c0",
+    "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_dcb1dfa52bf9",
     "warnings": [],
-    "answer_summary": "Latest recording rec_20260707_002 from day_08_2026-07-07. cam1; peak occupancy 3; last observed occupancy 1; sample frame C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-synthesis-web-data\\source_data\\frames\\day_08_2026-07-07_rec_20260707_002_cam1_t5.0.jpg. cam2; peak occupancy 2; last observed occupancy 1; sample frame C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-synthesis-web-data\\source_data\\frames\\day_08_2026-07-07_rec_20260707_002_cam2_t5.0.jpg.",
+    "answer_summary": "Recording rec_20260624_001 from day_05_2026-06-24 matched requested date June 24. cam1; peak occupancy 2; last observed occupancy 1; activities climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person, pushup, put on jacket, rtmpose, run, shake head, sit, somersault, stand, stand up, talk, throw, turn, walk; tracks 2; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam1_t5.0.jpg. cam2; peak occupancy 2; last observed occupancy 1; activities cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person, pick, pick up, pushup, put on a shoe, rtmpose, run, salute, shake head, stand, throw, turn, walk, wave; tracks 5; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam2_t5.0.jpg.",
+    "chat_answer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), cam 1 peaked at 2 people, and cam 2 peaked at 2 people. Across the observed time window, the peak occupancy was 2 people overall. At the latest observed moment, cam 1 most recently showed 1 person, and cam 2 most recently showed 1 person. Detected activities/poses included cam 1: climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person; cam 2: cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person.",
     "web_data_answer": {
-      "question": "What does the latest smartroom API data show?",
-      "text": "Latest recording rec_20260707_002 from day_08_2026-07-07. cam1; peak occupancy 3; last observed occupancy 1; sample frame C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-synthesis-web-data\\source_data\\frames\\day_08_2026-07-07_rec_20260707_002_cam1_t5.0.jpg. cam2; peak occupancy 2; last observed occupancy 1; sample frame C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-synthesis-web-data\\source_data\\frames\\day_08_2026-07-07_rec_20260707_002_cam2_t5.0.jpg.",
+      "question": "How many people are in the room on June 24th?",
+      "text": "Recording rec_20260624_001 from day_05_2026-06-24 matched requested date June 24. cam1; peak occupancy 2; last observed occupancy 1; activities climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person, pushup, put on jacket, rtmpose, run, shake head, sit, somersault, stand, stand up, talk, throw, turn, walk; tracks 2; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam1_t5.0.jpg. cam2; peak occupancy 2; last observed occupancy 1; activities cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person, pick, pick up, pushup, put on a shoe, rtmpose, run, salute, shake head, stand, throw, turn, walk, wave; tracks 5; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam2_t5.0.jpg.",
+      "chatAnswer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), cam 1 peaked at 2 people, and cam 2 peaked at 2 people. Across the observed time window, the peak occupancy was 2 people overall. At the latest observed moment, cam 1 most recently showed 1 person, and cam 2 most recently showed 1 person. Detected activities/poses included cam 1: climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person; cam 2: cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person.",
+      "chat_answer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), cam 1 peaked at 2 people, and cam 2 peaked at 2 people. Across the observed time window, the peak occupancy was 2 people overall. At the latest observed moment, cam 1 most recently showed 1 person, and cam 2 most recently showed 1 person. Detected activities/poses included cam 1: climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person; cam 2: cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person.",
       "recording": {
-        "day": "day_08_2026-07-07",
-        "rec": "rec_20260707_002"
+        "day": "day_05_2026-06-24",
+        "rec": "rec_20260624_001"
       },
+      "selection": {
+        "mode": "requested_date",
+        "requestedDate": {
+          "year": null,
+          "month": 6,
+          "day": 24,
+          "label": "June 24"
+        },
+        "requestedDateLabel": "June 24",
+        "reason": "matched requested date June 24"
+      },
+      "activityCounts": {
+        "climb stairs": 9,
+        "cross hands in front": 18,
+        "eat meal": 9,
+        "falling down": 18,
+        "hit": 9,
+        "hopping": 9,
+        "idle": 18,
+        "jump up": 18,
+        "jumping": 18,
+        "person": 3,
+        "pick": 9,
+        "pick up": 9,
+        "pushup": 18,
+        "put on a shoe": 9,
+        "put on jacket": 9,
+        "rtmpose": 18,
+        "run": 18,
+        "salute": 9,
+        "shake head": 18,
+        "sit": 9,
+        "somersault": 9,
+        "stand": 18,
+        "stand up": 9,
+        "talk": 9,
+        "throw": 18,
+        "turn": 18,
+        "walk": 18,
+        "wave": 9
+      },
+      "requestedActivities": [],
+      "requestedActivityCounts": {},
+      "requestedActivityCombination": null,
+      "requestedActivityAnswer": "",
       "cameras": [
         {
           "camera": "cam1",
           "node": "smartroom1",
           "durationSec": 30,
-          "peakPeople": 3,
+          "peakPeople": 2,
           "lastPeople": 1,
-          "trackCount": null,
-          "actions": [],
+          "trackCount": 2,
+          "actions": [
+            "climb stairs",
+            "cross hands in front",
+            "falling down",
+            "hit",
+            "jump up",
+            "jumping",
+            "pushup",
+            "put on jacket",
+            "run",
+            "shake head",
+            "sit",
+            "somersault",
+            "stand",
+            "stand up",
+            "talk",
+            "throw",
+            "turn",
+            "walk"
+          ],
+          "activities": [
+            "climb stairs",
+            "cross hands in front",
+            "falling down",
+            "hit",
+            "idle",
+            "jump up",
+            "jumping",
+            "person",
+            "pushup",
+            "put on jacket",
+            "rtmpose",
+            "run",
+            "shake head",
+            "sit",
+            "somersault",
+            "stand",
+            "stand up",
+            "talk",
+            "throw",
+            "turn",
+            "walk"
+          ],
+          "activityEvents": [
+            {
+              "model": "action-hmdb",
+              "label": "climb stairs"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "hit"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "idle"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "jumping"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "pushup"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "rtmpose"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "run"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "sit"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "somersault"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "stand"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "talk"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "throw"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "turn"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "walk"
+            },
+            {
+              "model": "action",
+              "label": "cross hands in front"
+            },
+            {
+              "model": "action",
+              "label": "falling down"
+            },
+            {
+              "model": "action",
+              "label": "idle"
+            },
+            {
+              "model": "action",
+              "label": "jump up"
+            },
+            {
+              "model": "action",
+              "label": "jumping"
+            },
+            {
+              "model": "action",
+              "label": "put on jacket"
+            },
+            {
+              "model": "action",
+              "label": "rtmpose"
+            },
+            {
+              "model": "action",
+              "label": "shake head"
+            },
+            {
+              "model": "action",
+              "label": "stand up"
+            },
+            {
+              "model": "yolo26l",
+              "label": "person"
+            },
+            {
+              "model": "yolo26n-pose",
+              "label": "person"
+            }
+          ],
+          "activityCounts": {
+            "climb stairs": 9,
+            "cross hands in front": 9,
+            "falling down": 9,
+            "hit": 9,
+            "idle": 9,
+            "jump up": 9,
+            "jumping": 9,
+            "person": 2,
+            "pushup": 9,
+            "put on jacket": 9,
+            "rtmpose": 9,
+            "run": 9,
+            "shake head": 9,
+            "sit": 9,
+            "somersault": 9,
+            "stand": 9,
+            "stand up": 9,
+            "talk": 9,
+            "throw": 9,
+            "turn": 9,
+            "walk": 9
+          },
+          "activityTrackIds": {
+            "climb stairs": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "cross hands in front": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "falling down": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "hit": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "idle": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "jump up": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "jumping": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "pushup": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "put on jacket": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "rtmpose": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "run": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "shake head": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "sit": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "somersault": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "stand": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "stand up": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "talk": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "throw": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "turn": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "walk": [
+              "17",
+              "8",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ]
+          },
+          "pose": {
+            "models": [
+              {
+                "model": "action-hmdb",
+                "labels": [
+                  "climb stairs",
+                  "hit",
+                  "idle",
+                  "jumping",
+                  "pushup",
+                  "rtmpose",
+                  "run",
+                  "sit",
+                  "somersault",
+                  "stand",
+                  "talk",
+                  "throw",
+                  "turn",
+                  "walk"
+                ],
+                "keypointSets": 527,
+                "segmentSets": 28,
+                "centroidSets": 383,
+                "hasKeypoints": true
+              },
+              {
+                "model": "action",
+                "labels": [
+                  "cross hands in front",
+                  "falling down",
+                  "idle",
+                  "jump up",
+                  "jumping",
+                  "put on jacket",
+                  "rtmpose",
+                  "shake head",
+                  "stand up"
+                ],
+                "keypointSets": 527,
+                "segmentSets": 28,
+                "centroidSets": 383,
+                "hasKeypoints": true
+              },
+              {
+                "model": "yolo26n-pose",
+                "labels": [
+                  "person"
+                ],
+                "keypointSets": 8,
+                "segmentSets": 0,
+                "centroidSets": 0,
+                "hasKeypoints": true
+              }
+            ],
+            "available": true
+          },
+          "endpoints": {
+            "action-hmdb": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_05_2026-06-24/rec_20260624_001/cam1/inference/action-hmdb",
+            "action": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_05_2026-06-24/rec_20260624_001/cam1/inference/action",
+            "yolo26l": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_05_2026-06-24/rec_20260624_001/cam1/inference/yolo26l",
+            "yolo26n-pose": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_05_2026-06-24/rec_20260624_001/cam1/inference/yolo26n-pose"
+          },
           "models": {
+            "action-hmdb": {
+              "status": "done",
+              "durationSec": 29.967,
+              "peakPeople": null,
+              "lastPeople": null,
+              "samples": 0,
+              "tracks": 2,
+              "actions": [
+                "talk",
+                "walk",
+                "turn",
+                "sit",
+                "pushup",
+                "somersault",
+                "stand",
+                "climb stairs",
+                "run",
+                "hit",
+                "throw",
+                "jumping"
+              ],
+              "trackActions": {
+                "8": "turn"
+              },
+              "activityLabels": [
+                "climb stairs",
+                "hit",
+                "idle",
+                "jumping",
+                "pushup",
+                "rtmpose",
+                "run",
+                "sit",
+                "somersault",
+                "stand",
+                "talk",
+                "throw",
+                "turn",
+                "walk"
+              ],
+              "activityCounts": {
+                "climb stairs": 9,
+                "hit": 9,
+                "idle": 9,
+                "jumping": 9,
+                "pushup": 9,
+                "rtmpose": 9,
+                "run": 9,
+                "sit": 9,
+                "somersault": 9,
+                "stand": 9,
+                "talk": 9,
+                "throw": 9,
+                "turn": 9,
+                "walk": 9
+              },
+              "activityTrackIds": {
+                "climb stairs": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "hit": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "idle": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "jumping": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "pushup": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "rtmpose": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "run": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "sit": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "somersault": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "stand": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "talk": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "throw": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "turn": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "walk": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ]
+              },
+              "pose": {
+                "model": "action-hmdb",
+                "labels": [
+                  "climb stairs",
+                  "hit",
+                  "idle",
+                  "jumping",
+                  "pushup",
+                  "rtmpose",
+                  "run",
+                  "sit",
+                  "somersault",
+                  "stand",
+                  "talk",
+                  "throw",
+                  "turn",
+                  "walk"
+                ],
+                "keypointSets": 527,
+                "segmentSets": 28,
+                "centroidSets": 383,
+                "hasKeypoints": true
+              },
+              "jumps": 4
+            },
+            "action": {
+              "status": "done",
+              "durationSec": 29.967,
+              "peakPeople": null,
+              "lastPeople": null,
+              "samples": 0,
+              "tracks": 2,
+              "actions": [
+                "shake head",
+                "falling down",
+                "stand up",
+                "put on jacket",
+                "jump up",
+                "cross hands in front",
+                "jumping"
+              ],
+              "trackActions": {
+                "8": "jump up"
+              },
+              "activityLabels": [
+                "cross hands in front",
+                "falling down",
+                "idle",
+                "jump up",
+                "jumping",
+                "put on jacket",
+                "rtmpose",
+                "shake head",
+                "stand up"
+              ],
+              "activityCounts": {
+                "cross hands in front": 9,
+                "falling down": 9,
+                "idle": 9,
+                "jump up": 9,
+                "jumping": 9,
+                "put on jacket": 9,
+                "rtmpose": 9,
+                "shake head": 9,
+                "stand up": 9
+              },
+              "activityTrackIds": {
+                "cross hands in front": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "falling down": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "idle": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "jump up": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "jumping": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "put on jacket": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "rtmpose": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "shake head": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "stand up": [
+                  "17",
+                  "8",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ]
+              },
+              "pose": {
+                "model": "action",
+                "labels": [
+                  "cross hands in front",
+                  "falling down",
+                  "idle",
+                  "jump up",
+                  "jumping",
+                  "put on jacket",
+                  "rtmpose",
+                  "shake head",
+                  "stand up"
+                ],
+                "keypointSets": 527,
+                "segmentSets": 28,
+                "centroidSets": 383,
+                "hasKeypoints": true
+              },
+              "jumps": 4
+            },
             "yolo26l": {
               "status": "done",
-              "durationSec": 30.067,
-              "peakPeople": 3,
+              "durationSec": 29.967,
+              "peakPeople": 2,
               "lastPeople": 1,
-              "samples": 147,
+              "samples": 135,
               "tracks": null,
               "actions": [],
               "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": null,
               "jumps": null
             },
             "yolo26n-pose": {
               "status": "done",
-              "durationSec": 30.067,
-              "peakPeople": 1,
+              "durationSec": 29.967,
+              "peakPeople": 2,
               "lastPeople": 1,
-              "samples": 147,
+              "samples": 135,
               "tracks": null,
               "actions": [],
               "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {
+                "person": 2
+              },
+              "activityTrackIds": {},
+              "pose": {
+                "model": "yolo26n-pose",
+                "labels": [
+                  "person"
+                ],
+                "keypointSets": 8,
+                "segmentSets": 0,
+                "centroidSets": 0,
+                "hasKeypoints": true
+              },
               "jumps": null
             }
           },
-          "framePath": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-synthesis-web-data\\source_data\\frames\\day_08_2026-07-07_rec_20260707_002_cam1_t5.0.jpg"
+          "framePath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam1_t5.0.jpg"
         },
         {
           "camera": "cam2",
@@ -1667,9 +2720,1082 @@
           "durationSec": 30,
           "peakPeople": 2,
           "lastPeople": 1,
-          "trackCount": null,
-          "actions": [],
+          "trackCount": 5,
+          "actions": [
+            "cross hands in front",
+            "eat meal",
+            "falling down",
+            "hopping",
+            "jump up",
+            "jumping",
+            "pick",
+            "pick up",
+            "pushup",
+            "put on a shoe",
+            "run",
+            "salute",
+            "shake head",
+            "stand",
+            "throw",
+            "turn",
+            "walk",
+            "wave"
+          ],
+          "activities": [
+            "cross hands in front",
+            "eat meal",
+            "falling down",
+            "hopping",
+            "idle",
+            "jump up",
+            "jumping",
+            "person",
+            "pick",
+            "pick up",
+            "pushup",
+            "put on a shoe",
+            "rtmpose",
+            "run",
+            "salute",
+            "shake head",
+            "stand",
+            "throw",
+            "turn",
+            "walk",
+            "wave"
+          ],
+          "activityEvents": [
+            {
+              "model": "action-hmdb",
+              "label": "idle"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "jumping"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "pick"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "pushup"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "rtmpose"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "run"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "stand"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "turn"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "walk"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "wave"
+            },
+            {
+              "model": "action",
+              "label": "cross hands in front"
+            },
+            {
+              "model": "action",
+              "label": "eat meal"
+            },
+            {
+              "model": "action",
+              "label": "falling down"
+            },
+            {
+              "model": "action",
+              "label": "hopping"
+            },
+            {
+              "model": "action",
+              "label": "idle"
+            },
+            {
+              "model": "action",
+              "label": "jump up"
+            },
+            {
+              "model": "action",
+              "label": "jumping"
+            },
+            {
+              "model": "action",
+              "label": "pick up"
+            },
+            {
+              "model": "action",
+              "label": "put on a shoe"
+            },
+            {
+              "model": "action",
+              "label": "rtmpose"
+            },
+            {
+              "model": "action",
+              "label": "salute"
+            },
+            {
+              "model": "action",
+              "label": "shake head"
+            },
+            {
+              "model": "action",
+              "label": "throw"
+            },
+            {
+              "model": "yolo26l",
+              "label": "person"
+            },
+            {
+              "model": "yolo26n-pose",
+              "label": "person"
+            }
+          ],
+          "activityCounts": {
+            "cross hands in front": 9,
+            "eat meal": 9,
+            "falling down": 9,
+            "hopping": 9,
+            "idle": 9,
+            "jump up": 9,
+            "jumping": 9,
+            "person": 1,
+            "pick": 9,
+            "pick up": 9,
+            "pushup": 9,
+            "put on a shoe": 9,
+            "rtmpose": 9,
+            "run": 9,
+            "salute": 9,
+            "shake head": 9,
+            "stand": 9,
+            "throw": 9,
+            "turn": 9,
+            "walk": 9,
+            "wave": 9
+          },
+          "activityTrackIds": {
+            "cross hands in front": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "eat meal": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "falling down": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "hopping": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "idle": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "jump up": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "jumping": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "pick": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "pick up": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "pushup": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "put on a shoe": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "rtmpose": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "run": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "salute": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "shake head": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "stand": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "throw": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "turn": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "walk": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "wave": [
+              "1",
+              "2",
+              "3",
+              "5",
+              "7",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ]
+          },
+          "pose": {
+            "models": [
+              {
+                "model": "action-hmdb",
+                "labels": [
+                  "idle",
+                  "jumping",
+                  "pick",
+                  "pushup",
+                  "rtmpose",
+                  "run",
+                  "stand",
+                  "turn",
+                  "walk",
+                  "wave"
+                ],
+                "keypointSets": 884,
+                "segmentSets": 42,
+                "centroidSets": 690,
+                "hasKeypoints": true
+              },
+              {
+                "model": "action",
+                "labels": [
+                  "cross hands in front",
+                  "eat meal",
+                  "falling down",
+                  "hopping",
+                  "idle",
+                  "jump up",
+                  "jumping",
+                  "pick up",
+                  "put on a shoe",
+                  "rtmpose",
+                  "salute",
+                  "shake head",
+                  "throw"
+                ],
+                "keypointSets": 884,
+                "segmentSets": 36,
+                "centroidSets": 690,
+                "hasKeypoints": true
+              },
+              {
+                "model": "yolo26n-pose",
+                "labels": [
+                  "person"
+                ],
+                "keypointSets": 8,
+                "segmentSets": 0,
+                "centroidSets": 0,
+                "hasKeypoints": true
+              }
+            ],
+            "available": true
+          },
+          "endpoints": {
+            "action-hmdb": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_05_2026-06-24/rec_20260624_001/cam2/inference/action-hmdb",
+            "action": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_05_2026-06-24/rec_20260624_001/cam2/inference/action",
+            "yolo26l": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_05_2026-06-24/rec_20260624_001/cam2/inference/yolo26l",
+            "yolo26n-pose": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_05_2026-06-24/rec_20260624_001/cam2/inference/yolo26n-pose"
+          },
           "models": {
+            "action-hmdb": {
+              "status": "done",
+              "durationSec": 30,
+              "peakPeople": null,
+              "lastPeople": null,
+              "samples": 0,
+              "tracks": 5,
+              "actions": [
+                "walk",
+                "turn",
+                "pick",
+                "stand",
+                "pushup",
+                "wave",
+                "run",
+                "jumping"
+              ],
+              "trackActions": {
+                "1": "walk",
+                "2": "walk",
+                "3": "pushup",
+                "5": "walk",
+                "7": "walk"
+              },
+              "activityLabels": [
+                "idle",
+                "jumping",
+                "pick",
+                "pushup",
+                "rtmpose",
+                "run",
+                "stand",
+                "turn",
+                "walk",
+                "wave"
+              ],
+              "activityCounts": {
+                "idle": 9,
+                "jumping": 9,
+                "pick": 9,
+                "pushup": 9,
+                "rtmpose": 9,
+                "run": 9,
+                "stand": 9,
+                "turn": 9,
+                "walk": 9,
+                "wave": 9
+              },
+              "activityTrackIds": {
+                "idle": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "jumping": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "pick": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "pushup": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "rtmpose": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "run": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "stand": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "turn": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "walk": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "wave": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ]
+              },
+              "pose": {
+                "model": "action-hmdb",
+                "labels": [
+                  "idle",
+                  "jumping",
+                  "pick",
+                  "pushup",
+                  "rtmpose",
+                  "run",
+                  "stand",
+                  "turn",
+                  "walk",
+                  "wave"
+                ],
+                "keypointSets": 884,
+                "segmentSets": 42,
+                "centroidSets": 690,
+                "hasKeypoints": true
+              },
+              "jumps": 2
+            },
+            "action": {
+              "status": "done",
+              "durationSec": 30,
+              "peakPeople": null,
+              "lastPeople": null,
+              "samples": 0,
+              "tracks": 5,
+              "actions": [
+                "shake head",
+                "hopping",
+                "falling down",
+                "put on a shoe",
+                "pick up",
+                "eat meal",
+                "cross hands in front",
+                "salute",
+                "throw",
+                "jump up",
+                "jumping"
+              ],
+              "trackActions": {
+                "1": "shake head",
+                "2": "shake head",
+                "3": "falling down",
+                "5": "hopping",
+                "7": "jump up"
+              },
+              "activityLabels": [
+                "cross hands in front",
+                "eat meal",
+                "falling down",
+                "hopping",
+                "idle",
+                "jump up",
+                "jumping",
+                "pick up",
+                "put on a shoe",
+                "rtmpose",
+                "salute",
+                "shake head",
+                "throw"
+              ],
+              "activityCounts": {
+                "cross hands in front": 9,
+                "eat meal": 9,
+                "falling down": 9,
+                "hopping": 9,
+                "idle": 9,
+                "jump up": 9,
+                "jumping": 9,
+                "pick up": 9,
+                "put on a shoe": 9,
+                "rtmpose": 9,
+                "salute": 9,
+                "shake head": 9,
+                "throw": 9
+              },
+              "activityTrackIds": {
+                "cross hands in front": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "eat meal": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "falling down": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "hopping": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "idle": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "jump up": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "jumping": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "pick up": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "put on a shoe": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "rtmpose": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "salute": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "shake head": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "throw": [
+                  "1",
+                  "2",
+                  "3",
+                  "5",
+                  "7",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ]
+              },
+              "pose": {
+                "model": "action",
+                "labels": [
+                  "cross hands in front",
+                  "eat meal",
+                  "falling down",
+                  "hopping",
+                  "idle",
+                  "jump up",
+                  "jumping",
+                  "pick up",
+                  "put on a shoe",
+                  "rtmpose",
+                  "salute",
+                  "shake head",
+                  "throw"
+                ],
+                "keypointSets": 884,
+                "segmentSets": 36,
+                "centroidSets": 690,
+                "hasKeypoints": true
+              },
+              "jumps": 2
+            },
             "yolo26l": {
               "status": "done",
               "durationSec": 30,
@@ -1679,71 +3805,104 @@
               "tracks": null,
               "actions": [],
               "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": null,
               "jumps": null
             },
             "yolo26n-pose": {
               "status": "done",
               "durationSec": 30,
-              "peakPeople": 2,
+              "peakPeople": 1,
               "lastPeople": 1,
               "samples": 150,
               "tracks": null,
               "actions": [],
               "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {
+                "person": 1
+              },
+              "activityTrackIds": {},
+              "pose": {
+                "model": "yolo26n-pose",
+                "labels": [
+                  "person"
+                ],
+                "keypointSets": 8,
+                "segmentSets": 0,
+                "centroidSets": 0,
+                "hasKeypoints": true
+              },
               "jumps": null
             }
           },
-          "framePath": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-synthesis-web-data\\source_data\\frames\\day_08_2026-07-07_rec_20260707_002_cam2_t5.0.jpg"
+          "framePath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam2_t5.0.jpg"
         }
       ],
       "errors": []
     },
-    "web_data_answer_path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-synthesis-web-data\\smartroom-answer.json",
+    "web_data_answer_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\smartroom-answer.json",
     "web_data_snapshot_summary": {
-      "recordingCount": 16,
-      "selectedDay": "day_08_2026-07-07",
-      "selectedRecording": "rec_20260707_002",
+      "recordingCount": 17,
+      "selectedDay": "day_05_2026-06-24",
+      "selectedRecording": "rec_20260624_001",
       "cameras": [
         "cam1",
         "cam2"
       ],
+      "selectionMode": "requested_date",
+      "selectionReason": "matched requested date June 24",
+      "requestedDate": {
+        "year": null,
+        "month": 6,
+        "day": 24,
+        "label": "June 24"
+      },
+      "requestedDateLabel": "June 24",
+      "question": "How many people are in the room on June 24th?",
       "errors": 0
     },
-    "web_data_payload_path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-synthesis-web-data\\source_data\\20260708-163737-748584_web_payload.json",
-    "web_data_source_url": "http://feruzgay.local:4000/api/v1",
+    "web_data_payload_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\20260709-162745-284834_web_payload.json",
+    "web_data_source_url": "https://smartroom-mirror.vercel.app/api/v1",
     "web_data_source_kind": "smartroom-control"
   },
   "tracefix": {
-    "run_id": "b0cf156811",
-    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346"
+    "run_id": "325b15f5bc",
+    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732"
   },
   "cityos": {
-    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346",
-    "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\spec\\cityos_module_plan.json",
+    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732",
+    "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\cityos_module_plan.json",
     "appsDir": "C:\\Users\\shrey\\cityos\\apps",
-    "manifestPath": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-synthesis.json",
+    "manifestPath": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis.json",
     "outputDir": "C:\\Users\\shrey\\cityos\\apps",
     "apps": [
       {
-        "name": "tracefix-tellme-structured-smart-room-application-20260708-123346-occupa",
+        "name": "tracefix-tellme-structured-smart-room-application-20260709-122732-occupa",
         "kind": "agent",
         "agent": "OCCUPANCY_ANALYZER",
-        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-occupa",
-        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260708-123346-occupa"
+        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260709-122732-occupa",
+        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260709-122732-occupa"
       },
       {
-        "name": "tracefix-tellme-structured-smart-room-application-20260708-123346-monito",
+        "name": "tracefix-tellme-structured-smart-room-application-20260709-122732-monito",
         "kind": "monitor",
         "agent": null,
-        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260708-123346-monito",
-        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260708-123346-monito"
+        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260709-122732-monito",
+        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260709-122732-monito"
       }
     ],
     "summary": {
-      "name": "tellme_structured_smart_room_application_20260708_123346",
-      "path": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346",
-      "lastModified": 1783528431.7062979,
-      "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\spec\\cityos_module_plan.json",
+      "name": "tellme_structured_smart_room_application_20260709_122732",
+      "path": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732",
+      "lastModified": 1783614457.626783,
+      "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\cityos_module_plan.json",
       "hasPlan": true,
       "productionReady": true,
       "verificationStatus": "verified",
@@ -1761,7 +3920,7 @@
       "tlcStatus": "passed",
       "planStatus": "ready",
       "workspaceType": "custom",
-      "taskText": "How many people are in the room in total?",
+      "taskText": "How many people are in the room on June 24th?",
       "taskSource": "tellme",
       "agents": [
         "OCCUPANCY_ANALYZER"
@@ -1771,56 +3930,56 @@
       "requirements": [
         {
           "path": "spec/cityos_module_plan.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\spec\\cityos_module_plan.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\cityos_module_plan.json",
           "exists": true,
           "createdBy": "Generate Verified Plan or Export Intermediary Plan",
           "required": true
         },
         {
           "path": "spec/ir.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\spec\\ir.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\ir.json",
           "exists": true,
           "createdBy": "Generate Verified Plan",
           "required": true
         },
         {
           "path": "spec/states.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\spec\\states.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\states.json",
           "exists": true,
           "createdBy": "Run TraceFix verification until TLC/state extraction completes",
           "required": true
         },
         {
           "path": "spec/Protocol.tla",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\spec\\Protocol.tla",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\Protocol.tla",
           "exists": true,
           "createdBy": "Run TraceFix protocol generation",
           "required": true
         },
         {
           "path": "spec/Protocol.cfg",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\spec\\Protocol.cfg",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\Protocol.cfg",
           "exists": true,
           "createdBy": "Run TraceFix protocol generation",
           "required": true
         },
         {
           "path": "spec/summary.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\spec\\summary.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\summary.json",
           "exists": true,
           "createdBy": "Run TraceFix verification until summary is written",
           "required": false
         },
         {
           "path": "spec/Protocol_translated.tla",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\spec\\Protocol_translated.tla",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\Protocol_translated.tla",
           "exists": true,
           "createdBy": "PlusCal translation",
           "required": false
         }
       ],
       "missingRequired": [],
-      "outputDir": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260708_123346\\output\\cityos_synthesis",
+      "outputDir": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\output\\cityos_synthesis",
       "ready": true
     }
   }

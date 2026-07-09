@@ -22,22 +22,41 @@ class _SmartroomHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/v1/recordings":
             payload = {
-                "recordings": [{
-                    "day": "day_08_2026-07-07",
-                    "rec": "rec_20260707_001",
-                    "mtime": 1783448292039.5,
-                    "cameras": {
-                        "cam2": {
-                            "node": "smartroom2",
-                            "durationSec": 30,
-                            "models": {
-                                "yolo26l": "done",
-                                "action-hmdb": "done",
-                                "yolo26n-pose": "analyzing",
+                "recordings": [
+                    {
+                        "day": "day_08_2026-07-07",
+                        "rec": "rec_20260707_001",
+                        "mtime": 1783448292039.5,
+                        "cameras": {
+                            "cam2": {
+                                "node": "smartroom2",
+                                "durationSec": 30,
+                                "models": {
+                                    "yolo26l": "done",
+                                    "action-hmdb": "done",
+                                    "yolo26n-pose": "done",
+                                    "action": "done",
+                                },
                             },
                         },
                     },
-                }],
+                    {
+                        "day": "day_04_2026-06-18",
+                        "rec": "rec_20260618_001",
+                        "mtime": 1781740800000.0,
+                        "cameras": {
+                            "cam1": {
+                                "node": "smartroom1",
+                                "durationSec": 40,
+                                "models": {
+                                    "yolo26l": "done",
+                                    "action": "done",
+                                    "yolo26n-pose": "done",
+                                },
+                            },
+                        },
+                    },
+                ],
             }
             self._json(payload)
             return
@@ -46,6 +65,39 @@ class _SmartroomHandler(BaseHTTPRequestHandler):
             return
         if self.path == "/api/v1/recordings/day_08_2026-07-07/rec_20260707_001/cam2/inference/action-hmdb":
             self._json({"detections": {"status": "done", "actions": ["pour"]}, "actions": {"tracks": {}}})
+            return
+        if self.path == "/api/v1/recordings/day_08_2026-07-07/rec_20260707_001/cam2/inference/action":
+            self._json({"detections": {"status": "done", "actions": ["talking", "standing up"], "trackActions": {"1": "talking"}}})
+            return
+        if self.path == "/api/v1/recordings/day_08_2026-07-07/rec_20260707_001/cam2/inference/yolo26n-pose":
+            self._json({
+                "detections": {"status": "done", "timeline": [{"t": 0.0, "count": 1}], "poses": ["standing up"]},
+                "pose": {"persons": [{"id": 1, "keypoints": [[1, 2, 0.9], [3, 4, 0.8]]}], "labels": ["standing up"]},
+            })
+            return
+        if self.path == "/api/v1/recordings/day_04_2026-06-18/rec_20260618_001/cam1/inference/yolo26l":
+            self._json({"detections": {"status": "done", "timeline": [
+                {"t": 0.0, "count": 1},
+                {"t": 5.0, "count": 4},
+                {"t": 10.0, "count": 3},
+            ]}})
+            return
+        if self.path == "/api/v1/recordings/day_04_2026-06-18/rec_20260618_001/cam1/inference/action":
+            self._json({"detections": {"status": "done", "actions": ["talking"], "trackActions": {"1": "talking", "2": "talking"}}})
+            return
+        if self.path == "/api/v1/recordings/day_04_2026-06-18/rec_20260618_001/cam1/inference/yolo26n-pose":
+            self._json({
+                "detections": {"status": "done", "timeline": [{"t": 0.0, "count": 2}], "poses": ["standing up"]},
+                "pose": {"persons": [{"id": 1, "keypoints": [[1, 2, 0.9]]}, {"id": 2, "keypoints": [[3, 4, 0.8]]}], "labels": ["standing up"]},
+            })
+            return
+        if self.path.startswith("/api/v1/recordings/day_04_2026-06-18/rec_20260618_001/cam1/frame?"):
+            body = b"fake-june-jpeg"
+            self.send_response(200)
+            self.send_header("Content-Type", "image/jpeg")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         if self.path.startswith("/api/v1/recordings/day_08_2026-07-07/rec_20260707_001/cam2/frame?"):
             body = b"fake-jpeg"
@@ -148,7 +200,7 @@ def test_web_data_harness_collects_smartroom_control_snapshot(tmp_path):
     try:
         result = run_web_data_apps(
             manifest_path=manifest,
-            source_url=url,
+            source_url=f"{url}api/v1",
             source_mode="auto",
             output_root=tmp_path / "smartroom-run",
         )
@@ -161,15 +213,24 @@ def test_web_data_harness_collects_smartroom_control_snapshot(tmp_path):
     assert result["payload"]["snapshotSummary"]["selectedRecording"] == "rec_20260707_001"
     assert result["payload"]["snapshotSummary"]["cameras"] == ["cam2"]
     assert result["answer"] is not None
-    assert "actions pour" in result["answer"]["text"]
+    assert "activities" in result["answer"]["text"]
+    assert "talking" in result["answer"]["text"]
+    assert "standing up" in result["answer"]["text"]
     assert result["answer"]["chatAnswer"] == result["answer"]["chat_answer"]
     assert "cam 2 peaked at 2 people" in result["answer"]["chatAnswer"]
     assert "peak occupancy was 2 people overall" in result["answer"]["chatAnswer"]
+    assert "talking" in result["answer"]["chatAnswer"]
+    assert "standing up" in result["answer"]["chatAnswer"]
+    camera_answer = result["answer"]["cameras"][0]
+    assert "talking" in camera_answer["activities"]
+    assert "standing up" in camera_answer["activities"]
+    assert "yolo26n-pose" in camera_answer["endpoints"]
+    assert camera_answer["pose"]["available"] is True
     assert result["answerPath"]
 
     snapshot = json.loads(open(result["payload"]["payloadPath"], encoding="utf-8").read())
     cam2 = snapshot["selected"]["cameras"]["cam2"]
-    assert set(cam2["inference"].keys()) == {"action-hmdb", "yolo26l"}
+    assert set(cam2["inference"].keys()) == {"action", "action-hmdb", "yolo26l", "yolo26n-pose"}
     assert cam2["inference"]["action-hmdb"]["data"]["detections"]["actions"] == ["pour"]
     assert cam2["frame"]["localPath"].endswith(".jpg")
 
@@ -177,3 +238,97 @@ def test_web_data_harness_collects_smartroom_control_snapshot(tmp_path):
         assert run["status"] == "completed"
         assert run["frameRecords"]
         assert run["answerPath"]
+
+
+def test_web_data_harness_uses_question_date_for_smartroom_selection(tmp_path):
+    manifest = _make_manifest(tmp_path)
+    server, url = _start_server(_SmartroomHandler)
+    try:
+        result = run_web_data_apps(
+            manifest_path=manifest,
+            source_url=f"{url}api/v1",
+            source_mode="auto",
+            output_root=tmp_path / "smartroom-june-run",
+            question_context="How many people are in the room in June 18th?",
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result["ok"] is True
+    assert result["question"] == "How many people are in the room in June 18th?"
+    assert result["payload"]["snapshotSummary"]["selectionMode"] == "requested_date"
+    assert result["payload"]["snapshotSummary"]["requestedDateLabel"] == "June 18"
+    assert result["payload"]["snapshotSummary"]["selectedRecording"] == "rec_20260618_001"
+    assert result["payload"]["snapshotSummary"]["cameras"] == ["cam1"]
+    assert result["answer"]["recording"]["rec"] == "rec_20260618_001"
+    assert "For June 18" in result["answer"]["chatAnswer"]
+    assert "peak occupancy was 4 people overall" in result["answer"]["chatAnswer"]
+
+def test_web_data_harness_reports_missing_requested_activity_date(tmp_path):
+    manifest = _make_manifest(tmp_path)
+    server, url = _start_server(_SmartroomHandler)
+    try:
+        result = run_web_data_apps(
+            manifest_path=manifest,
+            source_url=f"{url}api/v1",
+            source_mode="auto",
+            output_root=tmp_path / "smartroom-june24-run",
+            question_context="What was the person doing in the room on June 24th?",
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result["payload"]["snapshotSummary"]["selectionMode"] == "requested_date"
+    assert result["payload"]["snapshotSummary"]["requestedDateLabel"] == "June 24"
+    assert result["answer"]["recording"] is None
+    assert "No smartroom recording matched June 24" in result["answer"]["chatAnswer"]
+    assert "June 18, 2026" in result["answer"]["chatAnswer"]
+
+def test_web_data_harness_answers_requested_activity_count_question(tmp_path):
+    manifest = _make_manifest(tmp_path)
+    server, url = _start_server(_SmartroomHandler)
+    try:
+        result = run_web_data_apps(
+            manifest_path=manifest,
+            source_url=f"{url}api/v1",
+            source_mode="auto",
+            output_root=tmp_path / "smartroom-activity-run",
+            question_context="How many people are standing up and talking on June 18th?",
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    assert result["payload"]["snapshotSummary"]["selectedRecording"] == "rec_20260618_001"
+    assert result["answer"]["requestedActivities"] == ["standing up", "talking"]
+    assert result["answer"]["requestedActivityCounts"] == {"standing up": 2, "talking": 2}
+    assert "standing up: 2 people" in result["answer"]["chatAnswer"]
+    assert "talking: 2 people" in result["answer"]["chatAnswer"]
+    cam1 = result["answer"]["cameras"][0]
+    assert cam1["activityCounts"]["standing up"] == 2
+    assert cam1["activityCounts"]["talking"] == 2
+
+
+def test_web_data_harness_answers_combined_activity_question(tmp_path):
+    manifest = _make_manifest(tmp_path)
+    server, url = _start_server(_SmartroomHandler)
+    try:
+        result = run_web_data_apps(
+            manifest_path=manifest,
+            source_url=f"{url}api/v1",
+            source_mode="auto",
+            output_root=tmp_path / "smartroom-combined-activity-run",
+            question_context="How many people are both standing up and talking on June 18th?",
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    combination = result["answer"]["requestedActivityCombination"]
+    assert combination["labels"] == ["standing up", "talking"]
+    assert combination["exact"] is True
+    assert combination["count"] == 2
+    assert combination["byCamera"][0]["trackIds"] == ["1", "2"]
+    assert "2 people were both standing up and talking" in result["answer"]["chatAnswer"]

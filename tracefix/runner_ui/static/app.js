@@ -31,7 +31,7 @@ const state = {
     workspaceType: "custom",
     cityosRoot: "",
     appsDir: "",
-    webDataUrl: "http://feruzgay.local:4000/api/v1",
+    webDataUrl: "https://smartroom-mirror.vercel.app/api/v1",
   },
 };
 
@@ -160,6 +160,7 @@ const els = {
   synthGenerate: document.querySelector("#synthGenerate"),
   synthBuildCityOS: document.querySelector("#synthBuildCityOS"),
   synthRunWebData: document.querySelector("#synthRunWebData"),
+  synthViewTellMeAnswer: document.querySelector("#synthViewTellMeAnswer"),
   synthStatus: document.querySelector("#synthStatus"),
   synthChecklist: document.querySelector("#synthChecklist"),
   synthWorkspaceTypeDisplay: document.querySelector("#synthWorkspaceTypeDisplay"),
@@ -465,6 +466,10 @@ function bindEvents() {
 
   els.synthRunWebData?.addEventListener("click", async () => {
     await runWebDataApps();
+  });
+
+  els.synthViewTellMeAnswer?.addEventListener("click", async () => {
+    await viewTellMeAnswer();
   });
 
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -817,7 +822,7 @@ function appendTellMeMessage(kind, text) {
 function pipelineWebDataUrl() {
   const fromTellMe = els.tellmeWebDataUrl?.value?.trim() || "";
   const fromSynth = els.synthWebDataUrl?.value?.trim() || "";
-  const url = fromTellMe || fromSynth || state.synth.webDataUrl || "http://feruzgay.local:4000/api/v1";
+  const url = fromTellMe || fromSynth || state.synth.webDataUrl || "https://smartroom-mirror.vercel.app/api/v1";
   if (els.tellmeWebDataUrl) els.tellmeWebDataUrl.value = url;
   if (els.synthWebDataUrl) els.synthWebDataUrl.value = url;
   state.synth.webDataUrl = url;
@@ -831,9 +836,57 @@ async function refreshTellMeCurrentFromServer() {
     state.tellme.runId = response.run_id;
     renderTellMe(response.data, response.errors, response.warnings);
   }
+  syncTellMeAnswerButton();
   return response.data || null;
 }
 
+function hasTellMeAnswer(data = state.tellme.current) {
+  if (!data) return false;
+  const answer = data.web_data_answer || data.answer_packet?.answer || null;
+  return Boolean(
+    data.chat_answer
+    || data.answer_summary
+    || data.web_data_answer_path
+    || answer?.chatAnswer
+    || answer?.chat_answer
+    || answer?.text
+    || answer?.answer
+  );
+}
+
+function syncTellMeAnswerButton() {
+  if (els.synthViewTellMeAnswer) {
+    els.synthViewTellMeAnswer.disabled = !hasTellMeAnswer();
+  }
+}
+
+function setWorkflow(workflow) {
+  state.workflow = workflow;
+  markWorkflowSeen(workflow);
+  document.querySelectorAll("[data-workflow]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.workflow === workflow);
+  });
+  updateWorkflow();
+}
+
+async function viewTellMeAnswer() {
+  try {
+    await refreshTellMeCurrentFromServer();
+  } catch (error) {
+    showToast(error.message);
+  }
+  if (!hasTellMeAnswer()) {
+    showToast("No TeLLMe answer yet");
+    syncTellMeAnswerButton();
+    return;
+  }
+  setWorkflow("tellme");
+  window.requestAnimationFrame(() => {
+    const target = els.tellmeChatAnswer || els.tellmeAnswer;
+    target?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  showToast("Showing TeLLMe answer");
+}
 async function processTellMeFullPipeline() {
   const originalText = els.tellmeRunAll.textContent;
   els.tellmeRunAll.textContent = "Running Full Pipeline...";
@@ -883,11 +936,12 @@ async function processTellMeFullPipeline() {
       sourceUrl: pipelineWebDataUrl(),
       sourceMode: "auto",
       timeoutSeconds: 30,
+      question: state.tellme.current?.query || els.tellmeQuery.value.trim(),
     });
     state.synth.webDataResult = webResult;
     await refreshTellMeCurrentFromServer();
     appendTellMeMessage(webResult.ok ? "success" : "warning", webResult.ok
-      ? "Full pipeline complete. The Answer Summary now contains the latest smartroom result."
+      ? "Full pipeline complete. The Answer Summary now contains the requested smartroom result."
       : "Full pipeline finished, but one or more generated apps reported errors. Check the CityOS Synthesizer output.");
     showToast(webResult.ok ? "Full pipeline complete" : "Pipeline finished with app errors");
   } catch (error) {
@@ -924,6 +978,7 @@ function renderTellMeChatAnswer(data) {
   }
   const cameraParts = [];
   const latestParts = [];
+  const activityParts = [];
   const peaks = [];
   cameras.forEach((camera) => {
     const name = formatCameraNameForAnswer(camera.camera);
@@ -937,16 +992,24 @@ function renderTellMeChatAnswer(data) {
     if (camera.lastPeople !== null && camera.lastPeople !== undefined) {
       latestParts.push(`${name} most recently showed ${personCountLabel(camera.lastPeople)}`);
     }
+    const activities = camera.activities?.length ? camera.activities : camera.actions;
+    if (activities?.length) {
+      activityParts.push(`${name}: ${activities.slice(0, 8).join(", ")}`);
+    }
   });
   if (!cameraParts.length) {
     return "I found the latest smartroom recording, but there was not enough occupancy data to summarize yet.";
   }
   const overallPeak = peaks.length ? Math.max(...peaks) : null;
   const recording = answer?.recording ? [answer.recording.day, answer.recording.rec].filter(Boolean).join(" / ") : "";
-  let text = recording ? `For the latest recording (${recording}), ` : "For the latest recording, ";
+  const requestedLabel = answer?.selection?.requestedDateLabel || "";
+  let text = requestedLabel
+    ? (recording ? `For ${requestedLabel} (${recording}), ` : `For ${requestedLabel}, `)
+    : (recording ? `For the latest recording (${recording}), ` : "For the latest recording, ");
   text += `${cameraParts.join(", and ")}.`;
   if (overallPeak !== null) text += ` Across the observed time window, the peak occupancy was ${personCountLabel(overallPeak)} overall.`;
   if (latestParts.length) text += ` At the latest observed moment, ${latestParts.join(", and ")}.`;
+  if (activityParts.length) text += ` Detected activities/poses included ${activityParts.join("; ")}.`;
   return text;
 }
 
@@ -979,11 +1042,24 @@ function renderTellMeAnswerSummary(data) {
     if (snapshot.selectedRecording || snapshot.selectedDay) {
       lines.push(`Recording: ${[snapshot.selectedDay, snapshot.selectedRecording].filter(Boolean).join(" / ")}`);
     }
+    if (snapshot.requestedDateLabel) lines.push(`Requested date: ${snapshot.requestedDateLabel}`);
+    if (snapshot.selectionReason) lines.push(`Selection: ${snapshot.selectionReason}`);
     if (Array.isArray(snapshot.cameras) && snapshot.cameras.length) {
       lines.push(`Cameras: ${snapshot.cameras.join(", ")}`);
     }
     if (snapshot.recordingCount !== undefined) lines.push(`Recordings available: ${snapshot.recordingCount}`);
     if (snapshot.errors) lines.push(`API errors: ${snapshot.errors}`);
+  }
+
+  if (answer?.requestedActivityAnswer) {
+    lines.push("");
+    lines.push("Requested Activity Counts");
+    lines.push(answer.requestedActivityAnswer);
+  }
+  if (answer?.activityCounts && Object.keys(answer.activityCounts).length) {
+    lines.push("");
+    lines.push("Activity Count Totals");
+    Object.entries(answer.activityCounts).forEach(([label, count]) => lines.push(`- ${label}: ${count}`));
   }
 
   if (answer?.cameras?.length) {
@@ -993,7 +1069,11 @@ function renderTellMeAnswerSummary(data) {
       const details = [];
       if (camera.peakPeople !== null && camera.peakPeople !== undefined) details.push(`peak ${camera.peakPeople}`);
       if (camera.lastPeople !== null && camera.lastPeople !== undefined) details.push(`latest ${camera.lastPeople}`);
-      if (camera.actions?.length) details.push(`actions ${camera.actions.join(", ")}`);
+      const activities = camera.activities?.length ? camera.activities : camera.actions;
+      if (activities?.length) details.push(`activities/poses ${activities.join(", ")}`);
+      if (camera.activityCounts && Object.keys(camera.activityCounts).length) details.push(`activity counts ${Object.entries(camera.activityCounts).map(([label, count]) => `${label}: ${count}`).join(", ")}`);
+      if (camera.pose?.available) details.push(`pose models ${(camera.pose.models || []).map((item) => item.model).filter(Boolean).join(", ")}`);
+      if (camera.endpoints && Object.keys(camera.endpoints).length) details.push(`model endpoints ${Object.keys(camera.endpoints).join(", ")}`);
       if (camera.framePath) details.push(`frame ${camera.framePath}`);
       lines.push(`- ${camera.camera || "camera"}: ${details.join("; ") || "no summarized result"}`);
     });
@@ -1026,6 +1106,7 @@ function renderTellMe(data, errors = [], warnings = []) {
   els.tellmeTaskSpec.textContent = data ? JSON.stringify(spec, null, 2) : "No TraceFix task spec yet.";
   els.tellmeAnswer.textContent = renderTellMeAnswerSummary(data);
   if (els.tellmeChatAnswer) els.tellmeChatAnswer.textContent = renderTellMeChatAnswer(data);
+  syncTellMeAnswerButton();
   els.tellmeToTracefix.disabled = !data || !Object.keys(spec).length || data.status === "not_answerable";
 
   const messages = [
@@ -1334,7 +1415,7 @@ async function runWebDataApps() {
     showToast("Generate CityOS artifacts first");
     return;
   }
-  const sourceUrl = els.synthWebDataUrl?.value?.trim() || state.synth.webDataUrl || "http://feruzgay.local:4000/api/v1";
+  const sourceUrl = els.synthWebDataUrl?.value?.trim() || state.synth.webDataUrl || "https://smartroom-mirror.vercel.app/api/v1";
   els.synthRunWebData.disabled = true;
   els.synthOutputStatus.textContent = "Running web data apps...";
   const prior = els.synthOutput.textContent || "";
@@ -1345,6 +1426,7 @@ async function runWebDataApps() {
       sourceUrl,
       sourceMode: "auto",
       timeoutSeconds: 30,
+      question: state.tellme.current?.query || els.tellmeQuery.value.trim(),
     });
     els.synthOutputStatus.textContent = result.ok ? "Web data run complete" : "Web data run failed";
     els.synthOutput.textContent = `${els.synthOutput.textContent}\n${renderWebDataRunResult(result)}`;
@@ -1366,9 +1448,11 @@ function renderWebDataRunResult(result) {
   if (result.sourceKind) lines.push(`Kind: ${result.sourceKind}`);
   lines.push(`Manifest: ${result.manifestPath || "unknown"}`);
   lines.push(`Output: ${result.outputRoot || "unknown"}`);
+  if (result.question) lines.push(`Question: ${result.question}`);
   if (result.payload?.payloadPath) lines.push(`Payload: ${result.payload.payloadPath}`);
   if (result.payload?.snapshotSummary) lines.push(`Snapshot: ${JSON.stringify(result.payload.snapshotSummary)}`);
-  if (result.answer?.text) lines.push(`Answer: ${result.answer.text}`);
+  if (result.answer?.chatAnswer || result.answer?.chat_answer) lines.push(`Answer: ${result.answer.chatAnswer || result.answer.chat_answer}`);
+  else if (result.answer?.text) lines.push(`Answer: ${result.answer.text}`);
   if (result.answerPath) lines.push(`Answer file: ${result.answerPath}`);
   if (result.resultPath) lines.push(`Result: ${result.resultPath}`);
   lines.push("");
@@ -1409,6 +1493,7 @@ function renderSynthArtifacts(result) {
   const apps = result?.apps || [];
   if (els.synthBuildCityOS) els.synthBuildCityOS.disabled = !apps.length;
   if (els.synthRunWebData) els.synthRunWebData.disabled = !apps.length;
+  syncTellMeAnswerButton();
   els.synthAppCount.textContent = String(apps.length);
   els.synthManifestPath.textContent = result?.manifestPath || "No synthesis yet";
   els.synthAppsDirLabel.textContent = result?.appsDir || "No output yet";

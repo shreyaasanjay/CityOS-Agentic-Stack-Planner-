@@ -779,7 +779,7 @@ def infer_allowed_modalities(analysis: QueryAnalysis, route: str) -> List[str]:
     if route == "single_agent":
         if "audio" in analysis.context_requirements:
             return ["audio"]
-        if "occupancy" in analysis.context_requirements or "motion" in analysis.context_requirements:
+        if any(item in analysis.context_requirements for item in ("occupancy", "motion", "activities", "tracks", "events")):
             return ["video"]
         if "room_state" in analysis.context_requirements:
             return ["context", "video", "audio"]
@@ -1035,7 +1035,7 @@ def _default_task_category(analysis: dict[str, Any]) -> str:
     intent = analysis.get("intent", "")
     if "occupancy" in intent:
         return "occupancy_count"
-    if "motion" in intent or "audio" in intent:
+    if "motion" in intent or "audio" in intent or "activity" in intent:
         return "event_detection"
     if analysis.get("requires_multi_timestamp_reasoning"):
         return "temporal_correlation"

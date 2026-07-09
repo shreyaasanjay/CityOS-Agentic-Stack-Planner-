@@ -7,39 +7,24 @@ The end-to-end flow is:
 1. TeLLMe decomposes the user intent into structured application requirements.
 2. TraceFix generates an agent/resource/channel protocol.
 3. TraceFix verifies the protocol with TLA+/PlusCal and TLC.
-4. TraceFix exports the CityOS module plan.
-
-```text
-spec/cityos_module_plan.json
-```
-
+4. TraceFix exports `spec/cityos_module_plan.json`.
 5. CityOS Synthesizer packages the verified plan into one CityOS app per agent plus one monitor app.
 6. CityOS Runtime OS runs the generated apps.
 
 TraceFix is the planner and verifier. It does not run production CityOS agents itself.
 
----
-
 ## Requirements
 
 Install or configure the following before running the project:
 
-* Python 3.11+
-* Java 17 for TLC
-* TLA tools JAR
-
-```text
-lib/tla2tools.jar
-```
-
-* OpenCode CLI for LLM design runs
-* LLM API keys as needed:
-
-  * TeLLMe: OpenAI key, commonly using `gpt-4.1`
-  * TraceFix: OpenRouter key, commonly using GLM 5.2
-  * Optional: Anthropic, Ollama
-
----
+- Python 3.11+
+- Java 17 for TLC
+- `lib/tla2tools.jar`
+- OpenCode CLI for LLM design runs
+- LLM API keys as needed:
+  - TeLLMe: OpenAI key, commonly using `gpt-4.1`
+  - TraceFix: OpenRouter key, commonly using GLM 5.2
+  - Optional: Anthropic, Ollama
 
 ## First-Time Setup
 
@@ -73,20 +58,38 @@ ANTHROPIC_API_KEY=
 
 The local UI can also accept API keys directly in the browser. Keys entered there are passed only to the spawned run process and are not written to disk.
 
----
+## Start The Local UI
 
-## Start the Local UI
+Start the main integrated UI.
 
-Start the main integrated runner.
+```powershell
+.\local-ui\start-synth.ps1 -Port 8790 -Open
+```
+
+Open the UI in your browser.
+
+```text
+http://127.0.0.1:8790/
+```
+
+For another computer to access the UI on the same network, start the server in LAN mode on the machine that cloned the repo.
+
+```powershell
+.\local-ui\start-synth.ps1 -Port 8790 -Lan
+```
+
+Then open the printed LAN URL from the other computer, for example:
+
+```text
+http://192.168.1.25:8790/
+```
+
+If the LAN URL does not connect, allow inbound TCP traffic for port `8790` in Windows Firewall.
+
+You can also start the runner-only UI on port `8788`.
 
 ```powershell
 .\local-ui\start-runner.ps1 -Port 8788 -Open
-```
-
-Open the runner in your browser.
-
-```text
-http://127.0.0.1:8788/
 ```
 
 To start every local UI, run:
@@ -109,54 +112,68 @@ Stop the local UIs with:
 .\local-ui\stop-ui.ps1
 ```
 
----
+## Smartroom Mirror API
 
-## End-to-End UI Flow
-
-Open the runner.
+The web-data agents use the public read-only smartroom mirror by default:
 
 ```text
-http://127.0.0.1:8788/
+https://smartroom-mirror.vercel.app/api/v1
+```
+
+This mirror has the same endpoint shapes as the LAN smartroom API, but it contains synced recordings only. It does not provide live streams. Frame requests redirect to the nearest pre-extracted thumbnail.
+
+You can still paste a LAN API URL into the UI when running on the lab network.
+
+## End-To-End UI Flow
+
+Open the integrated UI.
+
+```text
+http://127.0.0.1:8790/
 ```
 
 Choose the workflow you want:
 
-* TraceFix Planner: generate or export a verified intermediary plan.
-* CityOS Synthesizer: package a verified workspace into CityOS app folders.
+- TeLLMe: turn a natural-language smart-room request into a structured task.
+- TraceFix: generate or export a verified intermediary plan.
+- CityOS Synthesizer: package a verified workspace into CityOS app folders and run web-data agents.
 
 Enter the required API keys.
 
 Pick provider and model settings:
 
-* Use OpenAI or TeLLMe-facing settings for TeLLMe decomposition.
-* Use OpenRouter/GLM 5.2 or the desired TraceFix model for verification.
+- Use OpenAI or TeLLMe-facing settings for TeLLMe decomposition.
+- Use OpenRouter/GLM 5.2 or the desired TraceFix model for verification.
 
 Choose either a benchmark task or a custom task.
 
-Click **Generate Verified Plan**.
+Click **Run Full Pipeline** from TeLLMe, or run each stage manually:
 
-Wait for TraceFix to finish the planning and verification flow:
+1. Process the TeLLMe intent.
+2. Continue to TraceFix and click **Generate Verified Plan**.
+3. Switch to CityOS Synthesizer and click **Generate CityOS Artifacts**.
+4. Click **Run Web Data Apps** to query the smartroom API/mirror and generate the answer packet.
 
-* IR generation
-* PlusCal/TLA+ generation
-* TLC verification
-* Repair loop, if needed
-* State extraction
-* Prompt generation
-* CityOS module plan export
+During TraceFix verification, wait for:
+
+- IR generation
+- PlusCal/TLA+ generation
+- TLC verification
+- Repair loop, if needed
+- State extraction
+- Prompt generation
+- CityOS module plan export
 
 Check the output tabs:
 
-* Log
-* IR
-* Intermediary Plan
-* Protocol
-* States
-* TLC Error
+- Log
+- IR
+- Intermediary Plan
+- Protocol
+- States
+- TLC Error
 
-Check **LLM Usage** for token and cost reporting.
-
-Mixed-model runs show model breakdowns, for example:
+Check **LLM Usage** for token and cost reporting. Mixed-model runs show model breakdowns, for example:
 
 ```text
 TeLLMe:   gpt-4.1
@@ -165,23 +182,17 @@ TraceFix: glm-5.2
 
 Deterministic or no-LLM runs show zero tokens instead of unavailable usage.
 
-Switch to **CityOS Synthesizer**.
-
-Pick the verified workspace.
-
-Confirm readiness checks pass.
-
-Choose the output directory and package prefix.
-
-Click **Generate CityOS Artifacts**.
-
-Use the generated app folders from:
+Generated CityOS app folders are written under the selected workspace output directory, commonly:
 
 ```text
 workspace/<run_id>/output/cityos_synthesis/
 ```
 
----
+Web-data run outputs are kept inside the repo under:
+
+```text
+.tracefix-ui/web-data-runs/
+```
 
 ## CLI Flow
 
@@ -202,8 +213,6 @@ Run the legacy local debug runner only when needed.
 ```powershell
 tracefix run --local-dev --workspace workspace/<generated_workspace>
 ```
-
----
 
 ## Main Outputs
 
@@ -234,24 +243,28 @@ spec/cityos_module_plan.json
 
 CityOS Synthesizer consumes that file and writes Docker-buildable CityOS app packages.
 
----
-
 ## Theme Toggle
 
-The runner UI supports dark mode and beige light mode. Use the theme button in the header to switch modes.
-
-The preference is saved locally in the browser.
-
----
+The runner UI supports dark mode and beige light mode. Use the theme button in the header to switch modes. The preference is saved locally in the browser.
 
 ## Troubleshooting
 
-If the UI cannot start, check the runner logs.
+If the UI cannot start, check the logs.
 
 ```text
 .tracefix-ui\logs\runner.out.log
 .tracefix-ui\logs\runner.err.log
+.tracefix-ui\logs\unified-ui.out.log
+.tracefix-ui\logs\unified-ui.err.log
 ```
+
+If `http://127.0.0.1:8790/` does not load, make sure the server is running:
+
+```powershell
+.\local-ui\start-synth.ps1 -Port 8790
+```
+
+If another computer cannot connect, start with `-Lan` and use the printed LAN URL. Also check Windows Firewall for inbound TCP access to port `8790`.
 
 If TLC cannot run, check that Java is installed and that the TLA tools JAR exists.
 
@@ -261,10 +274,10 @@ lib/tla2tools.jar
 
 If an LLM request times out, verify the following:
 
-* The API key is correct.
-* The selected model exists for that provider.
-* Network access is available.
-* Provider and model settings match the intended stage.
+- The API key is correct.
+- The selected model exists for that provider.
+- Network access is available.
+- Provider and model settings match the intended stage.
 
 If CityOS synthesis is not ready, make sure the workspace contains:
 
@@ -274,8 +287,6 @@ spec/states.json
 spec/cityos_module_plan.json
 prompts/runtime_b/
 ```
-
----
 
 ## Project Structure
 

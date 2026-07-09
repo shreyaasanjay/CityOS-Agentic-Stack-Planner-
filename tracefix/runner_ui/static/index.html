@@ -18,8 +18,8 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=tracefix-unified-ui-20260708-full-pipeline-v4" />
-    <link rel="stylesheet" href="/static/styles.css?v=tracefix-unified-ui-20260708-full-pipeline-v4" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=tracefix-unified-ui-20260709-full-pipeline-v9" />
+    <link rel="stylesheet" href="/static/styles.css?v=tracefix-unified-ui-20260709-full-pipeline-v9" />
   </head>
   <body>
     <main class="runner-shell">
@@ -81,8 +81,8 @@
                 <input id="tellmeSpaceId" value="smart_room_1" autocomplete="off" />
               </label>
               <label>
-                Smartroom API URL
-                <input id="tellmeWebDataUrl" value="http://feruzgay.local:4000/api/v1" autocomplete="off" />
+                Smartroom mirror API URL
+                <input id="tellmeWebDataUrl" value="https://smartroom-mirror.vercel.app/api/v1" autocomplete="off" />
               </label>
               <label>
                 Timestamp <span class="optional-label">optional</span>
@@ -300,8 +300,8 @@
                 <input id="synthCityOSRoot" autocomplete="off" placeholder="C:\Users\...\cityos" />
               </label>
               <label>
-                Web data URL
-                <input id="synthWebDataUrl" autocomplete="off" value="http://feruzgay.local:4000/api/v1" />
+                Smartroom mirror URL
+                <input id="synthWebDataUrl" autocomplete="off" value="https://smartroom-mirror.vercel.app/api/v1" />
               </label>
               <label>
                 Output directory
@@ -324,6 +324,7 @@
               <button id="synthGenerate" class="primary-button" type="button">Generate CityOS Artifacts</button>
               <button id="synthBuildCityOS" class="secondary-button" type="button" disabled>Build In CityOS</button>
               <button id="synthRunWebData" class="secondary-button" type="button" disabled>Run Web Data Apps</button>
+              <button id="synthViewTellMeAnswer" class="secondary-button" type="button" disabled>View Answer In TeLLMe</button>
             </div>
           </section>
         </section>
@@ -567,6 +568,6 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=tracefix-unified-ui-20260708-full-pipeline-v4" type="module"></script>
+    <script src="/static/app.js?v=tracefix-unified-ui-20260709-full-pipeline-v9" type="module"></script>
   </body>
 </html>

@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 from tracefix.runtime.cityos_synthesizer import synthesize_cityos_apps
-from tracefix.runtime.web_data_harness import default_web_data_url, run_web_data_apps
+from tracefix.runtime.web_data_harness import default_web_data_output_root, default_web_data_url, run_web_data_apps
 from tracefix.textio import safe_read_json
 
 
@@ -26,6 +26,13 @@ def _repo_root() -> Path:
             return parent
     return Path.cwd()
 
+
+def _path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
 
 def _default_cityos_root() -> Path | None:
     configured = os.environ.get("CITYOS_ROOT", "").strip()
@@ -223,7 +230,8 @@ class SynthHandler(BaseHTTPRequestHandler):
             if not output_root.is_absolute():
                 output_root = self.root / output_root
             output_root = output_root.resolve()
-
+        if output_root is None or not _path_is_within(output_root, self.root):
+            output_root = default_web_data_output_root(manifest_path, repo_root=self.root)
         result = run_web_data_apps(
             manifest_path=manifest_path,
             source_url=source_url,
