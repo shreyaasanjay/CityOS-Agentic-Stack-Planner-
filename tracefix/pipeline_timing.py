@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from tracefix.runtime.usage_tracker import UsageTracker
+
 
 _WRITE_LOCK = threading.Lock()
 
@@ -44,6 +46,8 @@ class PipelineTimingReport:
         self._started_ms = started_ms if started_ms is not None else monotonic_ms()
         self.stages: list[dict[str, Any]] = []
         self.api_calls: list[dict[str, Any]] = []
+        self.usage = UsageTracker(self.run_dir, run_id=self.run_id or self.run_dir.name)
+        self.usage.write()
 
     def stage(
         self,
@@ -115,7 +119,10 @@ class PipelineTimingReport:
             "failed": disposition.get("status") not in {"completed", "incomplete"},
             "status": disposition.get("status"),
             "observation_scope": "opencode_process",
+            "usage_available": bool(disposition.get("usage_available")),
+            "usage": disposition.get("usage") or {},
         }
+        self._record_disposition_usage(stage, disposition)
         self.api_calls.append(call)
         self.stage(
             stage,
@@ -147,6 +154,56 @@ class PipelineTimingReport:
 
     def finalize(self) -> None:
         self.write(complete=True)
+        summary = self.usage.summary()
+        cost = summary.get("total_estimated_cost_usd")
+        cost_text = "unavailable" if cost is None else f"${cost:.6f}"
+        print(
+            "[TRACEFIX LLM TOTAL] "
+            f"tokens={summary.get('total_tokens', 0)} cost={cost_text} "
+            f"highest_cost_stage={summary.get('highest_cost_stage') or 'none'} "
+            f"usage_unavailable={summary.get('usage_unavailable_count', 0)} "
+            f"missing_pricing={summary.get('missing_pricing_count', 0)}",
+            flush=True,
+        )
+
+    def _record_disposition_usage(
+        self,
+        stage: str,
+        disposition: dict[str, Any],
+    ) -> None:
+        call_id = str(disposition.get("call_id") or stage)
+        steps = disposition.get("usage_steps")
+        if isinstance(steps, list) and steps:
+            for index, step in enumerate(steps, 1):
+                if not isinstance(step, dict):
+                    continue
+                self.usage.record(
+                    stage=stage,
+                    agent=str(disposition.get("agent_id") or ""),
+                    provider=str(disposition.get("provider") or ""),
+                    model=str(disposition.get("model") or ""),
+                    started_at=str(disposition.get("started_at") or utc_now()),
+                    ended_at=str(disposition.get("finished_at") or utc_now()),
+                    duration_ms=float(disposition.get("duration_ms") or 0.0),
+                    prompt_tokens=int(step.get("prompt_tokens") or 0),
+                    completion_tokens=int(step.get("completion_tokens") or 0),
+                    total_tokens=int(step.get("total_tokens") or 0),
+                    cached_tokens=int(step.get("cached_tokens") or 0),
+                    reasoning_tokens=int(step.get("reasoning_tokens") or 0),
+                    exact_cost_usd=step.get("cost_usd"),
+                    record_id=f"{call_id}:{index}",
+                )
+            return
+        self.usage.record_unavailable(
+            stage=stage,
+            agent=str(disposition.get("agent_id") or ""),
+            provider=str(disposition.get("provider") or ""),
+            model=str(disposition.get("model") or ""),
+            started_at=str(disposition.get("started_at") or utc_now()),
+            ended_at=str(disposition.get("finished_at") or utc_now()),
+            duration_ms=float(disposition.get("duration_ms") or 0.0),
+            record_id=f"{call_id}:unavailable",
+        )
 
     def _payload(self, *, complete: bool) -> dict[str, Any]:
         duration_ms = round(monotonic_ms() - self._started_ms, 2)
@@ -166,6 +223,7 @@ class PipelineTimingReport:
         fast_path = _latest_fast_path(self.stages)
         coord_template = _latest_coord_template(self.stages)
         pattern_repository = _latest_pattern_repository(self.stages)
+        usage = self.usage.summary()
         if repair.get("stop_reason") and repair.get("stop_reason") != "tlc_passed":
             recommendation = str(repair.get("recommendation") or recommendation)
         return {
@@ -179,6 +237,14 @@ class PipelineTimingReport:
             "total_wall_clock_ms": duration_ms,
             "stages": self.stages,
             "api_calls": self.api_calls,
+            "usage": usage,
+            "usage_records": list(self.usage.records),
+            "total_prompt_tokens": usage["total_prompt_tokens"],
+            "total_completion_tokens": usage["total_completion_tokens"],
+            "total_tokens": usage["total_tokens"],
+            "total_estimated_cost_usd": usage["total_estimated_cost_usd"],
+            "cost_by_stage": usage["cost_by_stage"],
+            "cost_by_model": usage["cost_by_model"],
             "repair": repair,
             "ir_sanitization": ir_sanitization,
             "single_agent_fast_path": fast_path,
@@ -423,6 +489,9 @@ def _to_markdown(payload: dict[str, Any]) -> str:
     fast_path = payload.get("single_agent_fast_path") or {}
     coord = payload.get("coordination_pattern_template") or {}
     repo = payload.get("pattern_repository") or {}
+    usage = payload.get("usage") or {}
+    total_cost = usage.get("total_estimated_cost_usd")
+    cost_text = "unavailable" if total_cost is None else f"${total_cost:.6f}"
     lines = [
         "# TraceFix Pipeline Timing",
         "",
@@ -432,6 +501,13 @@ def _to_markdown(payload: dict[str, Any]) -> str:
         f"- Confidence: {summary.get('confidence')}",
         f"- Repair attempts: {summary.get('total_repair_attempts', 0)}",
         f"- Repair stop reason: {summary.get('repair_stop_reason') or 'none'}",
+        f"- LLM prompt tokens: {usage.get('total_prompt_tokens', 0)}",
+        f"- LLM completion tokens: {usage.get('total_completion_tokens', 0)}",
+        f"- LLM total tokens: {usage.get('total_tokens', 0)}",
+        f"- LLM estimated cost: {cost_text}",
+        f"- Highest-cost LLM stage: {usage.get('highest_cost_stage') or 'none'}",
+        f"- Calls without usage: {usage.get('usage_unavailable_count', 0)}",
+        f"- Calls missing pricing: {usage.get('missing_pricing_count', 0)}",
         f"- IR sanitization attempted: {'yes' if sanitization.get('attempted') else 'no'}",
         f"- IR sanitizer recovered pipeline: {'yes' if sanitization.get('recovered') else 'no'}",
         f"- Single-agent fast path considered: {'yes' if fast_path.get('considered') else 'no'}",
