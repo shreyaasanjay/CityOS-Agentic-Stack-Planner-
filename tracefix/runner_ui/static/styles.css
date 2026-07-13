@@ -562,6 +562,22 @@ textarea:focus {
   margin-top: 10px;
 }
 
+.tellme-chat-card {
+  grid-column: 1 / -1;
+}
+
+.chat-answer {
+  margin-top: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -1193,7 +1209,7 @@ textarea:focus {
 
 :root[data-theme="light"] select option:checked {
   color: #241c14;
-  background-color: #dbeae4;
+  background-color: #b8d3c7;
 }
 
 :root[data-theme="light"] select option:hover,
@@ -1209,9 +1225,16 @@ textarea:focus {
 :root[data-theme="light"] .mode-button.active,
 :root[data-theme="light"] .primary-button,
 :root[data-theme="light"] .tab.active {
-  color: #241c14;
+  color: #1f1912;
   border-color: var(--green);
-  background: #dbeae4;
+  background: #b8d3c7;
+}
+
+:root[data-theme="light"] .api-key-status.detected,
+:root[data-theme="light"] .message-card.success {
+  color: #173c2f;
+  border-color: rgba(47, 111, 95, 0.55);
+  background: #b8d3c7;
 }
 
 :root[data-theme="light"] .secondary-button {

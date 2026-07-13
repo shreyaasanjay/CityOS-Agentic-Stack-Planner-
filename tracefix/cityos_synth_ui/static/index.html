@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>TraceFix CityOS Synthesizer</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260708-smartroom8790" />
   </head>
   <body>
     <main class="shell">
@@ -51,6 +52,31 @@
           </section>
 
           <section class="panel">
+            <h2>Smartroom Data</h2>
+            <label>
+              Smartroom mirror URL
+              <input id="webDataUrl" autocomplete="off" placeholder="https://smartroom-mirror.vercel.app/api/v1" />
+            </label>
+            <label>
+              Source mode
+              <select id="sourceMode">
+                <option value="auto">Auto-detect</option>
+                <option value="smartroom">Smartroom API</option>
+                <option value="raw">Raw HTTP payload</option>
+              </select>
+            </label>
+            <label>
+              Timeout seconds
+              <input id="webTimeout" type="number" min="1" max="300" value="30" />
+            </label>
+            <label class="check-row">
+              <input id="autoRunWebData" type="checkbox" checked />
+              Run smartroom agents after synthesis
+            </label>
+            <button id="runWebData" class="secondary" type="button" disabled>Run Smartroom Agents</button>
+          </section>
+
+          <section class="panel">
             <h2>Actions</h2>
             <button id="synthesize" class="primary" type="submit">Synthesize CityOS Apps</button>
             <button id="refresh" class="secondary" type="button">Refresh Workspaces</button>
@@ -91,7 +117,15 @@
             <div id="appsList" class="apps-list"></div>
           </div>
 
-          <div class="panel output-panel">
+          <div class="panel output-panel answer-panel">
+            <div class="heading">
+              <h3>Answer Summary</h3>
+              <span id="webRunLabel"></span>
+            </div>
+            <div id="answerSummary" class="answer-summary empty">Synthesize apps, then run smartroom agents to generate an answer summary.</div>
+          </div>
+
+          <div class="panel output-panel log-panel">
             <div class="heading">
               <h3>Log</h3>
             </div>
@@ -102,6 +136,6 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=20260708-smartroom8790"></script>
   </body>
 </html>

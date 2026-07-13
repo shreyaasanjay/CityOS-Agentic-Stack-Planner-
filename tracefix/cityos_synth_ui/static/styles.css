@@ -176,7 +176,8 @@ select:focus {
   background: #171b1e;
 }
 
-.primary:disabled {
+.primary:disabled,
+.secondary:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -383,6 +384,138 @@ select:focus {
 .toast.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+
+.log-panel {
+  grid-column: 1 / -1;
+}
+
+.log-panel .log {
+  height: 260px;
+}
+
+.answer-summary {
+  min-height: 220px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel-soft);
+}
+
+.answer-summary.pending {
+  color: var(--muted);
+}
+
+.answer-summary.ok {
+  border-color: rgba(63, 146, 124, 0.55);
+}
+
+.answer-summary.failed {
+  border-color: rgba(210, 98, 98, 0.65);
+}
+
+.answer-status {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  margin-bottom: 10px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.answer-status.ok {
+  color: #caf3e2;
+  background: var(--green-soft);
+}
+
+.answer-status.failed {
+  color: #ffdada;
+  background: var(--red-soft);
+}
+
+.answer-text {
+  margin: 0 0 12px;
+  color: #edf3ef;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.camera-list,
+.run-list,
+.answer-details {
+  display: grid;
+  gap: 8px;
+}
+
+.camera-list,
+.answer-details {
+  margin-top: 10px;
+}
+
+.run-list {
+  margin-top: 12px;
+}
+
+.camera-card,
+.run-card,
+.answer-detail {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #161a1d;
+}
+
+.camera-card,
+.run-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.camera-card strong,
+.run-card strong {
+  color: #dce7e1;
+  font-size: 13px;
+}
+
+.camera-card span,
+.run-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.run-card.completed {
+  border-color: rgba(63, 146, 124, 0.45);
+}
+
+.run-card.failed,
+.run-card.error {
+  border-color: rgba(210, 98, 98, 0.5);
+}
+
+.run-card code,
+.answer-detail code {
+  overflow-wrap: anywhere;
+  color: #dce7e1;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+}
+
+.answer-detail {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.answer-detail span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 @media (max-width: 1040px) {

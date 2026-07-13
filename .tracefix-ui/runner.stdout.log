@@ -1,0 +1,127 @@
+TraceFix Intermediary Planner running at http://127.0.0.1:8788
+Reading repo data from C:\Users\shrey\TraceFixCityOS
+Serving UI static files from C:\Users\shrey\TraceFixCityOS\tracefix\runner_ui\static
+TraceFix UI build: tracefix-unified-ui-20260708-full-pipeline-v2
+TraceFix UI Python: C:\Users\shrey\AppData\Local\Programs\Python\Python312\python.exe
+TraceFix subprocess Python: C:\Users\shrey\AppData\Local\Programs\Python\Python312\python.exe
+TraceFix TLA_VERIFY_JAVA: C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot\bin\java.exe
+TraceFix JAVA_EXE: C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot\bin\java.exe
+TraceFix JAVA_HOME: C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot\
+TraceFix PATH beginning: C:\Users\shrey\.codex\tmp\arg0\codex-arg0XT2vFS;C:\Users\shrey\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin;C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot\bin;C:\Program Files (x86)\Common Files\Oracle\Java\java8path;C:\Program Files (x86)\Common Files\Oracle\Java\javapath
+TraceFix final Java selected by toolchain: C:\Program Files\Eclipse Adoptium\jdk-17.0.19.10-hotspot\bin\java.exe
+TeLLMe OPENAI_API_KEY detected: False
+TeLLMe TELLME_API_KEY detected: False
+TeLLMe TELLME_MODEL: (not set, using default)
+TeLLMe query_analysis.py : C:\Users\shrey\TraceFixCityOS\tellme_harness\query_analysis.py
+TeLLMe route_policy.py   : C:\Users\shrey\TraceFixCityOS\tellme_harness\route_policy.py
+TeLLMe compound detector : present
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_100659 type=custom ready=True status=verified task_text='How many people are currently in the conference room, exclud'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094845 type=custom ready=True status=verified task_text='What is the maximum number of people in the room at any give'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094528 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_235343 type=custom ready=False status=unknown task_text='AGENT_A; AGENT_B'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_220254 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] /api/synth/config benchmark='' workspaceType='custom' count=6
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/config?workspaceType=custom HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET / HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET / HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /static/app.js?v=tracefix-unified-ui-20260708-full-pipeline-v2 HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /static/styles.css?v=tracefix-unified-ui-20260708-full-pipeline-v2 HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/ui-info HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/tellme/config HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /static/favicon.svg?v=tracefix-unified-ui-20260708-full-pipeline-v2 HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/tellme/current HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/model-options HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/tasks HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_100659 type=custom ready=True status=verified task_text='How many people are currently in the conference room, exclud'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094845 type=custom ready=True status=verified task_text='What is the maximum number of people in the room at any give'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094528 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_235343 type=custom ready=False status=unknown task_text='AGENT_A; AGENT_B'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_220254 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] /api/synth/config benchmark='' workspaceType='custom' count=6
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/config?workspaceType=custom HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[tracefix-runner] 127.0.0.1 - "GET /api/cityos/current HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[SYNTH] /api/synth/workspace path=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/workspace?workspace=C%3A%5CUsers%5Cshrey%5CTraceFixCityOS%5Cworkspace%5Ctellme_structured_smart_room_application_20260707_100006 HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/tellme/current HTTP/1.1" 200 -
+[TRACEFIX TIMING] {"stage":"tellme_decomposition","duration_ms":313.0,"success":true,"model":null,"provider":"deterministic","retry_count":0}
+[tracefix-runner] 127.0.0.1 - "POST /api/tellme/query HTTP/1.1" 201 -
+[tracefix-runner] 127.0.0.1 - "POST /api/tracefix/from-tellme HTTP/1.1" 201 -
+[tracefix-runner] 127.0.0.1 - "GET /api/runs/b0cf156811/events HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=False status=unknown task_text='How many people are in the room in total?'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_100659 type=custom ready=True status=verified task_text='How many people are currently in the conference room, exclud'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094845 type=custom ready=True status=verified task_text='What is the maximum number of people in the room at any give'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094528 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_235343 type=custom ready=False status=unknown task_text='AGENT_A; AGENT_B'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_220254 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] /api/synth/config benchmark='' workspaceType='custom' count=7
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/config?workspaceType=custom HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[SYNTH] /api/synth/workspace path=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/workspace?workspace=C%3A%5CUsers%5Cshrey%5CTraceFixCityOS%5Cworkspace%5Ctellme_structured_smart_room_application_20260707_100006 HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/runs/b0cf156811 HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_100659 type=custom ready=True status=verified task_text='How many people are currently in the conference room, exclud'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094845 type=custom ready=True status=verified task_text='What is the maximum number of people in the room at any give'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094528 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_235343 type=custom ready=False status=unknown task_text='AGENT_A; AGENT_B'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_220254 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] /api/synth/config benchmark='' workspaceType='custom' count=7
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/config?workspaceType=custom HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[SYNTH] /api/synth/workspace path=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/workspace?workspace=C%3A%5CUsers%5Cshrey%5CTraceFixCityOS%5Cworkspace%5Ctellme_structured_smart_room_application_20260708_123346 HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[SYNTH] /api/synth/workspace path=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/workspace?workspace=C%3A%5CUsers%5Cshrey%5CTraceFixCityOS%5Cworkspace%5Ctellme_structured_smart_room_application_20260708_123346 HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[TRACEFIX TIMING] {"stage":"cityos_synthesis","duration_ms":1390.0,"success":true,"model":null,"provider":null,"retry_count":null}
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[tracefix-runner] 127.0.0.1 - "POST /api/cityos/synthesize HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "POST /api/synth/run-web-data HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/tellme/current HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_100659 type=custom ready=True status=verified task_text='How many people are currently in the conference room, exclud'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094845 type=custom ready=True status=verified task_text='What is the maximum number of people in the room at any give'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094528 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_235343 type=custom ready=False status=unknown task_text='AGENT_A; AGENT_B'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_220254 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] /api/synth/config benchmark='' workspaceType='custom' count=7
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/config?workspaceType=custom HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[SYNTH] /api/synth/workspace path=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/workspace?workspace=C%3A%5CUsers%5Cshrey%5CTraceFixCityOS%5Cworkspace%5Ctellme_structured_smart_room_application_20260708_123346 HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "POST /api/synth/run-web-data HTTP/1.1" 400 -
+[tracefix-runner] 127.0.0.1 - "POST /api/synth/run-web-data HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/tellme/current HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/tellme/current HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_100659 type=custom ready=True status=verified task_text='How many people are currently in the conference room, exclud'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094845 type=custom ready=True status=verified task_text='What is the maximum number of people in the room at any give'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094528 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_235343 type=custom ready=False status=unknown task_text='AGENT_A; AGENT_B'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_220254 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] /api/synth/config benchmark='' workspaceType='custom' count=7
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/config?workspaceType=custom HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[SYNTH] /api/synth/workspace path=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/workspace?workspace=C%3A%5CUsers%5Cshrey%5CTraceFixCityOS%5Cworkspace%5Ctellme_structured_smart_room_application_20260708_123346 HTTP/1.1" 200 -
+[tracefix-runner] 127.0.0.1 - "GET /api/tellme/current HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260707_100006 type=custom ready=True status=verified task_text='video_context; audio_context'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_100659 type=custom ready=True status=verified task_text='How many people are currently in the conference room, exclud'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094845 type=custom ready=True status=verified task_text='What is the maximum number of people in the room at any give'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260702_094528 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_235343 type=custom ready=False status=unknown task_text='AGENT_A; AGENT_B'
+[SYNTH] workspace=tellme_structured_smart_room_application_20260701_220254 type=custom ready=True status=verified task_text='Evaluate room occupancy independently.'
+[SYNTH] /api/synth/config benchmark='' workspaceType='custom' count=7
+[tracefix-runner] 127.0.0.1 - "GET /api/synth/config?workspaceType=custom HTTP/1.1" 200 -
+[SYNTH] workspace=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True status=verified task_text='How many people are in the room in total?'
+[SYNTH] /api/synth/workspace path=tellme_structured_smart_room_application_20260708_123346 type=custom ready=True

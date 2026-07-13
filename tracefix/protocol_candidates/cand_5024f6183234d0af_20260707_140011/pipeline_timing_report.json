@@ -1,0 +1,251 @@
+{
+  "schema_version": "0.1",
+  "run_kind": "tracefix_design",
+  "run_id": "tellme_structured_smart_room_application_20260707_100006",
+  "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260707_100006",
+  "started_at": "2026-07-07T14:00:06.103453+00:00",
+  "finished_at": null,
+  "complete": false,
+  "total_wall_clock_ms": 5172.0,
+  "stages": [
+    {
+      "stage": "workspace_initialization",
+      "queued_at": "2026-07-07T14:00:05.302732+00:00",
+      "started_at": "2026-07-07T14:00:06.104456+00:00",
+      "finished_at": "2026-07-07T14:00:06.124823+00:00",
+      "duration_ms": 16.0,
+      "success": true,
+      "error": null,
+      "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260707_100006",
+      "queue_wait_ms": 800.721
+    },
+    {
+      "stage": "single_agent_fast_path",
+      "queued_at": null,
+      "started_at": "2026-07-07T14:00:06.158947+00:00",
+      "finished_at": "2026-07-07T14:00:06.158947+00:00",
+      "duration_ms": 0.0,
+      "success": true,
+      "error": null,
+      "fast_path": {
+        "considered": true,
+        "used": false,
+        "reason": "TeLLMe route is multi_agent, not single_agent",
+        "structured_input": true,
+        "agent_id": null,
+        "ir_generation_duration_ms": 0.0,
+        "fallback_to_opencode": true,
+        "error": null
+      },
+      "aggregate": true
+    },
+    {
+      "stage": "pluscal_translation",
+      "queued_at": null,
+      "started_at": "2026-07-07T14:00:06.328616+00:00",
+      "finished_at": "2026-07-07T14:00:08.254319+00:00",
+      "duration_ms": 1937.0,
+      "success": true,
+      "error": null
+    },
+    {
+      "stage": "tlc_verification",
+      "queued_at": null,
+      "started_at": "2026-07-07T14:00:08.260009+00:00",
+      "finished_at": "2026-07-07T14:00:11.124132+00:00",
+      "duration_ms": 2844.0,
+      "success": true,
+      "error": null
+    },
+    {
+      "stage": "state_extraction",
+      "queued_at": null,
+      "started_at": "2026-07-07T14:00:11.129894+00:00",
+      "finished_at": "2026-07-07T14:00:11.171355+00:00",
+      "duration_ms": 31.0,
+      "success": true,
+      "error": null
+    },
+    {
+      "stage": "coordination_pattern_template",
+      "queued_at": null,
+      "started_at": "2026-07-07T14:00:06.165945+00:00",
+      "finished_at": "2026-07-07T14:00:11.223041+00:00",
+      "duration_ms": 5063.0,
+      "success": true,
+      "error": null,
+      "coord_template": {
+        "considered": true,
+        "used": true,
+        "pattern_id": "sequential_handoff",
+        "confidence": 0.78,
+        "reason": "matched pattern 'sequential_handoff' with confidence 0.78",
+        "fallback_reason": "",
+        "fallback_to_opencode": false,
+        "error": null,
+        "tellme_route": "multi_agent",
+        "user_query_excerpt": "How many lights are still on in the room after 8 am.",
+        "candidate_harnesses": [
+          "video_context_harness",
+          "audio_context_harness",
+          "answer_synthesis_harness"
+        ],
+        "pattern_scores": {
+          "sequential_handoff": 0.78,
+          "fan_in_decision": 0.0,
+          "verifier_approver": 0.0,
+          "producer_consumer": 0.0,
+          "attendance_verification": 0.0
+        },
+        "evidence_sources_detected": [],
+        "evidence_source_count": 0,
+        "decision_agent_id": null,
+        "fan_in_decision_used": false,
+        "template_priority_reason": "two-agent workflow retained because fewer than three independent evidence sources were detected",
+        "app_agent_count": 2,
+        "monitor_count": 1
+      },
+      "aggregate": true
+    },
+    {
+      "stage": "ir_validation",
+      "queued_at": null,
+      "started_at": "2026-07-07T14:00:11.230039+00:00",
+      "finished_at": "2026-07-07T14:00:11.231038+00:00",
+      "duration_ms": 0.0,
+      "success": true,
+      "error": null,
+      "ir_sanitization": {
+        "attempted": false,
+        "changed": false,
+        "removed_fields": [],
+        "normalized_fields": [],
+        "validation_before": {
+          "valid": true,
+          "errors": []
+        },
+        "validation_after": {
+          "valid": true,
+          "errors": []
+        },
+        "recovered": false,
+        "prevented_likely_unnecessary_failure": false
+      }
+    },
+    {
+      "stage": "deterministic_runtime_prompt",
+      "queued_at": null,
+      "started_at": "2026-07-07T14:00:11.239037+00:00",
+      "finished_at": "2026-07-07T14:00:11.257560+00:00",
+      "duration_ms": 15.0,
+      "success": true,
+      "error": null,
+      "prompt_paths": [
+        "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260707_100006\\prompts\\runtime_b\\video_context.md",
+        "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260707_100006\\prompts\\runtime_b\\audio_context.md"
+      ]
+    },
+    {
+      "stage": "cityos_plan_export",
+      "queued_at": null,
+      "started_at": "2026-07-07T14:00:11.276775+00:00",
+      "finished_at": "2026-07-07T14:00:11.276775+00:00",
+      "duration_ms": 0.0,
+      "success": true,
+      "error": null
+    }
+  ],
+  "api_calls": [],
+  "repair": {
+    "total_attempts": 0,
+    "attempts": [],
+    "repair_time_seconds": 0.0,
+    "stop_reason": null,
+    "recommendation": null,
+    "config": {}
+  },
+  "ir_sanitization": {
+    "attempted": false,
+    "changed": false,
+    "removed_fields": [],
+    "normalized_fields": [],
+    "validation_before": {
+      "valid": true,
+      "errors": []
+    },
+    "validation_after": {
+      "valid": true,
+      "errors": []
+    },
+    "recovered": false,
+    "prevented_likely_unnecessary_failure": false
+  },
+  "single_agent_fast_path": {
+    "considered": true,
+    "used": false,
+    "reason": "TeLLMe route is multi_agent, not single_agent",
+    "structured_input": true,
+    "agent_id": null,
+    "ir_generation_duration_ms": 0.0,
+    "fallback_to_opencode": true,
+    "error": null
+  },
+  "coordination_pattern_template": {
+    "considered": true,
+    "used": true,
+    "pattern_id": "sequential_handoff",
+    "confidence": 0.78,
+    "reason": "matched pattern 'sequential_handoff' with confidence 0.78",
+    "fallback_reason": "",
+    "fallback_to_opencode": false,
+    "error": null,
+    "tellme_route": "multi_agent",
+    "user_query_excerpt": "How many lights are still on in the room after 8 am.",
+    "candidate_harnesses": [
+      "video_context_harness",
+      "audio_context_harness",
+      "answer_synthesis_harness"
+    ],
+    "pattern_scores": {
+      "sequential_handoff": 0.78,
+      "fan_in_decision": 0.0,
+      "verifier_approver": 0.0,
+      "producer_consumer": 0.0,
+      "attendance_verification": 0.0
+    },
+    "evidence_sources_detected": [],
+    "evidence_source_count": 0,
+    "decision_agent_id": null,
+    "fan_in_decision_used": false,
+    "template_priority_reason": "two-agent workflow retained because fewer than three independent evidence sources were detected",
+    "app_agent_count": 2,
+    "monitor_count": 1
+  },
+  "pattern_repository": {
+    "pattern_repository_enabled": null,
+    "candidate_harvest_attempted": false,
+    "candidate_saved": false,
+    "candidate_id": null,
+    "normalized_topology_hash": null,
+    "candidate_deduplicated": false,
+    "candidate_usage_count": 0,
+    "candidate_path": null,
+    "harvest_skip_reason": null
+  },
+  "summary": {
+    "slowest_stage": "tlc_verification",
+    "slowest_stage_duration_ms": 2844.0,
+    "api_call_count": 0,
+    "retry_count": 0,
+    "rate_limit_events": 0,
+    "total_repair_attempts": 0,
+    "repair_stop_reason": null,
+    "suspected_bottleneck": "formal_verification",
+    "confidence": "high",
+    "recommended_next_fix": "Inspect TLC state-space size and use bounded development constants without skipping TLC."
+  },
+  "limitations": [
+    "OpenCode timing observes the subprocess and its first JSON event, not provider first-token telemetry.",
+    "A long time-to-first-event can indicate OpenCode startup, provider queueing, or model latency."
+  ]
+}

@@ -164,6 +164,7 @@ def _is_direct_lookup(analysis: QueryAnalysis) -> bool:
         "motion_lookup",
         "audio_lookup",
         "room_state_lookup",
+        "activity_lookup",
         "general_lookup",
     ) and not any(
         (
@@ -189,6 +190,7 @@ def _route_intent(analysis_intent: str) -> str:
         "motion_lookup",
         "audio_lookup",
         "room_state_lookup",
+        "activity_lookup",
         "cross_modal_comparison",
         "identity_continuity_assessment",
     ):
@@ -200,7 +202,7 @@ def _route_intent(analysis_intent: str) -> str:
 
 def _select_single_agent(analysis: QueryAnalysis) -> str:
     requirements = set(analysis.context_requirements)
-    if "motion" in requirements:
+    if requirements & {"motion", "activities", "tracks", "events"}:
         return "motion_context_agent"
     if "audio" in requirements:
         return "audio_context_agent"

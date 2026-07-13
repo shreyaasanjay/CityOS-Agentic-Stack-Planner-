@@ -13,6 +13,24 @@ _MODALITY_TOKENS = {
     "wifi": ("wifi", "wi-fi"),
     "audio": ("audio", "sound", "noise", "microphone", "speaking", "speech"),
 }
+_ACTIVITY_LOOKUP_TOKENS = (
+    "what was the person doing",
+    "what were they doing",
+    "what was going on",
+    "what happened",
+    "doing",
+    "activity",
+    "activities",
+    "action",
+    "actions",
+    "talking",
+    "standing",
+    "standing up",
+    "sitting",
+    "walking",
+    "clapping",
+    "moving",
+)
 
 _EXPLICIT_MULTI_AGENT_PHRASES = (
     # Exact cross-agent verification phrases
@@ -114,7 +132,7 @@ def analyze_query(query: TellMeQuery) -> QueryAnalysis:
     lowered = user_query.lower()
 
     named_modalities = _infer_modalities(lowered)
-    if any(token in lowered for token in ("enter", "entered", "doorway", "under the table", "what happened", "injured", "injury", "speaker", "speaking", "speech")) and "video" not in named_modalities:
+    if any(token in lowered for token in ("enter", "entered", "doorway", "under the table", "what happened", "doing", "activity", "activities", "action", "actions", "standing", "walking", "sitting", "clapping", "moving", "injured", "injury", "speaker", "speaking", "speech")) and "video" not in named_modalities:
         named_modalities.append("video")
     if any(token in lowered for token in ("impact", "loud", "sound", "noise", "speaker", "speaking", "speech")) and "audio" not in named_modalities:
         named_modalities.append("audio")
@@ -272,6 +290,8 @@ def _infer_intent(lowered: str, time_scope: str) -> str:
         if time_scope == "latest":
             return "live_occupancy_count"
         return "occupancy_lookup"
+    if any(token in lowered for token in _ACTIVITY_LOOKUP_TOKENS):
+        return "activity_lookup"
     if "motion" in lowered:
         return "motion_lookup"
     if any(token in lowered for token in ("noise", "audio", "sound", "speech", "speaking", "microphone")):
@@ -288,6 +308,8 @@ def _infer_answer_type(lowered: str, intent: str) -> str:
         return "count"
     if intent in ("decision_evaluation", "pipeline_diagnostic"):
         return "explanation"
+    if intent == "activity_lookup":
+        return "summary"
     if any(token in lowered for token in ("is ", "was ", "did ", "were ", "same person")):
         return "boolean"
     if "room state" in lowered or "latest state" in lowered:
@@ -299,6 +321,8 @@ def _infer_context_requirements(lowered: str, intent: str, named_modalities: Lis
     requirements: List[str] = []
     if any(token in lowered for token in ("how many", "occupancy", "occupied", "empty", "people")):
         requirements.append("occupancy")
+    if any(token in lowered for token in _ACTIVITY_LOOKUP_TOKENS):
+        requirements.extend(["activities", "tracks", "events"])
     if "motion" in lowered:
         requirements.append("motion")
     if any(token in lowered for token in ("noise", "audio", "sound", "speech", "speaking", "microphone")):

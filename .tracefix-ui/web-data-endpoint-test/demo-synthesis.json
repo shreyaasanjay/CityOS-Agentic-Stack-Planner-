@@ -1,0 +1,10 @@
+{
+    "apps":  [
+                 {
+                     "agent":  "WRITER",
+                     "path":  "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-endpoint-test\\tracefix-writer",
+                     "name":  "tracefix-writer",
+                     "kind":  "agent"
+                 }
+             ]
+}

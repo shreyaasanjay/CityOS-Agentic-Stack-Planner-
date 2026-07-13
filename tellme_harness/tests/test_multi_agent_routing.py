@@ -222,3 +222,15 @@ def test_simple_occupancy_still_single_agent_expanded():
             f"Plain query wrongly routed to multi_agent: {prompt!r}\n"
             f"trigger_terms={analysis.trigger_terms_found}"
         )
+
+
+def test_person_doing_on_date_routes_activity_lookup_single_agent():
+    q = _make_query("What was the person doing in the room on June 24th?")
+    analysis = analyze_query(q)
+    decision = decide_route(q, analysis)
+    assert analysis.intent == "activity_lookup"
+    assert analysis.answer_type == "summary"
+    assert "activities" in analysis.context_requirements
+    assert decision.route == "single_agent"
+    assert decision.selected_agent == "motion_context_agent"
+    assert decision.requires_tracefix is False

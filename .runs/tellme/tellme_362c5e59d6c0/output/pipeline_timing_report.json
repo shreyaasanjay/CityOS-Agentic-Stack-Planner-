@@ -1,0 +1,97 @@
+{
+  "schema_version": "0.1",
+  "run_kind": "tellme",
+  "run_id": "tellme_362c5e59d6c0",
+  "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_362c5e59d6c0",
+  "started_at": "2026-07-08T16:33:44.505375+00:00",
+  "finished_at": "2026-07-08T16:33:44.831311+00:00",
+  "complete": true,
+  "total_wall_clock_ms": 329.0,
+  "stages": [
+    {
+      "stage": "tellme_decomposition",
+      "queued_at": null,
+      "started_at": "2026-07-08T16:33:44.505375+00:00",
+      "finished_at": "2026-07-08T16:33:44.821141+00:00",
+      "duration_ms": 313.0,
+      "success": true,
+      "error": null,
+      "provider": "deterministic",
+      "retry_count": 0
+    }
+  ],
+  "api_calls": [],
+  "repair": {
+    "total_attempts": 0,
+    "attempts": [],
+    "repair_time_seconds": 0.0,
+    "stop_reason": null,
+    "recommendation": null,
+    "config": {}
+  },
+  "ir_sanitization": {
+    "attempted": false,
+    "changed": false,
+    "removed_fields": [],
+    "normalized_fields": [],
+    "validation_before": null,
+    "validation_after": null,
+    "recovered": false,
+    "prevented_likely_unnecessary_failure": false
+  },
+  "single_agent_fast_path": {
+    "considered": false,
+    "used": false,
+    "reason": null,
+    "structured_input": false,
+    "agent_id": null,
+    "ir_generation_duration_ms": 0.0,
+    "fallback_to_opencode": true,
+    "error": null
+  },
+  "coordination_pattern_template": {
+    "considered": false,
+    "used": false,
+    "pattern_id": null,
+    "confidence": 0.0,
+    "reason": null,
+    "fallback_reason": null,
+    "fallback_to_opencode": true,
+    "error": null,
+    "evidence_sources_detected": [],
+    "evidence_source_count": 0,
+    "decision_agent_id": null,
+    "fan_in_decision_used": false,
+    "pattern_scores": {},
+    "template_priority_reason": null,
+    "app_agent_count": 0,
+    "monitor_count": 1
+  },
+  "pattern_repository": {
+    "pattern_repository_enabled": null,
+    "candidate_harvest_attempted": false,
+    "candidate_saved": false,
+    "candidate_id": null,
+    "normalized_topology_hash": null,
+    "candidate_deduplicated": false,
+    "candidate_usage_count": 0,
+    "candidate_path": null,
+    "harvest_skip_reason": null
+  },
+  "summary": {
+    "slowest_stage": "tellme_decomposition",
+    "slowest_stage_duration_ms": 313.0,
+    "api_call_count": 0,
+    "retry_count": 0,
+    "rate_limit_events": 0,
+    "total_repair_attempts": 0,
+    "repair_stop_reason": null,
+    "suspected_bottleneck": "internal_or_unknown",
+    "confidence": "low",
+    "recommended_next_fix": "Run a model-backed design trial to collect API and formal verification timings."
+  },
+  "limitations": [
+    "OpenCode timing observes the subprocess and its first JSON event, not provider first-token telemetry.",
+    "A long time-to-first-event can indicate OpenCode startup, provider queueing, or model latency."
+  ]
+}

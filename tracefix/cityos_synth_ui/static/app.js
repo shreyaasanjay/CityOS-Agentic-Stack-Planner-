@@ -1,6 +1,8 @@
 const state = {
   workspaces: [],
   result: null,
+  webRun: null,
+  webRunning: false,
   logs: [],
 };
 
@@ -12,6 +14,11 @@ const els = {
   appsDir: document.querySelector("#appsDir"),
   packageName: document.querySelector("#packageName"),
   overwrite: document.querySelector("#overwrite"),
+  webDataUrl: document.querySelector("#webDataUrl"),
+  sourceMode: document.querySelector("#sourceMode"),
+  webTimeout: document.querySelector("#webTimeout"),
+  autoRunWebData: document.querySelector("#autoRunWebData"),
+  runWebData: document.querySelector("#runWebData"),
   refresh: document.querySelector("#refresh"),
   synthesize: document.querySelector("#synthesize"),
   statusText: document.querySelector("#statusText"),
@@ -21,6 +28,8 @@ const els = {
   manifestPath: document.querySelector("#manifestPath"),
   appsDirLabel: document.querySelector("#appsDirLabel"),
   appsList: document.querySelector("#appsList"),
+  answerSummary: document.querySelector("#answerSummary"),
+  webRunLabel: document.querySelector("#webRunLabel"),
   log: document.querySelector("#log"),
   toast: document.querySelector("#toast"),
 };
@@ -66,6 +75,7 @@ async function loadConfig() {
   const config = await getJson("/api/config");
   els.cityosRoot.value = config.cityosRoot || "";
   els.appsDir.value = config.appsDir || "";
+  els.webDataUrl.value = config.webDataUrl || "https://smartroom-mirror.vercel.app/api/v1";
   state.workspaces = config.workspaces || [];
   renderWorkspaces();
 }
@@ -122,6 +132,10 @@ function bindEvents() {
     }
   });
 
+  els.runWebData.addEventListener("click", async () => {
+    await runWebData();
+  });
+
   els.form.addEventListener("submit", async (event) => {
     event.preventDefault();
     await synthesize();
@@ -131,7 +145,9 @@ function bindEvents() {
 async function synthesize() {
   state.logs = [];
   state.result = null;
+  state.webRun = null;
   renderResult();
+  renderWebRun();
   setStatus("Running", "Synthesis running");
   els.synthesize.disabled = true;
   log(`Workspace: ${els.workspacePath.value}`);
@@ -150,12 +166,58 @@ async function synthesize() {
     result.apps.forEach((app) => log(`App: ${app.name} -> ${app.path}`));
     setStatus("Done", "Synthesis completed");
     renderResult();
+    if (els.autoRunWebData.checked) {
+      await runWebData();
+    }
   } catch (error) {
     log(`Error: ${error.message}`);
     setStatus("Failed", "Synthesis failed");
     showToast(error.message);
   } finally {
     els.synthesize.disabled = false;
+    renderResult();
+  }
+}
+
+async function runWebData() {
+  const manifestPath = state.result?.manifestPath;
+  if (!manifestPath) {
+    showToast("Synthesize CityOS apps first");
+    return;
+  }
+  state.webRunning = true;
+  state.webRun = null;
+  renderResult();
+  renderWebRun();
+  setStatus("Running", "Smartroom agents running");
+  log(`Smartroom API: ${els.webDataUrl.value}`);
+  log(`Manifest for data run: ${manifestPath}`);
+  try {
+    const result = await postJson("/api/run-web-data", {
+      manifestPath,
+      sourceUrl: els.webDataUrl.value,
+      sourceMode: els.sourceMode.value,
+      timeoutSeconds: Number(els.webTimeout.value || 30),
+    });
+    state.webRun = result;
+    log(`Web data result: ${result.resultPath}`);
+    log(`Payload: ${result.payload?.payloadPath || "not written"}`);
+    if (result.answerPath) log(`Answer: ${result.answerPath}`);
+    (result.runs || []).forEach((run) => {
+      const answerSuffix = run.answerPath ? ` answer=${run.answerPath}` : "";
+      log(`Agent run: ${run.app} ${run.status}${answerSuffix}`);
+    });
+    setStatus(result.ok ? "Done" : "Failed", result.ok ? "Smartroom answer ready" : "Smartroom run had errors");
+    renderWebRun();
+    showToast(result.ok ? "Smartroom answer ready" : "Smartroom run finished with errors");
+  } catch (error) {
+    log(`Smartroom error: ${error.message}`);
+    setStatus("Failed", "Smartroom run failed");
+    showToast(error.message);
+  } finally {
+    state.webRunning = false;
+    renderResult();
+    renderWebRun();
   }
 }
 
@@ -165,6 +227,8 @@ function renderResult() {
   els.appCount.textContent = String(apps.length);
   els.manifestPath.textContent = result?.manifestPath || "No synthesis yet";
   els.appsDirLabel.textContent = result?.appsDir || "";
+  els.runWebData.disabled = !result?.manifestPath || state.webRunning;
+  els.runWebData.textContent = state.webRunning ? "Running Smartroom Agents" : "Run Smartroom Agents";
   if (!apps.length) {
     els.appsList.innerHTML = `<div class="empty">No apps generated yet.</div>`;
     return;
@@ -181,6 +245,84 @@ function renderResult() {
   `).join("");
 }
 
+function renderWebRun() {
+  const result = state.webRun;
+  if (state.webRunning) {
+    els.webRunLabel.textContent = els.webDataUrl.value;
+    els.answerSummary.className = "answer-summary pending";
+    els.answerSummary.innerHTML = `<div class="empty">Fetching smartroom data and feeding it to the generated apps...</div>`;
+    return;
+  }
+  if (!result) {
+    els.webRunLabel.textContent = "";
+    els.answerSummary.className = "answer-summary empty";
+    els.answerSummary.textContent = "Synthesize apps, then run smartroom agents to generate an answer summary.";
+    return;
+  }
+
+  const answer = result.answer || result.payload?.answer || null;
+  const snapshot = result.payload?.snapshotSummary || {};
+  const cameras = Array.isArray(answer?.cameras) ? answer.cameras : [];
+  els.webRunLabel.textContent = result.sourceKind || "web data";
+  els.answerSummary.className = `answer-summary ${result.ok ? "ok" : "failed"}`;
+  const summaryText = answer?.text || "No answer text was returned. Check the payload and run logs.";
+  const cameraHtml = cameras.length
+    ? `<div class="camera-list">${cameras.map(renderCamera).join("")}</div>`
+    : "";
+  const runHtml = Array.isArray(result.runs) && result.runs.length
+    ? `<div class="run-list">${result.runs.map(renderRun).join("")}</div>`
+    : "";
+  els.answerSummary.innerHTML = `
+    <div class="answer-status ${result.ok ? "ok" : "failed"}">${escapeHtml(result.ok ? "Completed" : "Needs attention")}</div>
+    <p class="answer-text">${escapeHtml(summaryText)}</p>
+    ${cameraHtml}
+    <div class="answer-details">
+      ${detailRow("Recording", [snapshot.selectedDay, snapshot.selectedRecording].filter(Boolean).join(" / "))}
+      ${detailRow("Cameras", Array.isArray(snapshot.cameras) ? snapshot.cameras.join(", ") : "")}
+      ${detailRow("Source", result.sourceUrl)}
+      ${detailRow("Payload", result.payload?.payloadPath)}
+      ${detailRow("Answer file", result.answerPath)}
+      ${detailRow("Run file", result.resultPath)}
+      ${detailRow("Output root", result.outputRoot)}
+    </div>
+    ${runHtml}
+  `;
+}
+
+function renderCamera(camera) {
+  const facts = [];
+  if (camera.peakPeople !== undefined && camera.peakPeople !== null) facts.push(`peak ${camera.peakPeople}`);
+  if (camera.lastPeople !== undefined && camera.lastPeople !== null) facts.push(`last ${camera.lastPeople}`);
+  if (camera.trackCount !== undefined && camera.trackCount !== null) facts.push(`tracks ${camera.trackCount}`);
+  if (Array.isArray(camera.actions) && camera.actions.length) facts.push(`actions ${camera.actions.join(", ")}`);
+  return `
+    <article class="camera-card">
+      <strong>${escapeHtml(camera.camera || "camera")}</strong>
+      <span>${escapeHtml(facts.join("; ") || "No camera facts returned")}</span>
+    </article>
+  `;
+}
+
+function renderRun(run) {
+  return `
+    <article class="run-card ${escapeHtml(run.status || "unknown")}">
+      <strong>${escapeHtml(run.app || "app")}</strong>
+      <span>${escapeHtml(run.status || "unknown")}</span>
+      ${run.answerPath ? `<code>${escapeHtml(run.answerPath)}</code>` : ""}
+    </article>
+  `;
+}
+
+function detailRow(label, value) {
+  if (value === undefined || value === null || value === "") return "";
+  return `
+    <div class="answer-detail">
+      <span>${escapeHtml(label)}</span>
+      <code>${escapeHtml(value)}</code>
+    </div>
+  `;
+}
+
 function escapeHtml(text) {
   return String(text)
     .replaceAll("&", "&amp;")
@@ -193,6 +335,7 @@ function escapeHtml(text) {
 async function init() {
   bindEvents();
   renderResult();
+  renderWebRun();
   await loadConfig();
 }
 

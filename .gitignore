@@ -25,3 +25,9 @@ workspace/
 tracefix.pipeline/
 # Server PID files (runtime artifacts, never commit)
 .tracefix-ui/*.pid
+
+# TraceFix local UI runtime output
+.tracefix-ui/logs/
+.tracefix-ui/web-data-runs/
+.tracefix-ui/smoke-*/
+.runs/tellme/tellme_*/

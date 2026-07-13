@@ -18,7 +18,8 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="/static/styles.css?v=tracefix-unified-ui-20260702-tellme-theme-dark-text" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=tracefix-unified-ui-20260709-full-pipeline-v9" />
+    <link rel="stylesheet" href="/static/styles.css?v=tracefix-unified-ui-20260709-full-pipeline-v9" />
   </head>
   <body>
     <main class="runner-shell">
@@ -80,6 +81,10 @@
                 <input id="tellmeSpaceId" value="smart_room_1" autocomplete="off" />
               </label>
               <label>
+                Smartroom mirror API URL
+                <input id="tellmeWebDataUrl" value="https://smartroom-mirror.vercel.app/api/v1" autocomplete="off" />
+              </label>
+              <label>
                 Timestamp <span class="optional-label">optional</span>
                 <input id="tellmeTimestamp" autocomplete="off" placeholder="2026-06-30T19:00:00Z" />
               </label>
@@ -120,7 +125,7 @@
             <h2>Actions</h2>
             <div class="section-body">
               <button id="tellmeProcess" class="primary-button" type="submit">Process Intent</button>
-              <button id="tellmeRunAll" class="secondary-button" type="button">Process + Run TraceFix</button>
+              <button id="tellmeRunAll" class="secondary-button" type="button">Run Full Pipeline</button>
               <button id="tellmeToTracefix" class="secondary-button" type="button" disabled>Continue To TraceFix</button>
             </div>
           </section>
@@ -291,8 +296,16 @@
             <h2>Synthesis Output</h2>
             <div class="section-body">
               <label>
+                CityOS root
+                <input id="synthCityOSRoot" autocomplete="off" placeholder="C:\Users\...\cityos" />
+              </label>
+              <label>
+                Smartroom mirror URL
+                <input id="synthWebDataUrl" autocomplete="off" value="https://smartroom-mirror.vercel.app/api/v1" />
+              </label>
+              <label>
                 Output directory
-                <input id="synthOutputDir" autocomplete="off" readonly placeholder="workspace/<run_id>/output/cityos_synthesis" />
+                <input id="synthOutputDir" autocomplete="off" readonly placeholder="<cityos>/apps" />
               </label>
               <label>
                 Package prefix
@@ -309,6 +322,9 @@
             <h2>Actions</h2>
             <div class="section-body">
               <button id="synthGenerate" class="primary-button" type="button">Generate CityOS Artifacts</button>
+              <button id="synthBuildCityOS" class="secondary-button" type="button" disabled>Build In CityOS</button>
+              <button id="synthRunWebData" class="secondary-button" type="button" disabled>Run Web Data Apps</button>
+              <button id="synthViewTellMeAnswer" class="secondary-button" type="button" disabled>View Answer In TeLLMe</button>
             </div>
           </section>
         </section>
@@ -383,10 +399,17 @@
             </section>
             <section class="tellme-detail-card">
               <div class="panel-heading">
-                <h3>Answer Packet</h3>
-                <span>TeLLMe result</span>
+                <h3>Answer Summary</h3>
+                <span>Latest data-backed result</span>
               </div>
               <pre id="tellmeAnswer" class="output-view"></pre>
+            </section>
+            <section class="tellme-detail-card tellme-chat-card">
+              <div class="panel-heading">
+                <h3>Answer</h3>
+                <span>Plain-language response</span>
+              </div>
+              <div id="tellmeChatAnswer" class="chat-answer"></div>
             </section>
           </div>
         </section>
@@ -545,6 +568,6 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=tracefix-unified-ui-20260702-tellme-theme-dark-text" type="module"></script>
+    <script src="/static/app.js?v=tracefix-unified-ui-20260709-full-pipeline-v9" type="module"></script>
   </body>
 </html>

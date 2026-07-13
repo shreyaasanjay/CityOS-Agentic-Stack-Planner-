@@ -31,7 +31,7 @@ from tracefix.textio import safe_read_json, safe_read_text
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-UI_BUILD = "tracefix-unified-ui-20260630-tellme-v1-cityos"
+UI_BUILD = "tracefix-unified-ui-20260709-full-pipeline-v9"
 
 RUNS: dict[str, "RunState"] = {}
 RUNS_LOCK = threading.Lock()
@@ -115,6 +115,13 @@ def _repo_root() -> Path:
             return parent
     return Path.cwd()
 
+
+def _path_is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
 
 def _ui_state_dir(root: Path) -> Path:
     path = root / ".tracefix-ui"
@@ -872,7 +879,7 @@ def _run_cityos_synthesis(root: Path, payload: dict[str, Any]) -> dict[str, Any]
                 "kind": app.kind,
                 "agent": app.agent,
                 "path": str(app.path),
-                "buildCommand": f"just build {app.name}",
+                "buildCommand": f"just build app={app.name}",
             }
             for app in result.apps
         ],
@@ -880,6 +887,73 @@ def _run_cityos_synthesis(root: Path, payload: dict[str, Any]) -> dict[str, Any]
     }
 
 
+
+def _run_cityos_docker_build(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    from tracefix.runtime.cityos_docker_harness import default_cityos_root, run_cityos_docker_builds
+
+    raw_manifest = str(payload.get("manifestPath") or payload.get("manifest") or "").strip()
+    if not raw_manifest:
+        raise ValueError("Synthesis manifest path is required. Generate CityOS artifacts first.")
+    manifest_path = Path(raw_manifest).expanduser()
+    if not manifest_path.is_absolute():
+        manifest_path = (root / manifest_path).resolve()
+    raw_cityos = str(payload.get("cityosRoot") or "").strip()
+    cityos_root = Path(raw_cityos).expanduser().resolve() if raw_cityos else default_cityos_root()
+    if cityos_root is None:
+        raise FileNotFoundError("CityOS root was not found. Set CITYOS_ROOT or enter the CityOS root in the UI.")
+    timeout = _bounded_int(payload.get("timeoutSeconds"), 1800, minimum=30, maximum=7200)
+    dry_run = bool(payload.get("dryRun"))
+    return run_cityos_docker_builds(
+        manifest_path=manifest_path,
+        cityos_root=cityos_root,
+        timeout_seconds=timeout,
+        dry_run=dry_run,
+    )
+
+def _run_web_data_apps(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    from tracefix.runtime.web_data_harness import default_web_data_output_root, default_web_data_url, run_web_data_apps
+
+    raw_manifest = str(payload.get("manifestPath") or payload.get("manifest") or "").strip()
+    if not raw_manifest:
+        raise ValueError("Synthesis manifest path is required. Generate CityOS artifacts first.")
+    manifest_path = Path(raw_manifest).expanduser()
+    if not manifest_path.is_absolute():
+        manifest_path = (root / manifest_path).resolve()
+    source_url = str(payload.get("sourceUrl") or payload.get("webDataUrl") or default_web_data_url()).strip()
+    raw_output = str(payload.get("outputRoot") or "").strip()
+    output_root = Path(raw_output).expanduser() if raw_output else None
+    if output_root is not None and not output_root.is_absolute():
+        output_root = (root / output_root).resolve()
+    elif output_root is not None:
+        output_root = output_root.resolve()
+    if output_root is None or not _path_is_within(output_root, root):
+        output_root = default_web_data_output_root(manifest_path, repo_root=root)
+    timeout = _bounded_int(payload.get("timeoutSeconds"), 30, minimum=2, maximum=600)
+    handler_timeout = _bounded_int(payload.get("handlerTimeoutSeconds"), 60, minimum=1, maximum=7200)
+    max_bytes = _bounded_int(payload.get("maxBytes"), 50 * 1024 * 1024, minimum=1024, maximum=100 * 1024 * 1024)
+    question_context = str(
+        payload.get("question")
+        or payload.get("query")
+        or payload.get("taskText")
+        or payload.get("task_text")
+        or ""
+    ).strip()
+    if not question_context:
+        current = _tellme_bridge(root).current() or {}
+        tellme = current.get("tellme") if isinstance(current.get("tellme"), dict) else {}
+        spec = tellme.get("tracefix_task_spec") if isinstance(tellme.get("tracefix_task_spec"), dict) else {}
+        question_context = str(tellme.get("query") or spec.get("user_query") or "").strip()
+    return run_web_data_apps(
+        manifest_path=manifest_path,
+        source_url=source_url,
+        output_root=output_root,
+        source_mode=str(payload.get("sourceMode") or "auto"),
+        timeout_seconds=timeout,
+        handler_command=payload.get("handlerCommand") or "",
+        handler_timeout_seconds=handler_timeout,
+        max_bytes=max_bytes,
+        question_context=question_context,
+    )
 def _open_local_path(path: Path) -> None:
     if not path.exists():
         raise FileNotFoundError(f"Path does not exist: {path}")
@@ -1824,6 +1898,7 @@ class RunnerHandler(BaseHTTPRequestHandler):
                 "workspaceType": workspace_type or "",
                 "cityosRoot": str(cityos_root) if cityos_root is not None else "",
                 "appsDir": str((cityos_root / "apps").resolve()) if cityos_root is not None else "",
+                "webDataUrl": "https://smartroom-mirror.vercel.app/api/v1",
                 "workspaces": workspaces,
             })
             return
@@ -2046,6 +2121,31 @@ class RunnerHandler(BaseHTTPRequestHandler):
                 return
             try:
                 result = _run_cityos_synthesis(self.root, payload)
+            except Exception as exc:  # noqa: BLE001 - local UI should surface clear errors
+                self._send_error(400, str(exc))
+                return
+            self._send_json(result)
+            return
+        if parsed.path == "/api/synth/build-cityos":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_error(400, "Invalid JSON")
+                return
+            try:
+                result = _run_cityos_docker_build(self.root, payload)
+            except Exception as exc:  # noqa: BLE001 - local UI should surface clear errors
+                self._send_error(400, str(exc))
+                return
+            self._send_json(result)
+            return
+        if parsed.path == "/api/synth/run-web-data":
+            payload = self._read_json_body()
+            if payload is None:
+                self._send_error(400, "Invalid JSON")
+                return
+            try:
+                result = _run_web_data_apps(self.root, payload)
+                _tellme_bridge(self.root).record_web_data_answer(result)
             except Exception as exc:  # noqa: BLE001 - local UI should surface clear errors
                 self._send_error(400, str(exc))
                 return

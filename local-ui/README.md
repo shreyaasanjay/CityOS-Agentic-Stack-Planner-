@@ -64,6 +64,21 @@ Add `-Open` to open the links in your browser:
 .\local-ui\start-both.ps1 -Open
 ```
 
+
+To connect from another computer on the same network, start the server in LAN mode on the machine that cloned the repo:
+
+```powershell
+.\local-ui\start-synth.ps1 -Port 8790 -Lan
+```
+
+Then open the printed LAN URL from the other computer, for example `http://192.168.1.25:8790/`. If the port still does not connect, allow inbound TCP traffic for that port in Windows Firewall.
+
+You can also expose all local UI ports at once:
+
+```powershell
+.\local-ui\start-both.ps1 -Lan
+```
+
 ## Stop The UIs
 
 ```powershell
