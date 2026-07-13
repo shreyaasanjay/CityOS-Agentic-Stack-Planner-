@@ -72,6 +72,7 @@ const els = {
   tellmeMessages: document.querySelector("#tellmeMessages"),
   tellmeIntent: document.querySelector("#tellmeIntent"),
   tellmeTaskSpec: document.querySelector("#tellmeTaskSpec"),
+  tellmeHandoffMeta: document.querySelector("#tellmeHandoffMeta"),
   tellmeAnswer: document.querySelector("#tellmeAnswer"),
   tellmeChatAnswer: document.querySelector("#tellmeChatAnswer"),
   form: document.querySelector("#runForm"),
@@ -1164,7 +1165,13 @@ function renderTellMe(data, errors = [], warnings = []) {
   els.tellmeRunStatus.textContent = data?.status || "Idle";
   els.tellmeRunId.textContent = data?.query_id || "No run yet";
   els.tellmeIntent.textContent = data ? JSON.stringify(data.intent_decomposition || data.execution_brief || {}, null, 2) : "No intent decomposition yet.";
-  els.tellmeTaskSpec.textContent = data ? JSON.stringify(spec, null, 2) : "No TraceFix task spec yet.";
+  const handoffText = data?.tracefix_handoff_text || "";
+  els.tellmeTaskSpec.textContent = handoffText || (data ? "No TraceFix handoff is available for this request." : "No TraceFix handoff yet.");
+  if (els.tellmeHandoffMeta) {
+    els.tellmeHandoffMeta.textContent = handoffText
+      ? `Exact payload · ${handoffText.length.toLocaleString()} chars`
+      : "No handoff";
+  }
   els.tellmeAnswer.textContent = renderTellMeAnswerSummary(data);
   if (els.tellmeChatAnswer) els.tellmeChatAnswer.textContent = renderTellMeChatAnswer(data);
   syncTellMeAnswerButton();
