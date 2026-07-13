@@ -9,9 +9,11 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from .agent_loop import SingleAgentLoop
+from .capability_registry import CapabilityRegistry
+from .cityos_discovery import CityOSDiscoveryProvider, build_discovery_provider
 from .cityos_mock import MockCityOSClient
 from .context_builder import build_context_window
-from .config import get_llm_config
+from .config import get_cityos_discovery_config, get_llm_config
 from .llm_agent import DeterministicAgentBackend, LLMAgentBackend
 from .llm_client import (
     FakeLLMClient,
@@ -32,6 +34,7 @@ from .schemas import (
     AnswerPacket,
     EvidenceCardRequirements,
     SmartspaceExecutionBrief,
+    TaskDesignBrief,
     TellMeQuery,
     TraceFixTaskSpec,
 )
@@ -50,6 +53,7 @@ class TellMeHarness:
         llm_model: str = "gpt-4.1-mini",
         llm_timeout_seconds: Optional[int] = None,
         execution_mode: str = "planning_only",
+        discovery_provider: Optional[CityOSDiscoveryProvider] = None,
     ) -> None:
         # execution_mode:
         #   "planning_only"        — brief + dry-run only (default; unchanged behavior)
@@ -77,9 +81,12 @@ class TellMeHarness:
         self._decomposition_resilient: Optional[ResilientLLMClient] = None
         self.agent_backend = self._build_agent_backend(agent_backend_mode, llm_client)
         self.single_agent_loop = SingleAgentLoop(self.tool_executor, agent_backend=self.agent_backend)
+        discovery_config = get_cityos_discovery_config()
+        provider = discovery_provider or build_discovery_provider(discovery_config)
         self.orchestrator = AgentOrchestrator(
             llm_client=self._build_decomposition_client(llm_client),
             llm_backend_mode=agent_backend_mode,
+            capability_registry=CapabilityRegistry(discovery_client=provider),
         )
 
     def handle_query(
@@ -144,7 +151,18 @@ class TellMeHarness:
                         "event": "cityos_capabilities_discovered",
                         "query_id": query.query_id,
                         "snapshot_id": execution_plan.cityos_capability_snapshot.get("snapshot_id"),
+                        "schema_version": execution_plan.cityos_capability_snapshot.get("schema_version"),
+                        "source": execution_plan.cityos_capability_snapshot.get("source"),
+                        "capability_count": len(execution_plan.cityos_capability_snapshot.get("sensors") or [])
+                        + len(execution_plan.cityos_capability_snapshot.get("context_apis") or []),
+                        "validation_outcome": "accepted",
                     },
+                )
+            if execution_plan.discovery_provenance is not None:
+                self.logging_store.write_json(
+                    query.query_id,
+                    "discovery_provenance.json",
+                    execution_plan.discovery_provenance,
                 )
             if execution_plan.room_capability_context is not None:
                 self.logging_store.write_json(
@@ -159,6 +177,8 @@ class TellMeHarness:
                     execution_plan.smartspace_execution_brief,
                 )
                 brief = SmartspaceExecutionBrief(**execution_plan.smartspace_execution_brief)
+                task_design_brief = TaskDesignBrief(**brief.model_dump())
+                self.logging_store.write_json(query.query_id, "task_design_brief.json", task_design_brief)
                 self.logging_store.write_text(
                     query.query_id,
                     "tracefix_design_prompt.md",

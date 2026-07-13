@@ -36,6 +36,7 @@ def build_execution_plan(
     task_spec: TraceFixTaskSpec | None = None,
     llm_backend_mode: str | None = None,
     capability_snapshot: dict | None = None,
+    discovery_provenance: dict | None = None,
     room_capability_context: dict | None = None,
     execution_brief: dict | None = None,
 ) -> ExecutionPlan:
@@ -64,6 +65,7 @@ def build_execution_plan(
             tracefix_task_spec=task_spec.model_dump() if task_spec else None,
             tracefix_bundle_summary=None,
             cityos_capability_snapshot=capability_snapshot,
+            discovery_provenance=discovery_provenance,
             room_capability_context=room_capability_context,
             smartspace_execution_brief=execution_brief,
         )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 DEFAULT_OUTPUT_CONTRACT = {
     "required_fields": ["answer", "confidence", "evidence_refs", "caveats"],
@@ -149,6 +149,7 @@ class ExecutionPlan(BaseModel):
     tracefix_task_spec: Optional[Dict[str, Any]] = None
     tracefix_bundle_summary: Optional[Dict[str, Any]] = None
     cityos_capability_snapshot: Optional[Dict[str, Any]] = None
+    discovery_provenance: Optional[Dict[str, Any]] = None
     room_capability_context: Optional[Dict[str, Any]] = None
     smartspace_execution_brief: Optional[Dict[str, Any]] = None
 
@@ -200,11 +201,35 @@ class AgentPlan(BaseModel):
     escalation_possible: bool = True
 
 
+class ArtifactRef(BaseModel):
+    artifact_id: str
+    artifact_type: str
+    time_range: Optional[str] = None
+    modality: Optional[str] = None
+    privacy_level: Optional[str] = None
+
+
+class TraceFixConstraints(BaseModel):
+    raw_media_allowed: bool = False
+    allowed_outputs: list[str] = Field(default_factory=list)
+    require_evidence_refs: bool = True
+    max_agents: Optional[int] = None
+    privacy_scope: Optional[str] = None
+    identity_inference_allowed: bool = False
+
+
 class TraceFixTaskSpec(BaseModel):
     task_id: str
     query_id: str
     user_query: str
     space_id: Optional[str] = None
+    intent: str = ""
+    tracefix_reason: str = ""
+    required_capabilities: list[str] = Field(default_factory=list)
+    input_artifacts: list[ArtifactRef] = Field(default_factory=list)
+    constraints: TraceFixConstraints = Field(default_factory=TraceFixConstraints)
+    success_criteria: list[str] = Field(default_factory=list)
+    output_contract_name: str = "answer_packet_v1"
     route: Literal["single_agent", "multi_agent"] = "multi_agent"
     time_windows: list[TimeWindow] = Field(default_factory=list)
     required_modalities: list[str] = Field(default_factory=list)
@@ -562,17 +587,19 @@ RelevanceLiteral = Literal["primary", "supporting", "unavailable"]
 
 
 class SensorCapability(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     sensor_id: str
     modality: ModalityLiteral
     space_id: str
-    description: str = ""
+    description: Optional[str] = None
     available: bool = True
-    status: str = "online"
-    privacy_tier: str = "structured_context_only"
+    status: Optional[str] = None
+    privacy_tier: Optional[str] = None
     supported_context_types: list[str] = Field(default_factory=list)
     coverage_time_window: Optional[TimeWindow] = None
-    placement: str = ""
-    orientation: str = ""
+    placement: Optional[str] = None
+    orientation: Optional[str] = None
     coverage_zones: list[str] = Field(default_factory=list)
     blind_spots: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
@@ -585,6 +612,8 @@ class SensorCapability(BaseModel):
 
 
 class ContextAPICapability(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     """A CityOS structured-context API the space exposes.
 
     ``api_name`` is expected to align with the CityOS APIs declared in the
@@ -593,15 +622,15 @@ class ContextAPICapability(BaseModel):
     """
 
     api_name: str
-    description: str = ""
+    description: Optional[str] = None
     modality: ModalityLiteral = "context"
     returns_packet_type: Optional[str] = None
-    requires_privacy_scope: str = "cityos_structured_context_only"
+    requires_privacy_scope: Optional[str] = None
     available: bool = True
-    data_level: str = "derived_context"
+    data_level: Optional[str] = None
     required_arguments: list[str] = Field(default_factory=list)
     supported_time_query_modes: list[str] = Field(default_factory=list)
-    privacy_level: str = "derived_context"
+    privacy_level: Optional[str] = None
     raw_access: bool = False
     retention_limits: Optional[str] = None
     authorization_scope: Optional[str] = None
@@ -611,6 +640,8 @@ class ContextAPICapability(BaseModel):
 
 
 class PrivacyPolicyCapability(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     policy_id: str
     privacy_scope: str = "cityos_structured_context_only"
     raw_sensor_access_allowed: bool = False
@@ -620,14 +651,29 @@ class PrivacyPolicyCapability(BaseModel):
 
 
 class CityOSCapabilitySnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     snapshot_id: str
     space_id: str
     generated_at: str
+    deployment_id: Optional[str] = None
     sensors: list[SensorCapability] = Field(default_factory=list)
     context_apis: list[ContextAPICapability] = Field(default_factory=list)
     privacy_policies: list[PrivacyPolicyCapability] = Field(default_factory=list)
-    source: Literal["mock", "live"] = "mock"
+    source: Literal["mock", "cityos_app", "live"] = "mock"
     schema_version: str = "1.0"
+
+
+class CityOSDiscoveryRequestContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query_id: str
+    space_id: str
+    user_query: Optional[str] = None
+    intent: Optional[str] = None
+    named_modalities: list[str] = Field(default_factory=list)
+    context_requirements: list[str] = Field(default_factory=list)
+    time_window: Optional[TimeWindow] = None
 
 
 class RelevantSensorCapability(BaseModel):
@@ -711,6 +757,10 @@ class SmartspaceExecutionBrief(BaseModel):
 
 TimeoutBehavior = Literal["fail", "continue_with_limitation", "escalate"]
 DependencyRequirement = Literal["required", "optional", "one_of"]
+
+
+class TaskDesignBrief(SmartspaceExecutionBrief):
+    """TeLLMe-owned task design boundary passed into TraceFix architecture design."""
 
 
 class TraceFixAgentPlan(BaseModel):

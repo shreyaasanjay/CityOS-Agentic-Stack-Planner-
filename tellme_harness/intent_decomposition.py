@@ -12,6 +12,7 @@ from .llm_client import LLMClient
 from .schemas import (
     ApplicationGoal,
     AnswerPacketRequirements,
+    ArtifactRef,
     DEFAULT_OUTPUT_CONTRACT,
     EvidenceCardRequirements,
     EvidencePlan,
@@ -27,6 +28,7 @@ from .schemas import (
     RouteDecision,
     SmartspaceExecutionBrief,
     TimeWindow,
+    TraceFixConstraints,
     TraceFixTaskSpec,
 )
 
@@ -593,11 +595,35 @@ def compile_tracefix_task_spec(
     )
 
     output_contract = _build_output_contract(proposal.answer_packet_requirements)
+    tracefix_reason = _build_tracefix_reason(
+        route_decision=route_decision,
+        analysis=route_policy.get("analysis", {}),
+        task_category=proposal.task_category,
+        executable=proposal.task_category != "unsupported",
+    )
     return TraceFixTaskSpec(
         task_id=task_id,
         query_id=query_id,
         user_query=proposal.original_query,
         space_id=route_policy.get("space_id"),
+        intent=proposal.application_goal.user_intent,
+        tracefix_reason=tracefix_reason,
+        required_capabilities=[_capability_id_for_harness(name) for name in harness_names],
+        input_artifacts=_build_input_artifacts(
+            proposal=proposal,
+            harness_names=harness_names,
+            time_windows=time_windows,
+            privacy_scope=(route_policy.get("privacy_policy") or {}).get("privacy_scope"),
+        ),
+        constraints=_build_tracefix_constraints(
+            privacy_policy=route_policy.get("privacy_policy") or _default_privacy_policy(),
+            harness_names=harness_names,
+        ),
+        success_criteria=_build_success_criteria(
+            proposal=proposal,
+            output_contract=output_contract,
+        ),
+        output_contract_name=_build_output_contract_name(proposal.answer_packet_requirements),
         route=route_decision.get("route", "multi_agent"),
         time_windows=time_windows,
         required_modalities=required_modalities,
@@ -720,11 +746,27 @@ def task_spec_from_brief(
         harnesses = ["answer_synthesis_harness"]
         modalities = ["context"]
 
+    output_contract = _build_output_contract(brief.answer_packet_requirements)
+    privacy_policy = dict(brief.privacy_policy) or _default_privacy_policy()
+
     return TraceFixTaskSpec(
         task_id=brief.brief_id.replace("brief_", "", 1) or brief.query_id,
         query_id=brief.query_id,
         user_query=brief.user_query,
         space_id=brief.space_id,
+        intent=brief.application_goal.user_intent,
+        tracefix_reason=_build_brief_tracefix_reason(brief),
+        required_capabilities=[_capability_id_for_harness(name) for name in harnesses],
+        input_artifacts=_build_brief_input_artifacts(brief=brief, harness_names=harnesses),
+        constraints=_build_tracefix_constraints(
+            privacy_policy=privacy_policy,
+            harness_names=harnesses,
+        ),
+        success_criteria=_build_brief_success_criteria(
+            brief=brief,
+            output_contract=output_contract,
+        ),
+        output_contract_name=_build_output_contract_name(brief.answer_packet_requirements),
         route=brief.route,
         time_windows=list(brief.time_windows),
         required_modalities=modalities,
@@ -733,8 +775,8 @@ def task_spec_from_brief(
         evidence_plan=brief.evidence_plan.model_dump(),
         answer_packet_requirements=brief.answer_packet_requirements.model_dump(),
         evidence_card_contract=brief.evidence_card_requirements.model_dump(),
-        output_contract=_build_output_contract(brief.answer_packet_requirements),
-        privacy_policy=dict(brief.privacy_policy) or _default_privacy_policy(),
+        output_contract=output_contract,
+        privacy_policy=privacy_policy,
         validation_policy=dict(brief.validation_policy) or _default_validation_policy(validation_result),
         escalation_conditions=list(brief.escalation_conditions),
         forbidden_claims=list(brief.forbidden_claims),
@@ -779,7 +821,7 @@ def infer_allowed_modalities(analysis: QueryAnalysis, route: str) -> List[str]:
     if route == "single_agent":
         if "audio" in analysis.context_requirements:
             return ["audio"]
-        if any(item in analysis.context_requirements for item in ("occupancy", "motion", "activities", "tracks", "events")):
+        if "occupancy" in analysis.context_requirements or "motion" in analysis.context_requirements:
             return ["video"]
         if "room_state" in analysis.context_requirements:
             return ["context", "video", "audio"]
@@ -1035,7 +1077,7 @@ def _default_task_category(analysis: dict[str, Any]) -> str:
     intent = analysis.get("intent", "")
     if "occupancy" in intent:
         return "occupancy_count"
-    if "motion" in intent or "audio" in intent or "activity" in intent:
+    if "motion" in intent or "audio" in intent:
         return "event_detection"
     if analysis.get("requires_multi_timestamp_reasoning"):
         return "temporal_correlation"
@@ -1059,6 +1101,198 @@ def _build_output_contract(requirements: AnswerPacketRequirements) -> Dict[str, 
         "must_include_evidence_refs": True,
         "must_include_limitations": True,
     }
+
+
+def _build_output_contract_name(requirements: AnswerPacketRequirements) -> str:
+    return f"{requirements.answer_type}_v1"
+
+
+def _build_tracefix_constraints(
+    *,
+    privacy_policy: Dict[str, Any],
+    harness_names: list[str],
+) -> TraceFixConstraints:
+    allowed_outputs = ["answer_packet"]
+    if "answer_synthesis_harness" in harness_names:
+        allowed_outputs.append("evidence_card")
+    return TraceFixConstraints(
+        raw_media_allowed=bool(privacy_policy.get("raw_sensor_access_allowed", False)),
+        allowed_outputs=_dedupe(allowed_outputs),
+        require_evidence_refs=True,
+        max_agents=len(set(harness_names)) or None,
+        privacy_scope=privacy_policy.get("privacy_scope"),
+        identity_inference_allowed=bool(privacy_policy.get("identity_inference_allowed", False)),
+    )
+
+
+def _build_input_artifacts(
+    *,
+    proposal: LLMDecompositionProposal,
+    harness_names: list[str],
+    time_windows: list[TimeWindow],
+    privacy_scope: str | None,
+) -> list[ArtifactRef]:
+    artifacts: list[ArtifactRef] = []
+    packet_modalities = {
+        HARNESS_REGISTRY[name]["expected_packet"]: _artifact_modality_for_harness(name)
+        for name in harness_names
+        if name in HARNESS_REGISTRY
+    }
+    packet_ids = _dedupe(
+        list(proposal.evidence_plan.primary_evidence)
+        + list(proposal.evidence_plan.supporting_evidence)
+        + list(proposal.evidence_plan.conflicting_evidence_checks)
+    )
+    time_range = _format_time_range(time_windows)
+    for packet_id in packet_ids:
+        artifacts.append(
+            ArtifactRef(
+                artifact_id=packet_id,
+                artifact_type="packet",
+                time_range=time_range,
+                modality=packet_modalities.get(packet_id),
+                privacy_level=_short_privacy_scope(privacy_scope),
+            )
+        )
+    if not artifacts:
+        artifacts.append(
+            ArtifactRef(
+                artifact_id="tellme_query_run",
+                artifact_type="query_run_directory",
+                time_range=time_range,
+                privacy_level=_short_privacy_scope(privacy_scope),
+            )
+        )
+    return artifacts
+
+
+def _build_brief_input_artifacts(
+    *,
+    brief: SmartspaceExecutionBrief,
+    harness_names: list[str],
+) -> list[ArtifactRef]:
+    packet_modalities = {
+        HARNESS_REGISTRY[name]["expected_packet"]: _artifact_modality_for_harness(name)
+        for name in harness_names
+        if name in HARNESS_REGISTRY
+    }
+    time_range = _format_time_range(brief.time_windows)
+    packet_ids = _dedupe(
+        list(brief.evidence_plan.primary_evidence)
+        + list(brief.evidence_plan.supporting_evidence)
+        + list(brief.evidence_plan.conflicting_evidence_checks)
+    )
+    artifacts = [
+        ArtifactRef(
+            artifact_id=packet_id,
+            artifact_type="packet",
+            time_range=time_range,
+            modality=packet_modalities.get(packet_id),
+            privacy_level=_short_privacy_scope(brief.privacy_policy.get("privacy_scope")),
+        )
+        for packet_id in packet_ids
+    ]
+    if not artifacts:
+        artifacts.append(
+            ArtifactRef(
+                artifact_id="tellme_query_run",
+                artifact_type="query_run_directory",
+                time_range=time_range,
+                privacy_level=_short_privacy_scope(brief.privacy_policy.get("privacy_scope")),
+            )
+        )
+    return artifacts
+
+
+def _build_success_criteria(
+    *,
+    proposal: LLMDecompositionProposal,
+    output_contract: Dict[str, Any],
+) -> list[str]:
+    criteria = [
+        proposal.application_goal.success_condition,
+        "Return required fields only.",
+        "Preserve privacy limits and caveats.",
+    ]
+    return _dedupe(criteria)
+
+
+def _build_brief_success_criteria(
+    *,
+    brief: SmartspaceExecutionBrief,
+    output_contract: Dict[str, Any],
+) -> list[str]:
+    criteria = [
+        brief.application_goal.success_condition,
+        "Return required fields only.",
+        "Preserve privacy limits and caveats.",
+    ]
+    return _dedupe(criteria)
+
+
+def _build_tracefix_reason(
+    *,
+    route_decision: Dict[str, Any],
+    analysis: Dict[str, Any],
+    task_category: str,
+    executable: bool,
+) -> str:
+    if not executable:
+        return "Needs a safe non-executable contract."
+    if route_decision.get("route") == "multi_agent":
+        reasons: list[str] = []
+        if analysis.get("requires_multi_modal_reconciliation"):
+            reasons.append("multimodal")
+        if analysis.get("requires_multi_timestamp_reasoning"):
+            reasons.append("multiple time windows")
+        if analysis.get("requires_identity_continuity"):
+            reasons.append("continuity reasoning")
+        if analysis.get("requires_diagnostic_reasoning") or analysis.get("requires_concordfs_trace_inspection"):
+            reasons.append("diagnostic coordination")
+        reason_text = ", ".join(reasons) if reasons else task_category.replace("_", " ")
+        return f"Needs {reason_text}."
+    return "Preserve routing, privacy, and output verification."
+
+
+def _build_brief_tracefix_reason(brief: SmartspaceExecutionBrief) -> str:
+    if not brief.executable:
+        return "Needs a safe non-executable contract."
+    if brief.route == "multi_agent":
+        return "Needs multi-step evidence gathering or consistency checks."
+    return "Preserve routing, privacy, and output verification."
+
+
+def _artifact_modality_for_harness(harness_name: str) -> str | None:
+    modalities = sorted(HARNESS_REGISTRY.get(harness_name, {}).get("modalities", []))
+    if len(modalities) == 1:
+        return modalities[0]
+    if len(modalities) > 1:
+        return "fusion"
+    return None
+
+
+def _capability_id_for_harness(harness_name: str) -> str:
+    if harness_name.endswith("_harness"):
+        return harness_name[: -len("_harness")]
+    return harness_name
+
+
+def _short_privacy_scope(privacy_scope: str | None) -> str | None:
+    if privacy_scope == "cityos_structured_context_only":
+        return "structured_context_only"
+    return privacy_scope
+
+
+def _format_time_range(time_windows: list[TimeWindow]) -> str | None:
+    if not time_windows:
+        return None
+    parts: list[str] = []
+    for window in time_windows:
+        label = window.label or "window"
+        start = window.start or "n/a"
+        end = window.end or "n/a"
+        parts.append(f"{label}:{start}->{end}")
+    return "; ".join(parts)
 
 
 def _normalize_contract(contract: Dict[str, object] | None) -> Dict[str, object]:

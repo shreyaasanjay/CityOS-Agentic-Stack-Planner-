@@ -1,0 +1,122 @@
+{
+  "schema_version": "cityos-capability-declaration/v1",
+  "snapshot_id": "room-a-approved-capabilities-2026-07-09",
+  "space_id": "smart-room-a",
+  "generated_at": "2026-07-09T12:00:00Z",
+  "deployment_id": "cityos-room-a",
+  "privacy_policies": [
+    {
+      "policy_id": "derived-only",
+      "summary": "Only approved derived or context metadata may be published.",
+      "rules": [
+        "no_raw_media",
+        "no_direct_identifiers",
+        "no_internal_endpoints"
+      ]
+    }
+  ],
+  "source": {
+    "publisher": "cityos.capability-publisher",
+    "origin": "approved_declaration",
+    "approval_ref": "room-a-privacy-review-2026-07"
+  },
+  "sensors": [
+    {
+      "capability_id": "anonymous_entry_event",
+      "space_id": "smart-room-a",
+      "modality": "vision-derived",
+      "data_level": "derived",
+      "raw_access": false,
+      "outputs": [
+        "entry_event"
+      ],
+      "privacy_constraints": [
+        "anonymous_only",
+        "no_person_identifiers"
+      ],
+      "limitations": [
+        "approximate event timing",
+        "not identity resolving"
+      ],
+      "availability": "available",
+      "status": "Approved derived event metadata."
+    },
+    {
+      "capability_id": "impact_sound_candidate",
+      "space_id": "smart-room-a",
+      "modality": "audio-derived",
+      "data_level": "derived",
+      "raw_access": false,
+      "outputs": [
+        "sound_event_candidate"
+      ],
+      "privacy_constraints": [
+        "no_transcript",
+        "no_speaker_identity"
+      ],
+      "limitations": [
+        "coarse event classification only"
+      ],
+      "availability": "degraded",
+      "status": "Event candidate detection only."
+    }
+  ],
+  "context_apis": [
+    {
+      "capability_id": "room_occupancy_state",
+      "space_id": "smart-room-a",
+      "modality": "multi-sensor-derived",
+      "data_level": "context",
+      "raw_access": false,
+      "outputs": [
+        "occupancy_state"
+      ],
+      "privacy_constraints": [
+        "aggregate_only",
+        "no_tracking_ids"
+      ],
+      "limitations": [
+        "not suitable for identity or trajectory reconstruction"
+      ],
+      "availability": "available",
+      "status": "Bounded occupancy state."
+    },
+    {
+      "capability_id": "wifi_motion_disturbance",
+      "space_id": "smart-room-a",
+      "modality": "wireless-derived",
+      "data_level": "context",
+      "raw_access": false,
+      "outputs": [
+        "motion_disturbance_state"
+      ],
+      "privacy_constraints": [
+        "aggregate_only"
+      ],
+      "limitations": [
+        "best-effort environmental signal"
+      ],
+      "availability": "stale",
+      "status": "Approved context signal."
+    },
+    {
+      "capability_id": "radar_stillness_estimate",
+      "space_id": "smart-room-a",
+      "modality": "radar-derived",
+      "data_level": "context",
+      "raw_access": false,
+      "outputs": [
+        "stillness_estimate"
+      ],
+      "privacy_constraints": [
+        "aggregate_only",
+        "no_individual_targeting"
+      ],
+      "limitations": [
+        "coarse room-level estimate"
+      ],
+      "availability": "available",
+      "status": "Approved context estimate."
+    }
+  ]
+}

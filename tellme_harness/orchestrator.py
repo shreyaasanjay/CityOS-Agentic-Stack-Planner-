@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Tuple
 
 from .capability_registry import CapabilityRegistry
+from .cityos_discovery import CityOSDiscoveryError
 from .execution_plan import build_execution_plan
 from .intent_decomposition import (
     build_policy_envelope,
@@ -43,19 +44,38 @@ class AgentOrchestrator:
         validation_result = None
         task_spec = None
         capability_snapshot = None
+        discovery_provenance = None
         room_context = None
         brief = None
         if decision.route in {"single_agent", "multi_agent"}:
             space_id = query.space_id or "smart_room_1"
-            # Discover CityOS capabilities for this space, then project them onto
-            # this query before any LLM decomposition runs.
-            capability_snapshot = self.capability_registry.get_snapshot(space_id)
-            room_context = self.capability_registry.get_relevant_context(
-                query_id=query.query_id,
-                space_id=space_id,
-                analysis=analysis,
-                time_window=decision.time_window,
-            )
+            try:
+                # Discover CityOS capabilities for this space, then project them onto
+                # this query before any LLM decomposition runs.
+                room_context = self.capability_registry.get_relevant_context(
+                    query_id=query.query_id,
+                    space_id=space_id,
+                    analysis=analysis,
+                    time_window=decision.time_window,
+                )
+                capability_snapshot = self.capability_registry.get_snapshot(space_id)
+                discovery_provenance = self.capability_registry.get_last_provenance(space_id)
+            except CityOSDiscoveryError as exc:
+                blocked = decision.model_copy(
+                    update={
+                        "route": "not_answerable",
+                        "requires_tracefix": False,
+                        "rationale": "CityOS capability discovery was unavailable, so TeLLMe failed closed.",
+                        "caveats": list(decision.caveats)
+                        + [
+                            "Capability discovery unavailable.",
+                            "TeLLMe did not fall back to unrestricted mock capabilities in this mode.",
+                            str(exc),
+                        ],
+                    }
+                )
+                plan = build_execution_plan(query, analysis, blocked)
+                return analysis, blocked, plan
             allowed_modalities = infer_allowed_modalities(analysis, decision.route)
             allowed_harnesses = infer_allowed_harnesses(analysis, decision.route, decision.selected_agent)
             allowed_time_windows = [decision.time_window] if decision.time_window else []
@@ -85,6 +105,7 @@ class AgentOrchestrator:
             task_spec=task_spec,
             llm_backend_mode=self.llm_backend_mode,
             capability_snapshot=capability_snapshot.model_dump() if capability_snapshot else None,
+            discovery_provenance=discovery_provenance,
             room_capability_context=room_context.model_dump() if room_context else None,
             execution_brief=brief.model_dump() if brief else None,
         )

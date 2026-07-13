@@ -12,9 +12,13 @@ from __future__ import annotations
 import time
 from typing import Dict, Optional, Tuple
 
-from .cityos_discovery import CityOSDiscoveryClient, MockCityOSDiscoveryClient
+from .cityos_discovery import (
+    CityOSDiscoveryProvider,
+    MockCityOSDiscoveryProvider,
+)
 from .schemas import (
     CityOSCapabilitySnapshot,
+    CityOSDiscoveryRequestContext,
     PrivacyPolicyCapability,
     QueryAnalysis,
     RelevantSensorCapability,
@@ -40,29 +44,44 @@ DEFAULT_CACHE_TTL_SECONDS = 300.0
 class CapabilityRegistry:
     def __init__(
         self,
-        discovery_client: Optional[CityOSDiscoveryClient] = None,
+        discovery_client: Optional[CityOSDiscoveryProvider] = None,
         *,
         cache_ttl_seconds: float = DEFAULT_CACHE_TTL_SECONDS,
         time_source=time.monotonic,
     ) -> None:
-        self.discovery_client = discovery_client or MockCityOSDiscoveryClient()
+        self.discovery_client = discovery_client or MockCityOSDiscoveryProvider()
         self.cache_ttl_seconds = cache_ttl_seconds
         self._time_source = time_source
         self._cache: Dict[str, Tuple[CityOSCapabilitySnapshot, float]] = {}
+        self._last_provenance: Dict[str, dict] = {}
 
     # -- snapshot caching --------------------------------------------------
 
-    def get_snapshot(self, space_id: str, *, force_refresh: bool = False) -> CityOSCapabilitySnapshot:
+    def get_snapshot(
+        self,
+        space_id: str,
+        *,
+        request_context: Optional[CityOSDiscoveryRequestContext] = None,
+        force_refresh: bool = False,
+    ) -> CityOSCapabilitySnapshot:
         cached = self._cache.get(space_id)
         if cached and not force_refresh and not self._is_stale(cached[1]):
             return cached[0]
-        snapshot = self.discovery_client.discover(space_id)
+        context = request_context or CityOSDiscoveryRequestContext(query_id="snapshot_cache", space_id=space_id)
+        snapshot = self.discovery_client.discover_capabilities(context)
         self._cache[space_id] = (snapshot, self._time_source())
+        provenance = getattr(self.discovery_client, "last_provenance", None)
+        if isinstance(provenance, dict):
+            self._last_provenance[space_id] = dict(provenance)
         return snapshot
 
     def is_cached_fresh(self, space_id: str) -> bool:
         cached = self._cache.get(space_id)
         return bool(cached) and not self._is_stale(cached[1])
+
+    def get_last_provenance(self, space_id: str) -> Optional[dict]:
+        provenance = self._last_provenance.get(space_id)
+        return dict(provenance) if isinstance(provenance, dict) else None
 
     def _is_stale(self, fetched_at: float) -> bool:
         return (self._time_source() - fetched_at) > self.cache_ttl_seconds
@@ -78,7 +97,20 @@ class CapabilityRegistry:
         time_window: Optional[TimeWindow] = None,
         force_refresh: bool = False,
     ) -> RoomCapabilityContext:
-        snapshot = self.get_snapshot(space_id, force_refresh=force_refresh)
+        request_context = CityOSDiscoveryRequestContext(
+            query_id=query_id,
+            space_id=space_id,
+            user_query=analysis.user_query,
+            intent=analysis.intent,
+            named_modalities=list(analysis.named_modalities),
+            context_requirements=list(analysis.context_requirements),
+            time_window=time_window,
+        )
+        snapshot = self.get_snapshot(
+            space_id,
+            request_context=request_context,
+            force_refresh=force_refresh,
+        )
         privacy_policy = _select_privacy_policy(snapshot, space_id)
 
         wanted_modalities = set(analysis.named_modalities)
@@ -92,7 +124,9 @@ class CapabilityRegistry:
         ]
 
         available_context_apis = sorted(
-            api.api_name for api in snapshot.context_apis if api.available
+            api.api_name
+            for api in snapshot.context_apis
+            if api.available and not api.raw_access
         )
 
         coverage_gaps = _coverage_gaps(
