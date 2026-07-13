@@ -1,7 +1,7 @@
-"""Coordination-pattern classifier.
+﻿"""Coordination-pattern classifier.
 
 Examines a TraceFix task description and optional TeLLMe spec to determine if
-a known 2-agent coordination pattern applies. Returns a CoordinationPatternDecision
+a known deterministic coordination pattern applies. Returns a CoordinationPatternDecision
 that includes:
   - Whether a pattern was identified (pattern_id != None)
   - Pre-built IR and Protocol.tla ready to drop into spec/
@@ -17,21 +17,22 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from tracefix.protocol_templates import classify_all, build_template
+from tracefix.protocol_templates import classify_all, build_template, get_template_metadata
 from tracefix.protocol_templates.fan_in_decision import (
     detect_evidence_sources,
     has_decision_language,
 )
 
-_CONFIDENCE_THRESHOLD = 0.75
+_CONFIDENCE_THRESHOLD = 0.95
+_PARTIAL_CONFIDENCE_THRESHOLD = 0.50
 
-# Patterns that require exactly 2 agents; anything else falls through.
 _SUPPORTED_PATTERN_IDS = frozenset({
     "sequential_handoff",
     "verifier_approver",
     "producer_consumer",
     "attendance_verification",
     "fan_in_decision",
+    "traffic_signal_coordination",
 })
 
 # Common role / function words that hint at agent IDs in free text.
@@ -41,6 +42,11 @@ _AGENT_NOUN_RE = re.compile(
     r"processor|generator|sender|receiver|submitter|validator|auditor)\b",
     re.I,
 )
+_COORDINATION_CUES = frozenset({
+    "coordinate", "coordination", "handoff", "producer", "consumer",
+    "review", "verify", "approve", "reconcile", "traffic", "intersection",
+    "signal", "conflict", "emergency", "all-red",
+})
 
 
 @dataclass
@@ -49,9 +55,11 @@ class CoordinationPatternDecision:
 
     # Core decision fields
     considered: bool = False
-    """True if classifier ran (agent count was 2 and task was non-trivial)."""
+    """True if deterministic templates were scored for this task."""
     pattern_id: str | None = None
     """Matched pattern ID, or None if no pattern matched above threshold."""
+    template_match_type: str = "none"
+    pattern: str | None = None
     confidence: float = 0.0
     reason: str = ""
     fallback_reason: str = ""
@@ -60,6 +68,10 @@ class CoordinationPatternDecision:
     ir_data: dict[str, Any] = field(default_factory=dict)
     protocol_tla: str = ""
     template_params: dict[str, Any] = field(default_factory=dict)
+    template_parameters: dict[str, Any] = field(default_factory=dict)
+    partial_repair_reason: str = ""
+    template_variant: str = ""
+    template_metadata: dict[str, Any] = field(default_factory=dict)
 
     # Convenience fields extracted from ir_data
     agents: list[dict] = field(default_factory=list)
@@ -105,11 +117,7 @@ def assess_coordination_pattern(
         if not agents:
             agents = _agents_from_harnesses(tellme_spec.get("candidate_harnesses") or [])
 
-    classify_text = task
-    if tellme_spec:
-        user_query = str(tellme_spec.get("user_query") or "").strip()
-        if user_query:
-            classify_text = user_query
+    classify_text = _classification_text(task, tellme_spec)
     task_lower = classify_text.lower()
     evidence_sources = detect_evidence_sources(task_lower)
     decision.evidence_sources_detected = [
@@ -130,26 +138,13 @@ def assess_coordination_pattern(
     if len(evidence_sources) >= 3 and has_decision_language(task_lower):
         agent_count = len(evidence_sources) + 1
 
-    if agent_count != 2 and len(evidence_sources) < 3:
-        decision.fallback_reason = (
-            "coordination classifier requires either exactly 2 agents or "
-            f"3+ explicit evidence sources; detected {agent_count} agents and "
-            f"{len(evidence_sources)} evidence sources"
-        )
+    if tellme_route == "single_agent":
+        decision.fallback_reason = "TeLLMe route is explicitly single_agent"
         return decision
-
-    decision.considered = True
 
     # --- 2. Extract keywords — prefer user_query over the full wrapper text ------
     # The full TeLLMe task text includes a JSON preamble that dilutes signals.
     # When a user_query is available, classify against it directly.
-    classify_text = task
-    if tellme_spec:
-        user_query = str(tellme_spec.get("user_query") or "").strip()
-        if user_query:
-            classify_text = user_query
-
-    task_lower = classify_text.lower()
     keywords = _extract_keywords(task_lower)
 
     # --- 3. Score all templates -------------------------------------------------
@@ -158,14 +153,28 @@ def assess_coordination_pattern(
         agent_count_hint=agent_count,
         keywords=keywords,
     )
+    scores = _apply_structured_score_hints(scores, tellme_spec)
     decision.all_scores = scores
 
     best_id, best_conf = scores[0] if scores else (None, 0.0)
+    has_coordination_cue = any(cue in task_lower for cue in _COORDINATION_CUES)
+    decision.considered = bool(
+        tellme_route == "multi_agent"
+        or agent_count >= 2
+        or len(evidence_sources) >= 3
+        or has_coordination_cue
+        or best_conf > 0.0
+    )
+    if not decision.considered:
+        decision.fallback_reason = (
+            "no multi-agent route, coordination cues, or template score detected"
+        )
+        return decision
 
-    if best_id is None or best_conf < _CONFIDENCE_THRESHOLD:
+    if best_id is None or best_conf < _PARTIAL_CONFIDENCE_THRESHOLD:
         decision.fallback_reason = (
             f"best pattern {best_id!r} scored {best_conf:.2f} "
-            f"(threshold {_CONFIDENCE_THRESHOLD}); falling back to OpenCode"
+            f"(partial threshold {_PARTIAL_CONFIDENCE_THRESHOLD}); falling back to OpenCode"
         )
         return decision
 
@@ -174,6 +183,23 @@ def assess_coordination_pattern(
             f"pattern {best_id!r} is not in supported set; falling back to OpenCode"
         )
         return decision
+
+    metadata = get_template_metadata(best_id)
+    match_type = "parameterized" if metadata.get("shape") == "parameterized" else "exact"
+    if best_conf <= _CONFIDENCE_THRESHOLD:
+        if metadata.get("supports_partial_repair"):
+            match_type = "partial"
+            decision.partial_repair_reason = (
+                f"pattern family {best_id!r} scored {best_conf:.2f}, not above exact "
+                f"threshold {_CONFIDENCE_THRESHOLD} but above partial threshold "
+                f"{_PARTIAL_CONFIDENCE_THRESHOLD}"
+            )
+        else:
+            decision.fallback_reason = (
+                f"best pattern {best_id!r} scored {best_conf:.2f}; template does "
+                "not support partial repair, falling back to OpenCode"
+            )
+            return decision
 
     # --- 4. Build template params from agent IDs --------------------------------
     try:
@@ -197,6 +223,8 @@ def assess_coordination_pattern(
 
     # --- 6. Populate decision ---------------------------------------------------
     decision.pattern_id = best_id
+    decision.pattern = best_id
+    decision.template_match_type = match_type
     decision.confidence = best_conf
     decision.reason = (
         f"matched pattern {best_id!r} with confidence {best_conf:.2f}"
@@ -204,6 +232,11 @@ def assess_coordination_pattern(
     decision.ir_data = ir_data
     decision.protocol_tla = protocol_tla
     decision.template_params = params
+    decision.template_parameters = params
+    decision.template_variant = str(params.get("variant_name") or "")
+    decision.template_metadata = metadata
+    if decision.template_variant:
+        decision.template_metadata["selected_variant"] = decision.template_variant
     decision.agents = ir_data.get("agents", [])
     decision.resources = ir_data.get("resources", [])
     decision.channels = ir_data.get("channels", [])
@@ -312,7 +345,130 @@ def _build_params(
             "channel_bound": channel_bound,
         }
 
+    if pattern_id == "traffic_signal_coordination":
+        return _extract_traffic_params(task_lower, tellme_spec, channel_bound)
+
     raise ValueError(f"No param builder for pattern {pattern_id!r}")
+
+
+
+_NUMBER_WORDS = {
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+}
+
+
+def _extract_traffic_params(
+    task_lower: str,
+    tellme_spec: dict | None,
+    channel_bound: int,
+) -> dict:
+    """Infer a supported traffic template variant, fail-closed if ambiguous."""
+    text = _classification_text(task_lower, tellme_spec).lower()
+    unsupported_cues = (
+        "roundabout",
+        "freeway",
+        "highway network",
+        "citywide network",
+        "city-wide network",
+        "multiple intersections",
+        "corridor",
+        "rail crossing",
+        "train crossing",
+    )
+    if any(cue in text for cue in unsupported_cues):
+        raise ValueError("unsupported or network-level traffic variant")
+
+    ambiguous_cues = (
+        "unknown number",
+        "variable number",
+        "arbitrary number",
+        "dynamic number",
+        "many intersections",
+    )
+    if any(cue in text for cue in ambiguous_cues):
+        raise ValueError("ambiguous traffic variant requires OpenCode fallback")
+
+    approach_count = _traffic_approach_count(text)
+    include_emergency = _traffic_has_emergency(text)
+    include_pedestrian = _traffic_has_pedestrian(text)
+    if approach_count < 2 or approach_count > 8:
+        raise ValueError("traffic template supports only 2 to 8 approaches")
+
+    approach_ids = _traffic_approach_ids(approach_count)
+    variant_name = _traffic_variant_name(
+        approach_count,
+        approach_ids,
+        include_emergency,
+        include_pedestrian,
+    )
+    return {
+        "approach_ids": approach_ids,
+        "approach_count": approach_count,
+        "controller_id": "signal_controller",
+        "include_emergency_detector": include_emergency,
+        "include_pedestrian_agent": include_pedestrian,
+        "emergency_detector_id": "emergency_detector",
+        "pedestrian_agent_id": "pedestrian_crossing_agent",
+        "variant_name": variant_name,
+        "channel_bound": channel_bound,
+    }
+
+
+def _traffic_approach_count(text: str) -> int:
+    for word, count in _NUMBER_WORDS.items():
+        if re.search(rf"\b{word}\s*[- ]?(?:way|approach|approaches|leg|legs)\b", text):
+            return count
+    numeric = re.search(r"\b([2-8])\s*[- ]?(?:way|approach|approaches|leg|legs)\b", text)
+    if numeric:
+        return int(numeric.group(1))
+    if "t-junction" in text or "t junction" in text or "three-way" in text:
+        return 3
+    return 4
+
+
+def _traffic_approach_ids(count: int) -> list[str]:
+    if count == 4:
+        return ["north_approach", "east_approach", "south_approach", "west_approach"]
+    return [f"approach_{index}" for index in range(1, count + 1)]
+
+
+def _traffic_has_emergency(text: str) -> bool:
+    if re.search(r"\b(no|without)\s+emergency\b", text):
+        return False
+    return any(cue in text for cue in ("emergency", "ambulance", "fire truck", "siren", "priority vehicle"))
+
+
+def _traffic_has_pedestrian(text: str) -> bool:
+    return any(cue in text for cue in ("pedestrian", "crosswalk", "crossing", "walk signal", "walk phase"))
+
+
+def _traffic_variant_name(
+    approach_count: int,
+    approach_ids: list[str],
+    include_emergency: bool,
+    include_pedestrian: bool,
+) -> str:
+    is_standard_four = approach_count == 4 and approach_ids == [
+        "north_approach",
+        "east_approach",
+        "south_approach",
+        "west_approach",
+    ]
+    base = "standard_four_way" if is_standard_four and not (include_emergency or include_pedestrian) else (
+        "four_way" if is_standard_four else "n_approach"
+    )
+    suffixes = []
+    if include_emergency:
+        suffixes.append("emergency")
+    if include_pedestrian:
+        suffixes.append("pedestrian")
+    return base if not suffixes else base + "_" + "_".join(suffixes)
 
 
 def _extract_two_agent_roles(
@@ -365,3 +521,78 @@ def _agents_from_harnesses(harnesses: list) -> list[dict]:
         if agent_id not in {agent["id"] for agent in result}:
             result.append({"id": agent_id})
     return result
+
+
+def _classification_text(
+    task: str,
+    tellme_spec: dict[str, Any] | None,
+) -> str:
+    """Combine raw and structured deterministic signals for template scoring."""
+    parts = [str(task or "")]
+    if not tellme_spec:
+        return "\n".join(parts)
+
+    semantic_keys = (
+        "user_query",
+        "task",
+        "description",
+        "route",
+        "candidate_harnesses",
+        "application_goals",
+        "goals",
+        "agents",
+        "resources",
+        "channels",
+    )
+    for key in semantic_keys:
+        value = tellme_spec.get(key)
+        if value in (None, "", [], {}):
+            continue
+        parts.extend(_flatten_semantic_values(value))
+    return "\n".join(part for part in parts if part)
+
+
+def _flatten_semantic_values(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        flattened: list[str] = []
+        for key, child in value.items():
+            flattened.append(str(key))
+            flattened.extend(_flatten_semantic_values(child))
+        return flattened
+    if isinstance(value, (list, tuple, set)):
+        flattened = []
+        for child in value:
+            flattened.extend(_flatten_semantic_values(child))
+        return flattened
+    return [str(value)]
+
+
+def _apply_structured_score_hints(
+    scores: list[tuple[str, float]],
+    tellme_spec: dict[str, Any] | None,
+) -> list[tuple[str, float]]:
+    """Resolve generic/domain ties using explicit TeLLMe harness metadata."""
+    if not tellme_spec:
+        return scores
+    harness_text = " ".join(
+        str(value).lower()
+        for value in tellme_spec.get("candidate_harnesses") or []
+    )
+    attendance_cues = ("occupancy", "attendance", "calendar", "sensor")
+    attendance_specificity = sum(cue in harness_text for cue in attendance_cues)
+    adjusted = [
+        (
+            pattern_id,
+            min(1.0, score + 0.01)
+            if (
+                pattern_id == "attendance_verification"
+                and score > 0.0
+                and attendance_specificity >= 2
+            )
+            else score,
+        )
+        for pattern_id, score in scores
+    ]
+    return sorted(adjusted, key=lambda item: item[1], reverse=True)

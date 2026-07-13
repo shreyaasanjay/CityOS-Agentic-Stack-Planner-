@@ -1,4 +1,4 @@
-"""``tracefix design`` — drive an UNMODIFIED headless opencode through the
+﻿"""``tracefix design`` — drive an UNMODIFIED headless opencode through the
 /tla-verify-pluscal skill to turn a natural-language requirement into a
 verified workspace (spec/ + prompts/runtime_b/ + spec/cityos_module_plan.json).
 
@@ -29,6 +29,7 @@ from typing import Callable
 
 from tracefix.pipeline_timing import PipelineTimingReport
 from tracefix.runtime.coordination_classifier import assess_coordination_pattern
+from tracefix.runtime.template_adaptation_repair import adapt_template_decision
 from tracefix.runtime.pattern_repository import harvest_candidate, repository_enabled
 from tracefix.runtime.single_agent_fastpath import (
     FastPathDecision,
@@ -1527,6 +1528,8 @@ async def run_design(
     coord_template_error: str | None = None
     coord_template_diagnostics: list[str] = []
     coord_decision = None
+    template_adaptation_result = None
+    coord_template_metadata: dict[str, object] = {}
     _tspec_route: str = ""
     _tspec_query: str = ""
     _tspec_harnesses: list = []
@@ -1549,6 +1552,7 @@ async def run_design(
             coord_template_diagnostics.append(
                 f"Coord classifier: considered={coord_decision.considered} "
                 f"pattern={coord_decision.pattern_id!r} "
+                f"template_variant={coord_decision.template_variant or 'n/a'} "
                 f"confidence={coord_decision.confidence:.2f} "
                 f"tellme_route={_tspec_route!r} "
                 f"user_query={_tspec_query!r} "
@@ -1556,10 +1560,146 @@ async def run_design(
                 f"scores=[{_scores_str}] "
                 f"fallback_reason={coord_decision.fallback_reason!r}"
             )
+            coord_template_diagnostics.append(
+                f"coord_classifier considered={coord_decision.considered} "
+                f"pattern={coord_decision.pattern_id or 'none'} "
+                f"template_variant={coord_decision.template_variant or 'none'}"
+            )
+            print(
+                f"coord_classifier considered={coord_decision.considered} "
+                f"pattern={coord_decision.pattern_id or 'none'} "
+                f"template_variant={coord_decision.template_variant or 'none'}",
+                flush=True,
+            )
             if coord_decision.pattern_id is not None:
                 from tracefix.pipeline.pipeline.validator import normalize_ir
 
+                match_type = str(coord_decision.template_match_type or "exact")
+                repair_agent_used = False
+                repair_stage = None
+                repair_summary = ""
+                adapted_fields: list[str] = []
+                changed_fields: list[str] = []
+                requested_differences: list[str] = []
+                safety_preservation_notes: list[str] = []
+
+                template_metadata = dict(coord_decision.template_metadata or {})
+                if coord_decision.template_variant:
+                    template_metadata["selected_variant"] = coord_decision.template_variant
+                template_metadata.update({
+                    "template_match_type": match_type,
+                    "template_used": coord_decision.pattern_id,
+                    "template_params": coord_decision.template_params,
+                    "template_parameters": coord_decision.template_parameters,
+                    "partial_repair_reason": coord_decision.partial_repair_reason,
+                    "opencode_full_generation": False,
+                    "opencode_skipped_for_initial_design": True,
+                    "repair_agent_used": False,
+                    "repair_stage": None,
+                    "repair_summary": "",
+                    "adapted_fields": [],
+                    "changed_fields": [],
+                    "requested_differences": [],
+                    "requested_changes": [],
+                    "applied_changes": [],
+                    "rejected_changes": [],
+                    "safety_preservation_notes": [],
+                })
+
+                if match_type == "partial":
+                    repair_started_at = datetime.now(timezone.utc).isoformat()
+                    repair_started_ms = time.monotonic() * 1000.0
+                    template_adaptation_result = adapt_template_decision(
+                        task=task,
+                        tellme_spec=_tellme_spec,
+                        decision=coord_decision,
+                    )
+                    repair_duration_ms = time.monotonic() * 1000.0 - repair_started_ms
+                    repair_agent_used = bool(template_adaptation_result.repair_agent_used)
+                    repair_stage = template_adaptation_result.repair_stage
+                    repair_summary = template_adaptation_result.repair_summary
+                    adapted_fields = list(template_adaptation_result.adapted_fields)
+                    changed_fields = list(template_adaptation_result.changed_fields)
+                    requested_differences = list(template_adaptation_result.requested_differences)
+                    requested_changes = list(template_adaptation_result.requested_changes)
+                    applied_changes = list(template_adaptation_result.applied_changes)
+                    rejected_changes = list(template_adaptation_result.rejected_changes)
+                    safety_preservation_notes = list(template_adaptation_result.safety_preservation_notes)
+                    timing.usage.record(
+                        stage="template_adaptation_repair",
+                        provider="deterministic",
+                        model=coord_decision.pattern_id,
+                        started_at=repair_started_at,
+                        ended_at=datetime.now(timezone.utc).isoformat(),
+                        duration_ms=repair_duration_ms,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        total_tokens=0,
+                        exact_cost_usd=0.0,
+                        pricing_source="deterministic_template_adaptation",
+                        record_id=f"{ws.name}:template_adaptation_repair",
+                    )
+                    timing.stage(
+                        "template_adaptation_repair",
+                        started_at=repair_started_at,
+                        finished_at=datetime.now(timezone.utc).isoformat(),
+                        duration_ms=repair_duration_ms,
+                        success=template_adaptation_result.accepted,
+                        error=("; ".join(template_adaptation_result.errors) if not template_adaptation_result.accepted else None),
+                        pattern_id=coord_decision.pattern_id,
+                        template_match_type=match_type,
+                        repair_agent_used=repair_agent_used,
+                        adapted_fields=adapted_fields,
+                        changed_fields=changed_fields,
+                        requested_differences=requested_differences,
+                        requested_changes=requested_changes,
+                        applied_changes=applied_changes,
+                        rejected_changes=rejected_changes,
+                    )
+                    if not template_adaptation_result.accepted:
+                        raise ValueError(
+                            template_adaptation_result.repair_summary
+                            or "; ".join(template_adaptation_result.errors)
+                            or "partial template adaptation was rejected"
+                        )
+                    coord_decision.ir_data = template_adaptation_result.ir_data
+                    coord_decision.protocol_tla = template_adaptation_result.protocol_tla
+                    coord_decision.template_params = template_adaptation_result.params
+                    coord_decision.template_parameters = template_adaptation_result.params
+                    coord_decision.template_variant = template_adaptation_result.template_variant
+                    coord_decision.agents = coord_decision.ir_data.get("agents", [])
+                    coord_decision.resources = coord_decision.ir_data.get("resources", [])
+                    coord_decision.channels = coord_decision.ir_data.get("channels", [])
+                    template_metadata.update({
+                        "template_params": coord_decision.template_params,
+                        "template_parameters": coord_decision.template_parameters,
+                        "selected_variant": coord_decision.template_variant,
+                        "repair_agent_used": repair_agent_used,
+                        "repair_stage": repair_stage,
+                        "repair_summary": repair_summary,
+                        "adapted_fields": adapted_fields,
+                        "changed_fields": changed_fields,
+                        "requested_differences": requested_differences,
+                        "requested_changes": requested_changes,
+                        "applied_changes": applied_changes,
+                        "rejected_changes": rejected_changes,
+                        "safety_preservation_notes": safety_preservation_notes,
+                    })
+                else:
+                    timing.usage.record(
+                        stage="deterministic_template",
+                        provider="deterministic",
+                        model=coord_decision.pattern_id,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        total_tokens=0,
+                        exact_cost_usd=0.0,
+                        pricing_source="deterministic_template",
+                        record_id=f"{ws.name}:deterministic_template",
+                    )
+
                 coord_decision.ir_data = normalize_ir(coord_decision.ir_data)
+                coord_template_metadata = template_metadata
                 # Write IR
                 (_spec_dir(ws) / "ir.json").write_text(
                     json.dumps(coord_decision.ir_data, indent=2) + "\n",
@@ -1568,6 +1708,12 @@ async def run_design(
                 # Write Protocol.tla
                 (_spec_dir(ws) / "Protocol.tla").write_text(
                     coord_decision.protocol_tla + "\n",
+                    encoding="utf-8",
+                )
+                # Persist template metadata beside verified artifacts without
+                # polluting ir.json, whose schema remains strict.
+                (_spec_dir(ws) / "template_metadata.json").write_text(
+                    json.dumps(template_metadata, indent=2) + "\n",
                     encoding="utf-8",
                 )
                 # Validate IR
@@ -1588,7 +1734,22 @@ async def run_design(
                 coord_template_used = True
                 coord_template_diagnostics.append(
                     f"Coord template {coord_decision.pattern_id!r} completed "
-                    "deterministic verification"
+                    f"{match_type} verification"
+                )
+                coord_template_diagnostics.append(
+                    f"opencode_skipped=true "
+                    f"template_used={coord_decision.pattern_id} "
+                    f"template_variant={coord_decision.template_variant or 'none'} "
+                    f"template_match_type={match_type} "
+                    f"repair_agent_used={str(repair_agent_used).lower()}"
+                )
+                print(
+                    f"opencode_skipped=true "
+                    f"template_used={coord_decision.pattern_id} "
+                    f"template_variant={coord_decision.template_variant or 'none'} "
+                    f"template_match_type={match_type} "
+                    f"repair_agent_used={str(repair_agent_used).lower()}",
+                    flush=True,
                 )
         except Exception as exc:  # noqa: BLE001 - fallback is the safety boundary
             coord_template_error = str(exc)
@@ -1606,6 +1767,35 @@ async def run_design(
             "reason": coord_decision.reason if coord_decision else None,
             "fallback_reason": coord_decision.fallback_reason if coord_decision else None,
             "fallback_to_opencode": not coord_template_used,
+            "opencode_skipped": coord_template_used,
+            "opencode_full_generation": not coord_template_used,
+            "opencode_skipped_for_initial_design": coord_template_used,
+            "template_match_type": (
+                coord_decision.template_match_type if coord_decision else "none"
+            ),
+            "template_used": (
+                coord_decision.pattern_id
+                if coord_template_used and coord_decision
+                else None
+            ),
+            "template_variant": (
+                coord_decision.template_variant
+                if coord_template_used and coord_decision
+                else None
+            ),
+            "repair_agent_used": bool(
+                coord_template_metadata.get("repair_agent_used")
+            ),
+            "repair_stage": coord_template_metadata.get("repair_stage"),
+            "repair_summary": coord_template_metadata.get("repair_summary"),
+            "adapted_fields": coord_template_metadata.get("adapted_fields", []),
+            "changed_fields": coord_template_metadata.get("changed_fields", []),
+            "requested_differences": coord_template_metadata.get("requested_differences", []),
+            "template_metadata": (
+                coord_template_metadata
+                if coord_template_used and coord_decision
+                else {}
+            ),
             "error": coord_template_error,
             # Diagnostic fields — visible in run JSON for post-run investigation
             "tellme_route": _tspec_route if coord_decision else None,
@@ -1668,6 +1858,8 @@ async def run_design(
             timeout=timeout,
             on_event=on_event,
             env_overrides=env,
+            usage_tracker=timing.usage,
+            usage_stage="opencode_initial_design",
         )
         timing.opencode_call("opencode_initial_design", disposition)
 
@@ -1753,6 +1945,8 @@ async def run_design(
                 timeout=timeout,
                 on_event=on_event,
                 env_overrides=env,
+                usage_tracker=timing.usage,
+                usage_stage="opencode_pluscal_continuation",
             )
             diagnostics.append("PlusCal continuation pass finished")
             status, ir_errors, continuation_diagnostics = classify_design_artifacts(
@@ -1787,6 +1981,8 @@ async def run_design(
             timeout=min(timeout, 600.0),
             on_event=on_event,
             env_overrides=env,
+            usage_tracker=timing.usage,
+            usage_stage="opencode_ir_repair",
         )
         timing.opencode_call("opencode_ir_repair", repair_disposition)
         diagnostics.append("IR repair pass finished")
@@ -1837,6 +2033,8 @@ async def run_design(
                     timeout=timeout,
                     on_event=on_event,
                     env_overrides=env,
+                    usage_tracker=timing.usage,
+                    usage_stage="opencode_pluscal_continuation_post_repair",
                 )
                 timing.opencode_call(
                     "opencode_pluscal_continuation_post_repair",
@@ -1962,6 +2160,8 @@ async def run_design(
                 timeout=min(timeout, 900.0),
                 on_event=on_event,
                 env_overrides=env,
+                usage_tracker=timing.usage,
+                usage_stage="opencode_runtime_prompt_generation",
             )
             timing.opencode_call("opencode_runtime_prompt_generation", prompt_disposition)
             timing.opencode_call("opencode_pluscal_continuation", continuation_disposition)
