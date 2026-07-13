@@ -31,7 +31,7 @@ from tracefix.textio import safe_read_json, safe_read_text
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-UI_BUILD = "tracefix-unified-ui-20260709-full-pipeline-v9"
+UI_BUILD = "tracefix-unified-ui-20260713-handoff-preview-v10"
 
 RUNS: dict[str, "RunState"] = {}
 RUNS_LOCK = threading.Lock()
@@ -94,6 +94,19 @@ def _api_envelope(
 
 def _tellme_bridge(root: Path) -> TellMeBridge:
     return TellMeBridge(root)
+
+
+def _tellme_handoff_payload(bridge: TellMeBridge, data: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Expose the exact compact text that will be passed to TraceFix."""
+    if not isinstance(data, dict):
+        return data
+    enriched = dict(data)
+    try:
+        enriched["tracefix_handoff_text"] = bridge.tracefix_task_text()
+    except ValueError:
+        # Blocked or incomplete TeLLMe runs do not produce a TraceFix handoff.
+        enriched["tracefix_handoff_text"] = ""
+    return enriched
 
 
 def _tracefix_current(root: Path) -> dict[str, Any]:
@@ -1810,6 +1823,7 @@ class RunnerHandler(BaseHTTPRequestHandler):
             bridge = _tellme_bridge(self.root)
             current = bridge.current()
             data = current.get("tellme") if current else None
+            data = _tellme_handoff_payload(bridge, data)
             config = bridge.llm_config()
             self._send_json(_api_envelope(
                 ok=data is not None,
@@ -2016,6 +2030,7 @@ class RunnerHandler(BaseHTTPRequestHandler):
                     status=400,
                 )
                 return
+            data = _tellme_handoff_payload(bridge, data)
             self._send_json(_api_envelope(
                 ok=True,
                 data=data,

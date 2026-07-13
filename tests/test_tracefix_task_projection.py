@@ -10,6 +10,7 @@ from tellme_harness.query_analysis import analyze_query
 from tellme_harness.route_policy import decide_route, infer_time_window
 from tellme_harness.schemas import TellMeQuery
 from tracefix.runtime.single_agent_fastpath import _extract_structured_task
+from tracefix.runner_ui.server import _tellme_handoff_payload
 
 
 def test_bridge_uses_compact_projection_but_keeps_full_tellme_artifacts(tmp_path: Path) -> None:
@@ -20,6 +21,9 @@ def test_bridge_uses_compact_projection_but_keeps_full_tellme_artifacts(tmp_path
     )
 
     task_text = bridge.tracefix_task_text()
+    api_data = _tellme_handoff_payload(bridge, result)
+    assert api_data is not None
+    assert api_data["tracefix_handoff_text"] == task_text
     compact = _extract_structured_task(task_text)
     assert compact is not None
     assert len(task_text) < 5000
