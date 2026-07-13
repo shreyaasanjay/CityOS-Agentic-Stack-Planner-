@@ -11,6 +11,7 @@ from typing import Any
 
 from tellme_harness import TellMeHarness
 from tellme_harness.config import DEFAULT_OPENAI_MODEL, DEFAULT_OPENAI_TIMEOUT_SECONDS, get_llm_config
+from tellme_harness.tracefix_projection import build_tracefix_task_projection
 from tracefix.pipeline_timing import PipelineTimingReport
 
 
@@ -184,6 +185,16 @@ class TellMeBridge:
                 f"The current TeLLMe run is not eligible for TraceFix design: {tellme.get('status') or 'unknown'}."
             )
 
+        run_dir = Path(str(tellme.get("run_dir") or ""))
+        execution_brief = tellme.get("execution_brief")
+        execution_brief = execution_brief if isinstance(execution_brief, dict) else {}
+        compact_spec = build_tracefix_task_projection(
+            task_spec,
+            execution_brief=execution_brief,
+            discovery_snapshot=self._read_json(run_dir / "cityos_capability_snapshot.json"),
+            discovery_provenance=self._read_json(run_dir / "discovery_provenance.json"),
+        )
+
         return "\n".join(
             [
                 "TeLLMe structured smart-room application requirements.",
@@ -192,7 +203,7 @@ class TellMeBridge:
                 "Do not execute production agents or bypass PlusCal/TLC verification.",
                 "",
                 "Structured task specification:",
-                json.dumps(task_spec, indent=2, ensure_ascii=False),
+                json.dumps(compact_spec, indent=2, ensure_ascii=False),
             ]
         )
 

@@ -65,12 +65,12 @@ def decide_route(query: TellMeQuery, analysis: QueryAnalysis) -> RouteDecision:
             caveats=["A non-empty user question is required."],
         )
 
-    if any(token in lowered for token in ("raw video", "raw audio", "raw sensor", "transcript", "who was speaking")):
+    if any(token in lowered for token in ("raw video", "raw audio", "raw sensor", "transcript", "who was speaking")) or _requests_person_identity(lowered):
         return RouteDecision(
             route="not_allowed",
             intent="policy_privacy",
-            rationale="The request asks for raw sensor access outside the V0 privacy boundary.",
-            caveats=["V0 can only use CityOS-style structured context, not raw sensor artifacts, speaker identity, or unrestricted transcription."],
+            rationale="The request asks for raw sensor access or person-level identity claims outside the V0 privacy boundary.",
+            caveats=["V0 can only use CityOS-style structured context, not raw sensor artifacts, speaker identity, person identity, or unrestricted transcription."],
         )
 
     score = score_query_analysis(analysis)
@@ -112,28 +112,69 @@ def decide_route(query: TellMeQuery, analysis: QueryAnalysis) -> RouteDecision:
     )
 
 
+def _requests_person_identity(lowered: str) -> bool:
+    """Block narrow, explicit requests to identify people in a space."""
+    patterns = (
+        r"\bidentify\b.{0,50}\b(person|individual|occupant|someone|name)\b",
+        r"\bwho\b.{0,50}\b(is|was|are|were|in the room|present|entered|speaking)\b",
+        r"\bname\b.{0,40}\b(person|individual|occupant|speaker)\b",
+        r"\b(face|speaker|personal)\s+identity\b",
+    )
+    return any(re.search(pattern, lowered) for pattern in patterns)
+
+
 def infer_time_window(user_query: str, timestamp: Optional[str] = None) -> Optional[TimeWindow]:
     if timestamp:
         return TimeWindow(start=timestamp, end=timestamp, label="explicit_timestamp")
 
     lowered = user_query.lower()
-    between_match = re.search(r"between\s+(\d{1,2}:\d{2})\s+and\s+(\d{1,2}:\d{2})", lowered)
+    clock = r"(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)"
+    between_match = re.search(rf"between\s+{clock}\s+and\s+{clock}", lowered)
     if between_match:
-        return TimeWindow(start=between_match.group(1), end=between_match.group(2), label="query_range")
+        return TimeWindow(
+            start=_normalize_clock_value(between_match.group(1)),
+            end=_normalize_clock_value(between_match.group(2)),
+            label="query_range",
+        )
 
-    at_match = re.search(r"\bat\s+(\d{1,2}:\d{2})\b", lowered)
+    at_match = re.search(rf"\bat\s+{clock}\b", lowered)
     if at_match:
-        time_value = at_match.group(1)
+        time_value = _normalize_clock_value(at_match.group(1))
         return TimeWindow(start=time_value, end=time_value, label="query_timestamp")
 
-    around_match = re.search(r"\baround\s+([0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)?)", lowered)
+    around_match = re.search(rf"\baround\s+{clock}\b", lowered)
     if around_match:
-        time_value = around_match.group(1)
+        time_value = _normalize_clock_value(around_match.group(1))
         return TimeWindow(start=time_value, end=time_value, label="approximate_query_timestamp")
+
+    boundary_match = re.search(rf"\b(after|before|until|through|from)\s+{clock}\b", lowered)
+    if boundary_match:
+        boundary, raw_time = boundary_match.group(1), boundary_match.group(2)
+        time_value = _normalize_clock_value(raw_time)
+        if boundary == "after" or boundary == "from":
+            return TimeWindow(start=time_value, end=None, label=f"{boundary}_time")
+        return TimeWindow(start=None, end=time_value, label=f"{boundary}_time")
 
     if "right now" in lowered or "latest" in lowered:
         return TimeWindow(label="latest")
     return None
+
+
+def _normalize_clock_value(value: str) -> str:
+    match = re.fullmatch(r"\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*", value, re.IGNORECASE)
+    if not match:
+        return value.strip()
+    hour = int(match.group(1))
+    minute = int(match.group(2) or "00")
+    meridiem = (match.group(3) or "").lower()
+    if meridiem:
+        if not 1 <= hour <= 12 or minute > 59:
+            return value.strip()
+        if meridiem == "am":
+            hour = 0 if hour == 12 else hour
+        else:
+            hour = 12 if hour == 12 else hour + 12
+    return f"{hour:02d}:{minute:02d}"
 
 
 def _is_hard_gate_tracefix(analysis: QueryAnalysis) -> bool:
