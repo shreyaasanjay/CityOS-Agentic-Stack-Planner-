@@ -237,8 +237,8 @@ class TraceFixTaskSpec(BaseModel):
     application_goal: Dict[str, Any] = Field(default_factory=dict)
     evidence_plan: Dict[str, Any] = Field(default_factory=dict)
     answer_packet_requirements: Dict[str, Any] = Field(default_factory=dict)
-    # Validated, deterministic card contract carried through to TraceFix. This is
-    # the authoritative card requirement set, not the raw LLM proposal.
+    # Validated, deterministic card contract retained in TeLLMe artifacts. The
+    # bridge's compact TraceFix projection intentionally excludes this UI contract.
     evidence_card_contract: Dict[str, Any] = Field(default_factory=dict)
     output_contract: Dict[str, Any] = Field(
         default_factory=lambda: {
