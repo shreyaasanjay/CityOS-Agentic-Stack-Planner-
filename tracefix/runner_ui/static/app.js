@@ -966,53 +966,114 @@ function personCountLabel(value) {
   return `${count} ${count === 1 ? "person" : "people"}`;
 }
 
+function activityPhrase(labels) {
+  const cleaned = (labels || []).filter(Boolean).map((item) => String(item));
+  if (!cleaned.length) return "the requested activities";
+  if (cleaned.length === 1) return cleaned[0];
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(", ")}, and ${cleaned[cleaned.length - 1]}`;
+}
+
+function answerDateLead(answer) {
+  const requested = answer?.selection?.requestedDateLabel || "";
+  return requested ? `For ${requested}, ` : "";
+}
+
+function stripTechnicalAnswerDetails(text, options = {}) {
+  let cleaned = String(text || "").trim();
+  if (!cleaned) return "";
+  cleaned = cleaned.replace(/\s+This uses matching track\/person IDs across the activity and pose endpoints\./g, "");
+  cleaned = cleaned.replace(/\s+Counts are per detected activity label\/track; ask for 'both'[^.]*\./g, "");
+  cleaned = cleaned.replace(/\s+The API data did not include matching track\/person IDs[^.]*\./g, "");
+  if (!options.keepBreakdown) cleaned = cleaned.replace(/\s+Camera breakdown:[^.]*\./g, "");
+  if (!options.keepActivities) cleaned = cleaned.replace(/\s+Detected activities\/poses included[^.]*\./g, "");
+  cleaned = cleaned.replace(/\s+\((?:day_|rec_)[^)]+\)/g, "");
+  return cleaned.replace(/\s+/g, " ").trim();
+}
+
+function questionAsksForActivity(question) {
+  const text = ` ${String(question || "").toLowerCase()} `;
+  return [
+    " activity ", " activities ", " action ", " actions ", " doing ", " pose ", " poses ",
+    " standing ", " talking ", " sitting ", " walking ", " clapping ", " moving ", " typing "
+  ].some((token) => text.includes(token));
+}
+
+function conciseRequestedActivityAnswer(answer) {
+  const requested = Array.isArray(answer?.requestedActivities) ? answer.requestedActivities : [];
+  const lead = answerDateLead(answer);
+  const combination = answer?.requestedActivityCombination || null;
+  if (combination?.exact) {
+    const labels = Array.isArray(combination.labels) ? combination.labels : requested;
+    return `${lead}${personCountLabel(combination.count || 0)} were both ${activityPhrase(labels)}.`;
+  }
+  if (requested.length) {
+    const counts = answer?.requestedActivityCounts || answer?.activityCounts || {};
+    const pieces = requested.map((label) => `${label}: ${personCountLabel(counts[label] || 0)}`);
+    return `${lead}${pieces.join(", ")}.`;
+  }
+  return stripTechnicalAnswerDetails(answer?.requestedActivityAnswer || "", { keepActivities: true });
+}
+
+function conciseOccupancyAnswer(answer) {
+  const cameras = Array.isArray(answer?.cameras) ? answer.cameras : [];
+  const peaks = [];
+  const latestParts = [];
+  cameras.forEach((camera) => {
+    if (camera.peakPeople !== null && camera.peakPeople !== undefined) {
+      const peak = Number(camera.peakPeople);
+      if (Number.isFinite(peak)) peaks.push(peak);
+    }
+    if (camera.lastPeople !== null && camera.lastPeople !== undefined) {
+      latestParts.push(`${formatCameraNameForAnswer(camera.camera)}: ${personCountLabel(camera.lastPeople)}`);
+    }
+  });
+  const lead = answerDateLead(answer);
+  const sentences = [];
+  if (peaks.length) {
+    sentences.push(`${lead}the peak observed occupancy was ${personCountLabel(Math.max(...peaks))} overall.`);
+  }
+  if (latestParts.length) {
+    sentences.push(`The latest observed counts were ${latestParts.join("; ")}.`);
+  }
+  return sentences.join(" ");
+}
+
+function conciseActivityOverviewAnswer(answer) {
+  const cameras = Array.isArray(answer?.cameras) ? answer.cameras : [];
+  const activityParts = [];
+  cameras.forEach((camera) => {
+    const activities = camera.activities?.length ? camera.activities : camera.actions;
+    if (activities?.length) {
+      activityParts.push(`${formatCameraNameForAnswer(camera.camera)}: ${activities.slice(0, 6).join(", ")}`);
+    }
+  });
+  if (!activityParts.length) return "";
+  return `${answerDateLead(answer)}the observed activities/poses were ${activityParts.join("; ")}.`;
+}
+
 function renderTellMeChatAnswer(data) {
   if (!data) return "No answer yet. Run the full pipeline to generate a data-backed response.";
   const answer = data.web_data_answer || data.answer_packet?.answer || null;
-  const chatAnswer = data.chat_answer || answer?.chatAnswer || answer?.chat_answer || "";
-  if (chatAnswer) return chatAnswer;
+  const fallback = data.chat_answer || answer?.chatAnswer || answer?.chat_answer || "";
+  if (!answer) return fallback || "No smartroom camera result is available yet. Run the web data apps after synthesis to generate the answer.";
 
-  const cameras = Array.isArray(answer?.cameras) ? answer.cameras : [];
-  if (!cameras.length) {
-    return "No smartroom camera result is available yet. Run the web data apps after synthesis to generate the answer.";
+  const question = data.query || answer.question || "";
+  const requestedActivityText = conciseRequestedActivityAnswer(answer);
+  if (requestedActivityText) return requestedActivityText;
+
+  if (questionAsksForActivity(question)) {
+    const activityAnswer = conciseActivityOverviewAnswer(answer);
+    if (activityAnswer) return activityAnswer;
   }
-  const cameraParts = [];
-  const latestParts = [];
-  const activityParts = [];
-  const peaks = [];
-  cameras.forEach((camera) => {
-    const name = formatCameraNameForAnswer(camera.camera);
-    if (camera.peakPeople !== null && camera.peakPeople !== undefined) {
-      const peak = Number(camera.peakPeople);
-      if (Number.isFinite(peak)) {
-        peaks.push(peak);
-        cameraParts.push(`${name} peaked at ${personCountLabel(peak)}`);
-      }
-    }
-    if (camera.lastPeople !== null && camera.lastPeople !== undefined) {
-      latestParts.push(`${name} most recently showed ${personCountLabel(camera.lastPeople)}`);
-    }
-    const activities = camera.activities?.length ? camera.activities : camera.actions;
-    if (activities?.length) {
-      activityParts.push(`${name}: ${activities.slice(0, 8).join(", ")}`);
-    }
-  });
-  if (!cameraParts.length) {
-    return "I found the latest smartroom recording, but there was not enough occupancy data to summarize yet.";
-  }
-  const overallPeak = peaks.length ? Math.max(...peaks) : null;
-  const recording = answer?.recording ? [answer.recording.day, answer.recording.rec].filter(Boolean).join(" / ") : "";
-  const requestedLabel = answer?.selection?.requestedDateLabel || "";
-  let text = requestedLabel
-    ? (recording ? `For ${requestedLabel} (${recording}), ` : `For ${requestedLabel}, `)
-    : (recording ? `For the latest recording (${recording}), ` : "For the latest recording, ");
-  text += `${cameraParts.join(", and ")}.`;
-  if (overallPeak !== null) text += ` Across the observed time window, the peak occupancy was ${personCountLabel(overallPeak)} overall.`;
-  if (latestParts.length) text += ` At the latest observed moment, ${latestParts.join(", and ")}.`;
-  if (activityParts.length) text += ` Detected activities/poses included ${activityParts.join("; ")}.`;
-  return text;
+
+  const occupancyAnswer = conciseOccupancyAnswer(answer);
+  if (occupancyAnswer) return occupancyAnswer;
+
+  const cleanedFallback = stripTechnicalAnswerDetails(fallback, { keepActivities: questionAsksForActivity(question) });
+  if (cleanedFallback) return cleanedFallback;
+  return "I found the smartroom recording, but there was not enough relevant data to answer the question yet.";
 }
-
 function renderTellMeAnswerSummary(data) {
   if (!data) return "No answer summary yet.";
   const lines = [];

@@ -1,8 +1,8 @@
 {
-  "run_id": "tellme_dcb1dfa52bf9",
+  "run_id": "tellme_e7a429e3a156",
   "tellme": {
-    "query_id": "tellme_dcb1dfa52bf9",
-    "query": "How many people are in the room on June 24th?",
+    "query_id": "tellme_e7a429e3a156",
+    "query": "Is a person jumping on June 24th? (Yes/No)",
     "mode": "llm",
     "model": "gpt-4.1-mini",
     "api_key_detected": true,
@@ -10,11 +10,11 @@
     "status": "needs_tracefix",
     "route_decision": {
       "route": "single_agent",
-      "intent": "historical_lookup",
-      "selected_agent": "occupancy_context_agent",
-      "selected_tool": "get_occupancy_context",
+      "intent": "general",
+      "selected_agent": "general_context_agent",
+      "selected_tool": "cityos_context_lookup",
       "required_tools": [
-        "get_occupancy_context"
+        "cityos_context_lookup"
       ],
       "rationale": "The query appears answerable with one focused CityOS-style context lookup.",
       "time_window": null,
@@ -40,9 +40,9 @@
       "harness_subtasks": [
         {
           "expected_modalities": [
-            "video"
+            "context"
           ],
-          "harness_name": "occupancy_context_harness",
+          "harness_name": "answer_synthesis_harness",
           "space_id": "smart_room_1",
           "time_window": null
         }
@@ -54,11 +54,9 @@
       "needs_temporal_consistency": false,
       "output_contract": {
         "allowed_claims": [
-          "bounded_count",
-          "presence_state",
-          "timestamped_event_summary"
+          "insufficient_evidence"
         ],
-        "answer_type": "direct_answer",
+        "answer_type": "insufficient_evidence",
         "fallback_answer_type": "insufficient_evidence",
         "field_types": {
           "answer": "string",
@@ -73,7 +71,8 @@
           "face_identity",
           "personal_identity",
           "medical_diagnosis",
-          "unsupported_behavioral_inference"
+          "unsupported_behavioral_inference",
+          "guessing"
         ],
         "must_include_confidence": true,
         "must_include_evidence_refs": true,
@@ -88,18 +87,17 @@
         ]
       },
       "plan_type": "tracefix",
-      "query_id": "tellme_dcb1dfa52bf9",
+      "query_id": "tellme_e7a429e3a156",
       "required_harnesses": [
-        "occupancy_context_harness"
+        "answer_synthesis_harness"
       ],
       "required_modalities": [
-        "video"
+        "context"
       ],
       "safety_caveats": [
         "This is a stub only; TraceFix-main is not invoked in V0.",
         "Real TraceFix multi-agent execution is not integrated yet.",
         "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
-        "No available sensor supports 'room_state' context for this space.",
         "Mock CityOS structured context may be incomplete.",
         "Confidence must remain bounded by available evidence.",
         "Use CityOS structured context only.",
@@ -111,9 +109,7 @@
     },
     "execution_brief": {
       "allowed_claims": [
-        "bounded_count",
-        "presence_state",
-        "timestamped_event_summary"
+        "insufficient_evidence"
       ],
       "ambiguity": {
         "ambiguity_type": null,
@@ -124,18 +120,17 @@
       },
       "answer_packet_requirements": {
         "allowed_claims": [
-          "bounded_count",
-          "presence_state",
-          "timestamped_event_summary"
+          "insufficient_evidence"
         ],
-        "answer_type": "direct_answer",
+        "answer_type": "insufficient_evidence",
         "fallback_answer_type": "insufficient_evidence",
         "forbidden_claims": [
           "raw_sensor_access",
           "face_identity",
           "personal_identity",
           "medical_diagnosis",
-          "unsupported_behavioral_inference"
+          "unsupported_behavioral_inference",
+          "guessing"
         ],
         "must_include_confidence": true,
         "must_include_evidence_refs": true,
@@ -151,7 +146,7 @@
       },
       "application_goal": {
         "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
-        "goal_type": "occupancy_count",
+        "goal_type": "unsupported",
         "non_goals": [
           "identify person",
           "face recognition",
@@ -159,18 +154,16 @@
           "infer cause or intent"
         ],
         "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
-        "user_intent": "occupancy_lookup"
+        "user_intent": "general_lookup"
       },
-      "brief_id": "brief_task_dcb1dfa52bf9",
+      "brief_id": "brief_task_e7a429e3a156",
       "candidate_harnesses": [
-        "occupancy_context_harness",
         "answer_synthesis_harness"
       ],
       "caveats": [
         "This is a stub only; TraceFix-main is not invoked in V0.",
         "Real TraceFix multi-agent execution is not integrated yet.",
         "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
-        "No available sensor supports 'room_state' context for this space.",
         "Mock CityOS structured context may be incomplete.",
         "Confidence must remain bounded by available evidence.",
         "Use CityOS structured context only.",
@@ -185,9 +178,7 @@
       ],
       "evidence_card_requirements": {
         "allowed_conclusion_types": [
-          "observed_state",
-          "bounded_count",
-          "presence_state"
+          "insufficient_evidence"
         ],
         "badge_requirements": [
           {
@@ -195,21 +186,15 @@
             "label_template": "{card_type}",
             "required": true,
             "source": "query_analysis"
-          },
-          {
-            "badge_id": "modality",
-            "label_template": "{modalities}",
-            "required": false,
-            "source": "harness_output"
           }
         ],
-        "card_type": "descriptive",
+        "card_type": "insufficient_evidence",
         "caveat_requirements": [
-          "Reflects structured context only; no causal interpretation."
+          "A stronger answer was not produced because the bounded evidence was insufficient."
         ],
-        "claim_target": "observed_room_state",
+        "claim_target": "insufficient_evidence",
         "confidence_requirements": {
-          "confidence_kind": "sensor_confidence",
+          "confidence_kind": "composite_confidence",
           "explanation_required": true,
           "label_bands": {
             "high": [
@@ -226,121 +211,83 @@
             ]
           },
           "minimum_threshold": null,
-          "required_inputs": [
-            "sensor_confidence",
-            "evidence_count"
-          ],
-          "scoring_method": "bounded_sensor_confidence"
+          "required_inputs": [],
+          "scoring_method": "none"
         },
-        "evidence_requirements": [
-          {
-            "accepted_packet_types": [
-              "occupancy_context_packet",
-              "room_state_packet",
-              "motion_context_packet",
-              "audio_context_packet"
-            ],
-            "evidence_type": "structured_context",
-            "include_evidence_refs": true,
-            "include_modality": true,
-            "include_time_window": true,
-            "minimum_count": 1,
-            "required": true
-          }
-        ],
+        "evidence_requirements": [],
         "fallback_card_type": "insufficient_evidence",
         "forbidden_conclusion_types": [
-          "causal_effect",
-          "statistical_significance",
-          "causal_graph_claim",
-          "raw_sensor_access",
-          "face_identity",
           "personal_identity",
+          "face_identity",
           "medical_diagnosis",
-          "unsupported_behavioral_inference",
           "confirmed_injury",
-          "cause_or_intent_inference"
+          "cause_or_intent_inference",
+          "unsupported_behavioral_inference",
+          "raw_sensor_access",
+          "fabricated_confidence",
+          "guessing"
         ],
         "metric_requirements": [
           {
-            "description": "The value observed in the time window (e.g. occupancy count or state).",
-            "display_label": "Observed value",
-            "metric_id": "observed_value",
-            "required": true,
-            "source": "harness_output",
-            "source_field": "value",
-            "unavailable_behavior": "show_na",
-            "value_type": "category"
-          },
-          {
-            "description": "Bounded window the observation covers.",
-            "display_label": "Time window",
-            "metric_id": "time_window",
-            "required": true,
-            "source": "harness_output",
-            "source_field": "timestamp",
-            "unavailable_behavior": "show_na",
-            "value_type": "range"
-          },
-          {
-            "description": "Sensor modalities that contributed.",
-            "display_label": "Modalities used",
-            "metric_id": "modalities_used",
+            "description": "What the system could establish, if anything.",
+            "display_label": "What was determined",
+            "metric_id": "what_determined",
             "required": true,
             "source": "aggregator",
             "source_field": null,
             "unavailable_behavior": "show_na",
-            "value_type": "category"
+            "value_type": "text"
           },
           {
-            "description": "Number of supporting context packets.",
-            "display_label": "Evidence count",
-            "metric_id": "evidence_count",
+            "description": "What evidence was missing or insufficient.",
+            "display_label": "Missing evidence",
+            "metric_id": "missing_evidence",
             "required": true,
             "source": "aggregator",
             "source_field": null,
             "unavailable_behavior": "show_na",
-            "value_type": "integer"
+            "value_type": "text"
           },
           {
-            "description": "Fraction of modalities in agreement.",
-            "display_label": "Sensor agreement",
-            "metric_id": "sensor_agreement",
+            "description": "Which harness or modality failed, if safe to disclose.",
+            "display_label": "Failed harness/modality",
+            "metric_id": "failed_modality",
             "required": false,
-            "source": "aggregator",
+            "source": "tracefix_verification",
             "source_field": null,
-            "unavailable_behavior": "show_na",
-            "value_type": "percentage"
+            "unavailable_behavior": "omit",
+            "value_type": "text"
           }
         ],
-        "primary_question": "What did the structured context observe?",
+        "primary_question": "Could the system answer this from the available evidence?",
         "provenance_requirements": [
-          "List the harness/packet ids backing the observed value."
+          "List which expected packets were missing or empty."
         ],
         "summary_requirements": [
-          "State the observed value and its bounded time window in one sentence."
+          "State what could and could not be determined; do not fabricate confidence."
         ],
-        "title_template": "{primary_question}"
+        "title_template": "Insufficient evidence to answer confidently"
       },
       "evidence_plan": {
         "conflicting_evidence_checks": [],
         "minimum_sufficient_evidence": [
-          "occupancy_context_packet"
+          "general_context_packet"
         ],
         "primary_evidence": [
-          "occupancy_context_packet"
+          "general_context_packet"
         ],
         "supporting_evidence": []
       },
-      "executable": true,
+      "executable": false,
       "forbidden_claims": [
         "raw_sensor_access",
         "face_identity",
         "personal_identity",
         "medical_diagnosis",
-        "unsupported_behavioral_inference"
+        "unsupported_behavioral_inference",
+        "guessing"
       ],
-      "normalized_query": "how many people are in the room on june 24th?",
+      "normalized_query": "is a person jumping on june 24th? (yes/no)",
       "privacy_policy": {
         "forbidden_inferences": [
           "raw_sensor_access",
@@ -358,10 +305,10 @@
         "privacy_scope": "cityos_structured_context_only",
         "raw_sensor_access_allowed": false
       },
-      "query_id": "tellme_dcb1dfa52bf9",
-      "reasoning_summary": "Deterministic template proposal generated for query tellme_dcb1dfa52bf9.",
+      "query_id": "tellme_e7a429e3a156",
+      "reasoning_summary": "Deterministic template proposal generated for query tellme_e7a429e3a156.",
       "required_modalities": [
-        "video"
+        "context"
       ],
       "room_capability_context": {
         "available_context_apis": [
@@ -388,10 +335,10 @@
           "get_room_state",
           "get_speech_activity_context"
         ],
-        "coverage_gaps": [
-          "No available sensor supports 'room_state' context for this space."
+        "coverage_gaps": [],
+        "notes": [
+          "No primary sensor is available for this query; planning relies on general context."
         ],
-        "notes": [],
         "privacy_policy": {
           "forbidden_inferences": [
             "raw_sensor_access",
@@ -414,7 +361,7 @@
           "privacy_scope": "cityos_structured_context_only",
           "raw_sensor_access_allowed": false
         },
-        "query_id": "tellme_dcb1dfa52bf9",
+        "query_id": "tellme_e7a429e3a156",
         "relevant_sensors": [
           {
             "allowed_api_names": [
@@ -441,8 +388,8 @@
               "Cannot verify events outside the doorway field of view."
             ],
             "modality": "video",
-            "reason": "Modality or supported context type matches the query requirements.",
-            "relevance": "primary",
+            "reason": "Not directly targeted but available for corroboration.",
+            "relevance": "supporting",
             "restricted_api_names": [
               "get_raw_video_reference"
             ],
@@ -479,8 +426,8 @@
               "Posture signals are candidate-level only."
             ],
             "modality": "video",
-            "reason": "Modality or supported context type matches the query requirements.",
-            "relevance": "primary",
+            "reason": "Not directly targeted but available for corroboration.",
+            "relevance": "supporting",
             "restricted_api_names": [
               "get_raw_video_reference"
             ],
@@ -586,9 +533,9 @@
       },
       "route": "single_agent",
       "space_id": "smart_room_1",
-      "task_category": "occupancy_count",
+      "task_category": "unsupported",
       "time_windows": [],
-      "user_query": "How many people are in the room on June 24th?",
+      "user_query": "Is a person jumping on June 24th? (Yes/No)",
       "validation_policy": {
         "bounded_time_windows_required": true,
         "llm_proposal_untrusted": true,
@@ -596,26 +543,27 @@
         "repairs": [],
         "schema_validation_required": true,
         "validation_status": "accepted",
-        "warnings": []
+        "warnings": [
+          "Proposal was marked unsupported and will compile to an insufficient-evidence TaskSpec."
+        ]
       }
     },
     "tracefix_task_spec": {
-      "task_id": "task_dcb1dfa52bf9",
-      "query_id": "tellme_dcb1dfa52bf9",
-      "user_query": "How many people are in the room on June 24th?",
+      "task_id": "task_e7a429e3a156",
+      "query_id": "tellme_e7a429e3a156",
+      "user_query": "Is a person jumping on June 24th? (Yes/No)",
       "space_id": "smart_room_1",
       "route": "single_agent",
       "time_windows": [],
       "required_modalities": [
-        "video"
+        "context"
       ],
       "candidate_harnesses": [
-        "occupancy_context_harness",
         "answer_synthesis_harness"
       ],
       "application_goal": {
-        "goal_type": "occupancy_count",
-        "user_intent": "occupancy_lookup",
+        "goal_type": "unsupported",
+        "user_intent": "general_lookup",
         "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
         "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
         "non_goals": [
@@ -627,16 +575,16 @@
       },
       "evidence_plan": {
         "primary_evidence": [
-          "occupancy_context_packet"
+          "general_context_packet"
         ],
         "supporting_evidence": [],
         "minimum_sufficient_evidence": [
-          "occupancy_context_packet"
+          "general_context_packet"
         ],
         "conflicting_evidence_checks": []
       },
       "answer_packet_requirements": {
-        "answer_type": "direct_answer",
+        "answer_type": "insufficient_evidence",
         "required_fields": [
           "answer",
           "confidence",
@@ -646,16 +594,15 @@
           "limitations"
         ],
         "allowed_claims": [
-          "bounded_count",
-          "presence_state",
-          "timestamped_event_summary"
+          "insufficient_evidence"
         ],
         "forbidden_claims": [
           "raw_sensor_access",
           "face_identity",
           "personal_identity",
           "medical_diagnosis",
-          "unsupported_behavioral_inference"
+          "unsupported_behavioral_inference",
+          "guessing"
         ],
         "must_include_confidence": true,
         "must_include_evidence_refs": true,
@@ -663,26 +610,23 @@
         "fallback_answer_type": "insufficient_evidence"
       },
       "evidence_card_contract": {
-        "card_type": "descriptive",
-        "primary_question": "What did the structured context observe?",
-        "title_template": "{primary_question}",
-        "claim_target": "observed_room_state",
+        "card_type": "insufficient_evidence",
+        "primary_question": "Could the system answer this from the available evidence?",
+        "title_template": "Insufficient evidence to answer confidently",
+        "claim_target": "insufficient_evidence",
         "allowed_conclusion_types": [
-          "observed_state",
-          "bounded_count",
-          "presence_state"
+          "insufficient_evidence"
         ],
         "forbidden_conclusion_types": [
-          "causal_effect",
-          "statistical_significance",
-          "causal_graph_claim",
-          "raw_sensor_access",
-          "face_identity",
           "personal_identity",
+          "face_identity",
           "medical_diagnosis",
-          "unsupported_behavioral_inference",
           "confirmed_injury",
-          "cause_or_intent_inference"
+          "cause_or_intent_inference",
+          "unsupported_behavioral_inference",
+          "raw_sensor_access",
+          "fabricated_confidence",
+          "guessing"
         ],
         "badge_requirements": [
           {
@@ -690,75 +634,46 @@
             "label_template": "{card_type}",
             "source": "query_analysis",
             "required": true
-          },
-          {
-            "badge_id": "modality",
-            "label_template": "{modalities}",
-            "source": "harness_output",
-            "required": false
           }
         ],
         "metric_requirements": [
           {
-            "metric_id": "observed_value",
-            "display_label": "Observed value",
-            "description": "The value observed in the time window (e.g. occupancy count or state).",
+            "metric_id": "what_determined",
+            "display_label": "What was determined",
+            "description": "What the system could establish, if anything.",
             "required": true,
-            "value_type": "category",
-            "source": "harness_output",
-            "source_field": "value",
-            "unavailable_behavior": "show_na"
-          },
-          {
-            "metric_id": "time_window",
-            "display_label": "Time window",
-            "description": "Bounded window the observation covers.",
-            "required": true,
-            "value_type": "range",
-            "source": "harness_output",
-            "source_field": "timestamp",
-            "unavailable_behavior": "show_na"
-          },
-          {
-            "metric_id": "modalities_used",
-            "display_label": "Modalities used",
-            "description": "Sensor modalities that contributed.",
-            "required": true,
-            "value_type": "category",
+            "value_type": "text",
             "source": "aggregator",
             "source_field": null,
             "unavailable_behavior": "show_na"
           },
           {
-            "metric_id": "evidence_count",
-            "display_label": "Evidence count",
-            "description": "Number of supporting context packets.",
+            "metric_id": "missing_evidence",
+            "display_label": "Missing evidence",
+            "description": "What evidence was missing or insufficient.",
             "required": true,
-            "value_type": "integer",
+            "value_type": "text",
             "source": "aggregator",
             "source_field": null,
             "unavailable_behavior": "show_na"
           },
           {
-            "metric_id": "sensor_agreement",
-            "display_label": "Sensor agreement",
-            "description": "Fraction of modalities in agreement.",
+            "metric_id": "failed_modality",
+            "display_label": "Failed harness/modality",
+            "description": "Which harness or modality failed, if safe to disclose.",
             "required": false,
-            "value_type": "percentage",
-            "source": "aggregator",
+            "value_type": "text",
+            "source": "tracefix_verification",
             "source_field": null,
-            "unavailable_behavior": "show_na"
+            "unavailable_behavior": "omit"
           }
         ],
         "summary_requirements": [
-          "State the observed value and its bounded time window in one sentence."
+          "State what could and could not be determined; do not fabricate confidence."
         ],
         "confidence_requirements": {
-          "confidence_kind": "sensor_confidence",
-          "required_inputs": [
-            "sensor_confidence",
-            "evidence_count"
-          ],
+          "confidence_kind": "composite_confidence",
+          "required_inputs": [],
           "minimum_threshold": null,
           "label_bands": {
             "low": [
@@ -775,29 +690,14 @@
             ]
           },
           "explanation_required": true,
-          "scoring_method": "bounded_sensor_confidence"
+          "scoring_method": "none"
         },
-        "evidence_requirements": [
-          {
-            "evidence_type": "structured_context",
-            "required": true,
-            "minimum_count": 1,
-            "accepted_packet_types": [
-              "occupancy_context_packet",
-              "room_state_packet",
-              "motion_context_packet",
-              "audio_context_packet"
-            ],
-            "include_evidence_refs": true,
-            "include_time_window": true,
-            "include_modality": true
-          }
-        ],
+        "evidence_requirements": [],
         "caveat_requirements": [
-          "Reflects structured context only; no causal interpretation."
+          "A stronger answer was not produced because the bounded evidence was insufficient."
         ],
         "provenance_requirements": [
-          "List the harness/packet ids backing the observed value."
+          "List which expected packets were missing or empty."
         ],
         "fallback_card_type": "insufficient_evidence"
       },
@@ -818,19 +718,18 @@
           "privacy_scope": "string",
           "limitations": "array"
         },
-        "answer_type": "direct_answer",
+        "answer_type": "insufficient_evidence",
         "fallback_answer_type": "insufficient_evidence",
         "allowed_claims": [
-          "bounded_count",
-          "presence_state",
-          "timestamped_event_summary"
+          "insufficient_evidence"
         ],
         "forbidden_claims": [
           "raw_sensor_access",
           "face_identity",
           "personal_identity",
           "medical_diagnosis",
-          "unsupported_behavioral_inference"
+          "unsupported_behavioral_inference",
+          "guessing"
         ],
         "must_include_confidence": true,
         "must_include_evidence_refs": true,
@@ -860,7 +759,9 @@
         "must_preserve_forbidden_claims": true,
         "validation_status": "accepted",
         "repairs": [],
-        "warnings": []
+        "warnings": [
+          "Proposal was marked unsupported and will compile to an insufficient-evidence TaskSpec."
+        ]
       },
       "escalation_conditions": [
         "insufficient_evidence",
@@ -872,23 +773,21 @@
         "face_identity",
         "personal_identity",
         "medical_diagnosis",
-        "unsupported_behavioral_inference"
+        "unsupported_behavioral_inference",
+        "guessing"
       ],
       "allowed_claims": [
-        "bounded_count",
-        "presence_state",
-        "timestamped_event_summary"
+        "insufficient_evidence"
       ],
-      "reasoning_summary": "Deterministic template proposal generated for query tellme_dcb1dfa52bf9.",
-      "executable": true,
-      "reason": "occupancy_lookup",
+      "reasoning_summary": "Deterministic template proposal generated for query tellme_e7a429e3a156.",
+      "executable": false,
+      "reason": "general_lookup",
       "target_tracefix_path": "TraceFix-main/",
       "status": "stub",
       "caveats": [
         "This is a stub only; TraceFix-main is not invoked in V0.",
         "Real TraceFix multi-agent execution is not integrated yet.",
         "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
-        "No available sensor supports 'room_state' context for this space.",
         "Mock CityOS structured context may be incomplete.",
         "Confidence must remain bounded by available evidence.",
         "Use CityOS structured context only.",
@@ -902,19 +801,9 @@
         {
           "name": "answer_synthesis_harness",
           "role": "Synthesize a final answer packet with caveats and evidence references."
-        },
-        {
-          "name": "occupancy_context_harness",
-          "role": "Retrieve occupancy-oriented structured context."
         }
       ],
-      "channels": [
-        {
-          "from": "occupancy_context_harness",
-          "label": "occupancy_findings",
-          "to": "answer_synthesis_harness"
-        }
-      ],
+      "channels": [],
       "notes": [
         "Dry-run bundle only; do not invoke real TraceFix-main.",
         "This bundle is an inspectable artifact representing future integration inputs.",
@@ -924,11 +813,9 @@
       ],
       "output_contract": {
         "allowed_claims": [
-          "bounded_count",
-          "presence_state",
-          "timestamped_event_summary"
+          "insufficient_evidence"
         ],
-        "answer_type": "direct_answer",
+        "answer_type": "insufficient_evidence",
         "fallback_answer_type": "insufficient_evidence",
         "field_types": {
           "answer": "string",
@@ -943,7 +830,8 @@
           "face_identity",
           "personal_identity",
           "medical_diagnosis",
-          "unsupported_behavioral_inference"
+          "unsupported_behavioral_inference",
+          "guessing"
         ],
         "must_include_confidence": true,
         "must_include_evidence_refs": true,
@@ -957,11 +845,11 @@
           "limitations"
         ]
       },
-      "query_id": "tellme_dcb1dfa52bf9",
+      "query_id": "tellme_e7a429e3a156",
       "resources": [
         {
           "modalities": [
-            "video"
+            "context"
           ],
           "name": "cityos_structured_context",
           "space_id": "smart_room_1",
@@ -970,24 +858,21 @@
         },
         {
           "name": "tellme_query_logs",
-          "query_id": "tellme_dcb1dfa52bf9",
+          "query_id": "tellme_e7a429e3a156",
           "type": "local_query_run_directory"
         }
       ],
-      "task_description": "# TraceFix Dry-Run Task\n\n## User Query\nHow many people are in the room on June 24th?\n\n## Scope\n- space_id: smart_room_1\n- privacy boundary: CityOS structured context only\n- raw sensor policy: no raw sensor data may be used; inputs are CityOS structured context, not raw sensor data\n\n## Time Windows\n- none specified\n\n## Required Modalities\n- video\n\n## Candidate Harnesses\n- answer_synthesis_harness\n- occupancy_context_harness\n\n## Application Goal\n- failure_condition: Return insufficient_evidence or escalate when the structured context is inadequate.\n- goal_type: occupancy_count\n- non_goals: ['identify person', 'face recognition', 'medical diagnosis', 'infer cause or intent']\n- success_condition: Return a privacy-bounded answer packet with confidence and evidence refs.\n- user_intent: occupancy_lookup\n\n## Evidence Plan\n- conflicting_evidence_checks: []\n- minimum_sufficient_evidence: ['occupancy_context_packet']\n- primary_evidence: ['occupancy_context_packet']\n- supporting_evidence: []\n\n## Answer Packet Requirements\n- allowed_claims: ['bounded_count', 'presence_state', 'timestamped_event_summary']\n- answer_type: direct_answer\n- fallback_answer_type: insufficient_evidence\n- forbidden_claims: ['raw_sensor_access', 'face_identity', 'personal_identity', 'medical_diagnosis', 'unsupported_behavioral_inference']\n- must_include_confidence: True\n- must_include_evidence_refs: True\n- must_include_limitations: True\n- required_fields: ['answer', 'confidence', 'evidence_refs', 'caveats', 'privacy_scope', 'limitations']\n\n## Allowed Claims\n- bounded_count, presence_state, timestamped_event_summary\n\n## Forbidden Claims\n- raw_sensor_access, face_identity, personal_identity, medical_diagnosis, unsupported_behavioral_inference\n\n## Expected Output Contract\n- required_fields: answer, confidence, evidence_refs, caveats, privacy_scope, limitations\n- field_types:\n  - answer: string\n  - caveats: array\n  - confidence: number\n  - evidence_refs: array\n  - limitations: array\n  - privacy_scope: string\n\n## Privacy Constraints\n- Use only CityOS-approved structured context.\n- Do not use or request raw sensor data.\n- All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts.",
-      "task_id": "task_dcb1dfa52bf9",
+      "task_description": "# TraceFix Dry-Run Task\n\n## User Query\nIs a person jumping on June 24th? (Yes/No)\n\n## Scope\n- space_id: smart_room_1\n- privacy boundary: CityOS structured context only\n- raw sensor policy: no raw sensor data may be used; inputs are CityOS structured context, not raw sensor data\n\n## Time Windows\n- none specified\n\n## Required Modalities\n- context\n\n## Candidate Harnesses\n- answer_synthesis_harness\n\n## Application Goal\n- failure_condition: Return insufficient_evidence or escalate when the structured context is inadequate.\n- goal_type: unsupported\n- non_goals: ['identify person', 'face recognition', 'medical diagnosis', 'infer cause or intent']\n- success_condition: Return a privacy-bounded answer packet with confidence and evidence refs.\n- user_intent: general_lookup\n\n## Evidence Plan\n- conflicting_evidence_checks: []\n- minimum_sufficient_evidence: ['general_context_packet']\n- primary_evidence: ['general_context_packet']\n- supporting_evidence: []\n\n## Answer Packet Requirements\n- allowed_claims: ['insufficient_evidence']\n- answer_type: insufficient_evidence\n- fallback_answer_type: insufficient_evidence\n- forbidden_claims: ['raw_sensor_access', 'face_identity', 'personal_identity', 'medical_diagnosis', 'unsupported_behavioral_inference', 'guessing']\n- must_include_confidence: True\n- must_include_evidence_refs: True\n- must_include_limitations: True\n- required_fields: ['answer', 'confidence', 'evidence_refs', 'caveats', 'privacy_scope', 'limitations']\n\n## Allowed Claims\n- insufficient_evidence\n\n## Forbidden Claims\n- raw_sensor_access, face_identity, personal_identity, medical_diagnosis, unsupported_behavioral_inference, guessing\n\n## Expected Output Contract\n- required_fields: answer, confidence, evidence_refs, caveats, privacy_scope, limitations\n- field_types:\n  - answer: string\n  - caveats: array\n  - confidence: number\n  - evidence_refs: array\n  - limitations: array\n  - privacy_scope: string\n\n## Privacy Constraints\n- Use only CityOS-approved structured context.\n- Do not use or request raw sensor data.\n- All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts.",
+      "task_id": "task_e7a429e3a156",
       "tool_manifest": {
         "answer_synthesis_harness": [
           "synthesize_answer_packet"
-        ],
-        "occupancy_context_harness": [
-          "get_occupancy_context"
         ]
       },
-      "user_query": "How many people are in the room on June 24th?"
+      "user_query": "Is a person jumping on June 24th? (Yes/No)"
     },
     "answer_packet": {
-      "query_id": "tellme_dcb1dfa52bf9",
+      "query_id": "tellme_e7a429e3a156",
       "status": "needs_tracefix",
       "answer": "This query requires a future TraceFix multi-agent workflow and cannot be fully answered in V0.",
       "confidence": 0.0,
@@ -1002,11 +887,11 @@
       "selected_agent": null,
       "route_decision": {
         "route": "single_agent",
-        "intent": "historical_lookup",
-        "selected_agent": "occupancy_context_agent",
-        "selected_tool": "get_occupancy_context",
+        "intent": "general",
+        "selected_agent": "general_context_agent",
+        "selected_tool": "cityos_context_lookup",
         "required_tools": [
-          "get_occupancy_context"
+          "cityos_context_lookup"
         ],
         "rationale": "The query appears answerable with one focused CityOS-style context lookup.",
         "time_window": null,
@@ -1019,7 +904,7 @@
       },
       "agent_plan": {},
       "raw_outputs": {
-        "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_dcb1dfa52bf9",
+        "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_e7a429e3a156",
         "logging_fallback_used": false,
         "llm_operational": {
           "agent_backend_mode": "llm",
@@ -1030,16 +915,16 @@
           "decomposition": {
             "model": "gpt-4.1-mini",
             "last_used": "primary",
-            "last_latency_ms": 18125.0,
+            "last_latency_ms": 13718.0,
             "fallback_reason": null,
             "primary_calls": 1,
             "fallback_calls": 0,
             "last_request": {
-              "request_start": "2026-07-09T16:27:13.551879+00:00",
-              "first_response_time": "2026-07-09T16:27:31.674152+00:00",
-              "request_end": "2026-07-09T16:27:31.675148+00:00",
-              "total_duration_ms": 18125.0,
-              "time_to_first_response_ms": 18125.0,
+              "request_start": "2026-07-09T17:23:36.665353+00:00",
+              "first_response_time": "2026-07-09T17:23:50.372817+00:00",
+              "request_end": "2026-07-09T17:23:50.375443+00:00",
+              "total_duration_ms": 13718.0,
+              "time_to_first_response_ms": 13718.0,
               "model": "gpt-4.1-mini",
               "provider": "https://api.openai.com/v1",
               "failed": false,
@@ -1050,22 +935,21 @@
         },
         "agent_backend_mode": "llm",
         "tracefix_task_spec": {
-          "task_id": "task_dcb1dfa52bf9",
-          "query_id": "tellme_dcb1dfa52bf9",
-          "user_query": "How many people are in the room on June 24th?",
+          "task_id": "task_e7a429e3a156",
+          "query_id": "tellme_e7a429e3a156",
+          "user_query": "Is a person jumping on June 24th? (Yes/No)",
           "space_id": "smart_room_1",
           "route": "single_agent",
           "time_windows": [],
           "required_modalities": [
-            "video"
+            "context"
           ],
           "candidate_harnesses": [
-            "occupancy_context_harness",
             "answer_synthesis_harness"
           ],
           "application_goal": {
-            "goal_type": "occupancy_count",
-            "user_intent": "occupancy_lookup",
+            "goal_type": "unsupported",
+            "user_intent": "general_lookup",
             "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
             "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
             "non_goals": [
@@ -1077,16 +961,16 @@
           },
           "evidence_plan": {
             "primary_evidence": [
-              "occupancy_context_packet"
+              "general_context_packet"
             ],
             "supporting_evidence": [],
             "minimum_sufficient_evidence": [
-              "occupancy_context_packet"
+              "general_context_packet"
             ],
             "conflicting_evidence_checks": []
           },
           "answer_packet_requirements": {
-            "answer_type": "direct_answer",
+            "answer_type": "insufficient_evidence",
             "required_fields": [
               "answer",
               "confidence",
@@ -1096,16 +980,15 @@
               "limitations"
             ],
             "allowed_claims": [
-              "bounded_count",
-              "presence_state",
-              "timestamped_event_summary"
+              "insufficient_evidence"
             ],
             "forbidden_claims": [
               "raw_sensor_access",
               "face_identity",
               "personal_identity",
               "medical_diagnosis",
-              "unsupported_behavioral_inference"
+              "unsupported_behavioral_inference",
+              "guessing"
             ],
             "must_include_confidence": true,
             "must_include_evidence_refs": true,
@@ -1113,26 +996,23 @@
             "fallback_answer_type": "insufficient_evidence"
           },
           "evidence_card_contract": {
-            "card_type": "descriptive",
-            "primary_question": "What did the structured context observe?",
-            "title_template": "{primary_question}",
-            "claim_target": "observed_room_state",
+            "card_type": "insufficient_evidence",
+            "primary_question": "Could the system answer this from the available evidence?",
+            "title_template": "Insufficient evidence to answer confidently",
+            "claim_target": "insufficient_evidence",
             "allowed_conclusion_types": [
-              "observed_state",
-              "bounded_count",
-              "presence_state"
+              "insufficient_evidence"
             ],
             "forbidden_conclusion_types": [
-              "causal_effect",
-              "statistical_significance",
-              "causal_graph_claim",
-              "raw_sensor_access",
-              "face_identity",
               "personal_identity",
+              "face_identity",
               "medical_diagnosis",
-              "unsupported_behavioral_inference",
               "confirmed_injury",
-              "cause_or_intent_inference"
+              "cause_or_intent_inference",
+              "unsupported_behavioral_inference",
+              "raw_sensor_access",
+              "fabricated_confidence",
+              "guessing"
             ],
             "badge_requirements": [
               {
@@ -1140,75 +1020,46 @@
                 "label_template": "{card_type}",
                 "source": "query_analysis",
                 "required": true
-              },
-              {
-                "badge_id": "modality",
-                "label_template": "{modalities}",
-                "source": "harness_output",
-                "required": false
               }
             ],
             "metric_requirements": [
               {
-                "metric_id": "observed_value",
-                "display_label": "Observed value",
-                "description": "The value observed in the time window (e.g. occupancy count or state).",
+                "metric_id": "what_determined",
+                "display_label": "What was determined",
+                "description": "What the system could establish, if anything.",
                 "required": true,
-                "value_type": "category",
-                "source": "harness_output",
-                "source_field": "value",
-                "unavailable_behavior": "show_na"
-              },
-              {
-                "metric_id": "time_window",
-                "display_label": "Time window",
-                "description": "Bounded window the observation covers.",
-                "required": true,
-                "value_type": "range",
-                "source": "harness_output",
-                "source_field": "timestamp",
-                "unavailable_behavior": "show_na"
-              },
-              {
-                "metric_id": "modalities_used",
-                "display_label": "Modalities used",
-                "description": "Sensor modalities that contributed.",
-                "required": true,
-                "value_type": "category",
+                "value_type": "text",
                 "source": "aggregator",
                 "source_field": null,
                 "unavailable_behavior": "show_na"
               },
               {
-                "metric_id": "evidence_count",
-                "display_label": "Evidence count",
-                "description": "Number of supporting context packets.",
+                "metric_id": "missing_evidence",
+                "display_label": "Missing evidence",
+                "description": "What evidence was missing or insufficient.",
                 "required": true,
-                "value_type": "integer",
+                "value_type": "text",
                 "source": "aggregator",
                 "source_field": null,
                 "unavailable_behavior": "show_na"
               },
               {
-                "metric_id": "sensor_agreement",
-                "display_label": "Sensor agreement",
-                "description": "Fraction of modalities in agreement.",
+                "metric_id": "failed_modality",
+                "display_label": "Failed harness/modality",
+                "description": "Which harness or modality failed, if safe to disclose.",
                 "required": false,
-                "value_type": "percentage",
-                "source": "aggregator",
+                "value_type": "text",
+                "source": "tracefix_verification",
                 "source_field": null,
-                "unavailable_behavior": "show_na"
+                "unavailable_behavior": "omit"
               }
             ],
             "summary_requirements": [
-              "State the observed value and its bounded time window in one sentence."
+              "State what could and could not be determined; do not fabricate confidence."
             ],
             "confidence_requirements": {
-              "confidence_kind": "sensor_confidence",
-              "required_inputs": [
-                "sensor_confidence",
-                "evidence_count"
-              ],
+              "confidence_kind": "composite_confidence",
+              "required_inputs": [],
               "minimum_threshold": null,
               "label_bands": {
                 "low": [
@@ -1225,29 +1076,14 @@
                 ]
               },
               "explanation_required": true,
-              "scoring_method": "bounded_sensor_confidence"
+              "scoring_method": "none"
             },
-            "evidence_requirements": [
-              {
-                "evidence_type": "structured_context",
-                "required": true,
-                "minimum_count": 1,
-                "accepted_packet_types": [
-                  "occupancy_context_packet",
-                  "room_state_packet",
-                  "motion_context_packet",
-                  "audio_context_packet"
-                ],
-                "include_evidence_refs": true,
-                "include_time_window": true,
-                "include_modality": true
-              }
-            ],
+            "evidence_requirements": [],
             "caveat_requirements": [
-              "Reflects structured context only; no causal interpretation."
+              "A stronger answer was not produced because the bounded evidence was insufficient."
             ],
             "provenance_requirements": [
-              "List the harness/packet ids backing the observed value."
+              "List which expected packets were missing or empty."
             ],
             "fallback_card_type": "insufficient_evidence"
           },
@@ -1268,19 +1104,18 @@
               "privacy_scope": "string",
               "limitations": "array"
             },
-            "answer_type": "direct_answer",
+            "answer_type": "insufficient_evidence",
             "fallback_answer_type": "insufficient_evidence",
             "allowed_claims": [
-              "bounded_count",
-              "presence_state",
-              "timestamped_event_summary"
+              "insufficient_evidence"
             ],
             "forbidden_claims": [
               "raw_sensor_access",
               "face_identity",
               "personal_identity",
               "medical_diagnosis",
-              "unsupported_behavioral_inference"
+              "unsupported_behavioral_inference",
+              "guessing"
             ],
             "must_include_confidence": true,
             "must_include_evidence_refs": true,
@@ -1310,7 +1145,9 @@
             "must_preserve_forbidden_claims": true,
             "validation_status": "accepted",
             "repairs": [],
-            "warnings": []
+            "warnings": [
+              "Proposal was marked unsupported and will compile to an insufficient-evidence TaskSpec."
+            ]
           },
           "escalation_conditions": [
             "insufficient_evidence",
@@ -1322,23 +1159,21 @@
             "face_identity",
             "personal_identity",
             "medical_diagnosis",
-            "unsupported_behavioral_inference"
+            "unsupported_behavioral_inference",
+            "guessing"
           ],
           "allowed_claims": [
-            "bounded_count",
-            "presence_state",
-            "timestamped_event_summary"
+            "insufficient_evidence"
           ],
-          "reasoning_summary": "Deterministic template proposal generated for query tellme_dcb1dfa52bf9.",
-          "executable": true,
-          "reason": "occupancy_lookup",
+          "reasoning_summary": "Deterministic template proposal generated for query tellme_e7a429e3a156.",
+          "executable": false,
+          "reason": "general_lookup",
           "target_tracefix_path": "TraceFix-main/",
           "status": "stub",
           "caveats": [
             "This is a stub only; TraceFix-main is not invoked in V0.",
             "Real TraceFix multi-agent execution is not integrated yet.",
             "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
-            "No available sensor supports 'room_state' context for this space.",
             "Mock CityOS structured context may be incomplete.",
             "Confidence must remain bounded by available evidence.",
             "Use CityOS structured context only.",
@@ -1348,37 +1183,35 @@
           ]
         },
         "tracefix_bundle_summary": {
-          "task_id": "task_dcb1dfa52bf9",
+          "task_id": "task_e7a429e3a156",
           "agent_names": [
-            "answer_synthesis_harness",
-            "occupancy_context_harness"
+            "answer_synthesis_harness"
           ],
-          "channel_count": 1,
+          "channel_count": 0,
           "resource_count": 2
         },
         "evidence_card_preview": {
-          "card_type": "descriptive",
-          "metric_count": 5,
+          "card_type": "insufficient_evidence",
+          "metric_count": 3,
           "validation_status": "valid"
         }
       },
       "tracefix_task_spec": {
-        "task_id": "task_dcb1dfa52bf9",
-        "query_id": "tellme_dcb1dfa52bf9",
-        "user_query": "How many people are in the room on June 24th?",
+        "task_id": "task_e7a429e3a156",
+        "query_id": "tellme_e7a429e3a156",
+        "user_query": "Is a person jumping on June 24th? (Yes/No)",
         "space_id": "smart_room_1",
         "route": "single_agent",
         "time_windows": [],
         "required_modalities": [
-          "video"
+          "context"
         ],
         "candidate_harnesses": [
-          "occupancy_context_harness",
           "answer_synthesis_harness"
         ],
         "application_goal": {
-          "goal_type": "occupancy_count",
-          "user_intent": "occupancy_lookup",
+          "goal_type": "unsupported",
+          "user_intent": "general_lookup",
           "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
           "failure_condition": "Return insufficient_evidence or escalate when the structured context is inadequate.",
           "non_goals": [
@@ -1390,16 +1223,16 @@
         },
         "evidence_plan": {
           "primary_evidence": [
-            "occupancy_context_packet"
+            "general_context_packet"
           ],
           "supporting_evidence": [],
           "minimum_sufficient_evidence": [
-            "occupancy_context_packet"
+            "general_context_packet"
           ],
           "conflicting_evidence_checks": []
         },
         "answer_packet_requirements": {
-          "answer_type": "direct_answer",
+          "answer_type": "insufficient_evidence",
           "required_fields": [
             "answer",
             "confidence",
@@ -1409,16 +1242,15 @@
             "limitations"
           ],
           "allowed_claims": [
-            "bounded_count",
-            "presence_state",
-            "timestamped_event_summary"
+            "insufficient_evidence"
           ],
           "forbidden_claims": [
             "raw_sensor_access",
             "face_identity",
             "personal_identity",
             "medical_diagnosis",
-            "unsupported_behavioral_inference"
+            "unsupported_behavioral_inference",
+            "guessing"
           ],
           "must_include_confidence": true,
           "must_include_evidence_refs": true,
@@ -1426,26 +1258,23 @@
           "fallback_answer_type": "insufficient_evidence"
         },
         "evidence_card_contract": {
-          "card_type": "descriptive",
-          "primary_question": "What did the structured context observe?",
-          "title_template": "{primary_question}",
-          "claim_target": "observed_room_state",
+          "card_type": "insufficient_evidence",
+          "primary_question": "Could the system answer this from the available evidence?",
+          "title_template": "Insufficient evidence to answer confidently",
+          "claim_target": "insufficient_evidence",
           "allowed_conclusion_types": [
-            "observed_state",
-            "bounded_count",
-            "presence_state"
+            "insufficient_evidence"
           ],
           "forbidden_conclusion_types": [
-            "causal_effect",
-            "statistical_significance",
-            "causal_graph_claim",
-            "raw_sensor_access",
-            "face_identity",
             "personal_identity",
+            "face_identity",
             "medical_diagnosis",
-            "unsupported_behavioral_inference",
             "confirmed_injury",
-            "cause_or_intent_inference"
+            "cause_or_intent_inference",
+            "unsupported_behavioral_inference",
+            "raw_sensor_access",
+            "fabricated_confidence",
+            "guessing"
           ],
           "badge_requirements": [
             {
@@ -1453,75 +1282,46 @@
               "label_template": "{card_type}",
               "source": "query_analysis",
               "required": true
-            },
-            {
-              "badge_id": "modality",
-              "label_template": "{modalities}",
-              "source": "harness_output",
-              "required": false
             }
           ],
           "metric_requirements": [
             {
-              "metric_id": "observed_value",
-              "display_label": "Observed value",
-              "description": "The value observed in the time window (e.g. occupancy count or state).",
+              "metric_id": "what_determined",
+              "display_label": "What was determined",
+              "description": "What the system could establish, if anything.",
               "required": true,
-              "value_type": "category",
-              "source": "harness_output",
-              "source_field": "value",
-              "unavailable_behavior": "show_na"
-            },
-            {
-              "metric_id": "time_window",
-              "display_label": "Time window",
-              "description": "Bounded window the observation covers.",
-              "required": true,
-              "value_type": "range",
-              "source": "harness_output",
-              "source_field": "timestamp",
-              "unavailable_behavior": "show_na"
-            },
-            {
-              "metric_id": "modalities_used",
-              "display_label": "Modalities used",
-              "description": "Sensor modalities that contributed.",
-              "required": true,
-              "value_type": "category",
+              "value_type": "text",
               "source": "aggregator",
               "source_field": null,
               "unavailable_behavior": "show_na"
             },
             {
-              "metric_id": "evidence_count",
-              "display_label": "Evidence count",
-              "description": "Number of supporting context packets.",
+              "metric_id": "missing_evidence",
+              "display_label": "Missing evidence",
+              "description": "What evidence was missing or insufficient.",
               "required": true,
-              "value_type": "integer",
+              "value_type": "text",
               "source": "aggregator",
               "source_field": null,
               "unavailable_behavior": "show_na"
             },
             {
-              "metric_id": "sensor_agreement",
-              "display_label": "Sensor agreement",
-              "description": "Fraction of modalities in agreement.",
+              "metric_id": "failed_modality",
+              "display_label": "Failed harness/modality",
+              "description": "Which harness or modality failed, if safe to disclose.",
               "required": false,
-              "value_type": "percentage",
-              "source": "aggregator",
+              "value_type": "text",
+              "source": "tracefix_verification",
               "source_field": null,
-              "unavailable_behavior": "show_na"
+              "unavailable_behavior": "omit"
             }
           ],
           "summary_requirements": [
-            "State the observed value and its bounded time window in one sentence."
+            "State what could and could not be determined; do not fabricate confidence."
           ],
           "confidence_requirements": {
-            "confidence_kind": "sensor_confidence",
-            "required_inputs": [
-              "sensor_confidence",
-              "evidence_count"
-            ],
+            "confidence_kind": "composite_confidence",
+            "required_inputs": [],
             "minimum_threshold": null,
             "label_bands": {
               "low": [
@@ -1538,29 +1338,14 @@
               ]
             },
             "explanation_required": true,
-            "scoring_method": "bounded_sensor_confidence"
+            "scoring_method": "none"
           },
-          "evidence_requirements": [
-            {
-              "evidence_type": "structured_context",
-              "required": true,
-              "minimum_count": 1,
-              "accepted_packet_types": [
-                "occupancy_context_packet",
-                "room_state_packet",
-                "motion_context_packet",
-                "audio_context_packet"
-              ],
-              "include_evidence_refs": true,
-              "include_time_window": true,
-              "include_modality": true
-            }
-          ],
+          "evidence_requirements": [],
           "caveat_requirements": [
-            "Reflects structured context only; no causal interpretation."
+            "A stronger answer was not produced because the bounded evidence was insufficient."
           ],
           "provenance_requirements": [
-            "List the harness/packet ids backing the observed value."
+            "List which expected packets were missing or empty."
           ],
           "fallback_card_type": "insufficient_evidence"
         },
@@ -1581,19 +1366,18 @@
             "privacy_scope": "string",
             "limitations": "array"
           },
-          "answer_type": "direct_answer",
+          "answer_type": "insufficient_evidence",
           "fallback_answer_type": "insufficient_evidence",
           "allowed_claims": [
-            "bounded_count",
-            "presence_state",
-            "timestamped_event_summary"
+            "insufficient_evidence"
           ],
           "forbidden_claims": [
             "raw_sensor_access",
             "face_identity",
             "personal_identity",
             "medical_diagnosis",
-            "unsupported_behavioral_inference"
+            "unsupported_behavioral_inference",
+            "guessing"
           ],
           "must_include_confidence": true,
           "must_include_evidence_refs": true,
@@ -1623,7 +1407,9 @@
           "must_preserve_forbidden_claims": true,
           "validation_status": "accepted",
           "repairs": [],
-          "warnings": []
+          "warnings": [
+            "Proposal was marked unsupported and will compile to an insufficient-evidence TaskSpec."
+          ]
         },
         "escalation_conditions": [
           "insufficient_evidence",
@@ -1635,23 +1421,21 @@
           "face_identity",
           "personal_identity",
           "medical_diagnosis",
-          "unsupported_behavioral_inference"
+          "unsupported_behavioral_inference",
+          "guessing"
         ],
         "allowed_claims": [
-          "bounded_count",
-          "presence_state",
-          "timestamped_event_summary"
+          "insufficient_evidence"
         ],
-        "reasoning_summary": "Deterministic template proposal generated for query tellme_dcb1dfa52bf9.",
-        "executable": true,
-        "reason": "occupancy_lookup",
+        "reasoning_summary": "Deterministic template proposal generated for query tellme_e7a429e3a156.",
+        "executable": false,
+        "reason": "general_lookup",
         "target_tracefix_path": "TraceFix-main/",
         "status": "stub",
         "caveats": [
           "This is a stub only; TraceFix-main is not invoked in V0.",
           "Real TraceFix multi-agent execution is not integrated yet.",
           "LLM reasoning is audit-only; validators and deterministic guardrails remain authoritative.",
-          "No available sensor supports 'room_state' context for this space.",
           "Mock CityOS structured context may be incomplete.",
           "Confidence must remain bounded by available evidence.",
           "Use CityOS structured context only.",
@@ -1662,15 +1446,17 @@
       },
       "error_message": null
     },
-    "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_dcb1dfa52bf9",
-    "warnings": [],
-    "answer_summary": "Recording rec_20260624_001 from day_05_2026-06-24 matched requested date June 24. cam1; peak occupancy 2; last observed occupancy 1; activities climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person, pushup, put on jacket, rtmpose, run, shake head, sit, somersault, stand, stand up, talk, throw, turn, walk; tracks 2; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam1_t5.0.jpg. cam2; peak occupancy 2; last observed occupancy 1; activities cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person, pick, pick up, pushup, put on a shoe, rtmpose, run, salute, shake head, stand, throw, turn, walk, wave; tracks 5; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam2_t5.0.jpg.",
-    "chat_answer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), cam 1 peaked at 2 people, and cam 2 peaked at 2 people. Across the observed time window, the peak occupancy was 2 people overall. At the latest observed moment, cam 1 most recently showed 1 person, and cam 2 most recently showed 1 person. Detected activities/poses included cam 1: climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person; cam 2: cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person.",
+    "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_e7a429e3a156",
+    "warnings": [
+      "Proposal was marked unsupported and will compile to an insufficient-evidence TaskSpec."
+    ],
+    "answer_summary": "Recording rec_20260624_001 from day_05_2026-06-24 matched requested date June 24. cam1; peak occupancy 2; last observed occupancy 1; activities climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person, pushup, put on jacket, rtmpose, run, shake head, sit, somersault, stand, stand up, talk, throw, turn, walk; tracks 2; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-132352-synthesis-20260709-172400-486412\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam1_t5.0.jpg. cam2; peak occupancy 2; last observed occupancy 1; activities cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person, pick, pick up, pushup, put on a shoe, rtmpose, run, salute, shake head, stand, throw, turn, walk, wave; tracks 5; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-132352-synthesis-20260709-172400-486412\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam2_t5.0.jpg. For June 24 (day_05_2026-06-24 / rec_20260624_001), jumping: 18 people, person: 3 people. Camera breakdown: cam 1: jumping 9, person 2; cam 2: jumping 9, person 1. Counts are per detected activity label/track; ask for 'both' to compute overlap when matching track IDs are available.",
+    "chat_answer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), jumping: 18 people, person: 3 people. Camera breakdown: cam 1: jumping 9, person 2; cam 2: jumping 9, person 1. Counts are per detected activity label/track; ask for 'both' to compute overlap when matching track IDs are available.",
     "web_data_answer": {
-      "question": "How many people are in the room on June 24th?",
-      "text": "Recording rec_20260624_001 from day_05_2026-06-24 matched requested date June 24. cam1; peak occupancy 2; last observed occupancy 1; activities climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person, pushup, put on jacket, rtmpose, run, shake head, sit, somersault, stand, stand up, talk, throw, turn, walk; tracks 2; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam1_t5.0.jpg. cam2; peak occupancy 2; last observed occupancy 1; activities cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person, pick, pick up, pushup, put on a shoe, rtmpose, run, salute, shake head, stand, throw, turn, walk, wave; tracks 5; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam2_t5.0.jpg.",
-      "chatAnswer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), cam 1 peaked at 2 people, and cam 2 peaked at 2 people. Across the observed time window, the peak occupancy was 2 people overall. At the latest observed moment, cam 1 most recently showed 1 person, and cam 2 most recently showed 1 person. Detected activities/poses included cam 1: climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person; cam 2: cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person.",
-      "chat_answer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), cam 1 peaked at 2 people, and cam 2 peaked at 2 people. Across the observed time window, the peak occupancy was 2 people overall. At the latest observed moment, cam 1 most recently showed 1 person, and cam 2 most recently showed 1 person. Detected activities/poses included cam 1: climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person; cam 2: cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person.",
+      "question": "Is a person jumping on June 24th? (Yes/No)",
+      "text": "Recording rec_20260624_001 from day_05_2026-06-24 matched requested date June 24. cam1; peak occupancy 2; last observed occupancy 1; activities climb stairs, cross hands in front, falling down, hit, idle, jump up, jumping, person, pushup, put on jacket, rtmpose, run, shake head, sit, somersault, stand, stand up, talk, throw, turn, walk; tracks 2; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-132352-synthesis-20260709-172400-486412\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam1_t5.0.jpg. cam2; peak occupancy 2; last observed occupancy 1; activities cross hands in front, eat meal, falling down, hopping, idle, jump up, jumping, person, pick, pick up, pushup, put on a shoe, rtmpose, run, salute, shake head, stand, throw, turn, walk, wave; tracks 5; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-132352-synthesis-20260709-172400-486412\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam2_t5.0.jpg. For June 24 (day_05_2026-06-24 / rec_20260624_001), jumping: 18 people, person: 3 people. Camera breakdown: cam 1: jumping 9, person 2; cam 2: jumping 9, person 1. Counts are per detected activity label/track; ask for 'both' to compute overlap when matching track IDs are available.",
+      "chatAnswer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), jumping: 18 people, person: 3 people. Camera breakdown: cam 1: jumping 9, person 2; cam 2: jumping 9, person 1. Counts are per detected activity label/track; ask for 'both' to compute overlap when matching track IDs are available.",
+      "chat_answer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), jumping: 18 people, person: 3 people. Camera breakdown: cam 1: jumping 9, person 2; cam 2: jumping 9, person 1. Counts are per detected activity label/track; ask for 'both' to compute overlap when matching track IDs are available.",
       "recording": {
         "day": "day_05_2026-06-24",
         "rec": "rec_20260624_001"
@@ -1716,10 +1502,16 @@
         "walk": 18,
         "wave": 9
       },
-      "requestedActivities": [],
-      "requestedActivityCounts": {},
+      "requestedActivities": [
+        "jumping",
+        "person"
+      ],
+      "requestedActivityCounts": {
+        "jumping": 18,
+        "person": 3
+      },
       "requestedActivityCombination": null,
-      "requestedActivityAnswer": "",
+      "requestedActivityAnswer": "For June 24 (day_05_2026-06-24 / rec_20260624_001), jumping: 18 people, person: 3 people. Camera breakdown: cam 1: jumping 9, person 2; cam 2: jumping 9, person 1. Counts are per detected activity label/track; ask for 'both' to compute overlap when matching track IDs are available.",
       "cameras": [
         {
           "camera": "cam1",
@@ -2712,7 +2504,7 @@
               "jumps": null
             }
           },
-          "framePath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam1_t5.0.jpg"
+          "framePath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-132352-synthesis-20260709-172400-486412\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam1_t5.0.jpg"
         },
         {
           "camera": "cam2",
@@ -3842,12 +3634,12 @@
               "jumps": null
             }
           },
-          "framePath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam2_t5.0.jpg"
+          "framePath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-132352-synthesis-20260709-172400-486412\\source_data\\frames\\day_05_2026-06-24_rec_20260624_001_cam2_t5.0.jpg"
         }
       ],
       "errors": []
     },
-    "web_data_answer_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\smartroom-answer.json",
+    "web_data_answer_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-132352-synthesis-20260709-172400-486412\\smartroom-answer.json",
     "web_data_snapshot_summary": {
       "recordingCount": 17,
       "selectedDay": "day_05_2026-06-24",
@@ -3865,44 +3657,44 @@
         "label": "June 24"
       },
       "requestedDateLabel": "June 24",
-      "question": "How many people are in the room on June 24th?",
+      "question": "Is a person jumping on June 24th? (Yes/No)",
       "errors": 0
     },
-    "web_data_payload_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis-20260709-162739-462174\\source_data\\20260709-162745-284834_web_payload.json",
+    "web_data_payload_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260709-132352-synthesis-20260709-172400-486412\\source_data\\20260709-172406-608293_web_payload.json",
     "web_data_source_url": "https://smartroom-mirror.vercel.app/api/v1",
     "web_data_source_kind": "smartroom-control"
   },
   "tracefix": {
-    "run_id": "325b15f5bc",
-    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732"
+    "run_id": "ad7f773b61",
+    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352"
   },
   "cityos": {
-    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732",
-    "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\cityos_module_plan.json",
+    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352",
+    "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\spec\\cityos_module_plan.json",
     "appsDir": "C:\\Users\\shrey\\cityos\\apps",
-    "manifestPath": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260709-122732-synthesis.json",
+    "manifestPath": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260709-132352-synthesis.json",
     "outputDir": "C:\\Users\\shrey\\cityos\\apps",
     "apps": [
       {
-        "name": "tracefix-tellme-structured-smart-room-application-20260709-122732-occupa",
+        "name": "tracefix-tellme-structured-smart-room-application-20260709-132352-task-a",
         "kind": "agent",
-        "agent": "OCCUPANCY_ANALYZER",
-        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260709-122732-occupa",
-        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260709-122732-occupa"
+        "agent": "TASK_AGENT",
+        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260709-132352-task-a",
+        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260709-132352-task-a"
       },
       {
-        "name": "tracefix-tellme-structured-smart-room-application-20260709-122732-monito",
+        "name": "tracefix-tellme-structured-smart-room-application-20260709-132352-monito",
         "kind": "monitor",
         "agent": null,
-        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260709-122732-monito",
-        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260709-122732-monito"
+        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260709-132352-monito",
+        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260709-132352-monito"
       }
     ],
     "summary": {
-      "name": "tellme_structured_smart_room_application_20260709_122732",
-      "path": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732",
-      "lastModified": 1783614457.626783,
-      "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\cityos_module_plan.json",
+      "name": "tellme_structured_smart_room_application_20260709_132352",
+      "path": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352",
+      "lastModified": 1783617837.6921172,
+      "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\spec\\cityos_module_plan.json",
       "hasPlan": true,
       "productionReady": true,
       "verificationStatus": "verified",
@@ -3920,66 +3712,66 @@
       "tlcStatus": "passed",
       "planStatus": "ready",
       "workspaceType": "custom",
-      "taskText": "How many people are in the room on June 24th?",
+      "taskText": "Is a person jumping on June 24th? (Yes/No)",
       "taskSource": "tellme",
       "agents": [
-        "OCCUPANCY_ANALYZER"
+        "TASK_AGENT"
       ],
       "channels": [],
       "resources": [],
       "requirements": [
         {
           "path": "spec/cityos_module_plan.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\cityos_module_plan.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\spec\\cityos_module_plan.json",
           "exists": true,
           "createdBy": "Generate Verified Plan or Export Intermediary Plan",
           "required": true
         },
         {
           "path": "spec/ir.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\ir.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\spec\\ir.json",
           "exists": true,
           "createdBy": "Generate Verified Plan",
           "required": true
         },
         {
           "path": "spec/states.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\states.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\spec\\states.json",
           "exists": true,
           "createdBy": "Run TraceFix verification until TLC/state extraction completes",
           "required": true
         },
         {
           "path": "spec/Protocol.tla",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\Protocol.tla",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\spec\\Protocol.tla",
           "exists": true,
           "createdBy": "Run TraceFix protocol generation",
           "required": true
         },
         {
           "path": "spec/Protocol.cfg",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\Protocol.cfg",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\spec\\Protocol.cfg",
           "exists": true,
           "createdBy": "Run TraceFix protocol generation",
           "required": true
         },
         {
           "path": "spec/summary.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\summary.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\spec\\summary.json",
           "exists": true,
           "createdBy": "Run TraceFix verification until summary is written",
           "required": false
         },
         {
           "path": "spec/Protocol_translated.tla",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\spec\\Protocol_translated.tla",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\spec\\Protocol_translated.tla",
           "exists": true,
           "createdBy": "PlusCal translation",
           "required": false
         }
       ],
       "missingRequired": [],
-      "outputDir": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_122732\\output\\cityos_synthesis",
+      "outputDir": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260709_132352\\output\\cityos_synthesis",
       "ready": true
     }
   }
