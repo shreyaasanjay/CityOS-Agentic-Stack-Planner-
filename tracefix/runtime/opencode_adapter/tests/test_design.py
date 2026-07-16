@@ -5,6 +5,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
+from tracefix.runtime.llm_attribute_extractor import (
+    AttributeExtractionError,
+    ExtractedCoordinationAttributes,
+)
+import tracefix.runtime.opencode_adapter.design as design_module
 from tracefix.runtime.opencode_adapter.config_gen import build_design_config
 from tracefix.runtime.opencode_adapter.design import (
     _channel_diagnostics,
@@ -652,3 +659,140 @@ def test_channel_diagnostics_reports_added_channels():
     assert diagnostics == [
         "IR repair added channel a_to_b: A -> B labels=[handoff, review]"
     ]
+
+
+@pytest.mark.asyncio
+async def test_run_design_writes_extracted_attributes_and_stops_for_reusable_decision(monkeypatch):
+    def fake_extract(query, *, model=None, client=None):
+        assert "three robots" in query.lower()
+        assert model == "test-model"
+        return ExtractedCoordinationAttributes(
+            coordination_patterns=[
+                "Request-Grant",
+                "Exclusive Resource Access",
+                "Task Prioritization",
+                "Queue-Based Scheduling",
+                "Reservation",
+            ],
+            number_of_agents=None,
+            agent_roles=[],
+            communication_flow=[],
+            limitations=[],
+            number_of_resources=1,
+            number_of_channels=None,
+        )
+
+    monkeypatch.setattr(design_module, "extract_coordination_attributes", fake_extract)
+    monkeypatch.setattr(
+        design_module,
+        "_complete_procedure_decision",
+        lambda _prompt: {
+            "selected_procedure": "exact_reuse",
+            "selected_template_id": "traffic_signal_coordination",
+            "reasoning": "Traffic-style shared resource coordination is an exact structural reuse.",
+            "evidence_used": ["exact_reuse is deterministically available"],
+        },
+    )
+
+    result = await design_module.run_design(
+        "Coordinate three robots through a shared corridor.",
+        name="pytest_attr_extract_success",
+        model="openrouter/test-model",
+        timeout=1,
+    )
+
+    ws = Path(result.workspace)
+    artifact = ws / "spec" / "extracted_coordination_attributes.json"
+    timing = json.loads((ws / "output" / "pipeline_timing_report.json").read_text(encoding="utf-8"))
+
+    assert result.status == "procedure_decision_complete"
+    assert artifact.is_file()
+    assert json.loads(artifact.read_text(encoding="utf-8"))["number_of_resources"] == 1
+    assert timing["llm_attribute_extraction"]["template_mapping_status"] == "procedure_decision_complete"
+    assert (ws / "spec" / "template_rankings.json").exists()
+    assert (ws / "spec" / "template_validation_result.json").exists()
+    assert (ws / "spec" / "procedure_options.json").exists()
+    assert (ws / "spec" / "procedure_decision.json").exists()
+    assert not (ws / "spec" / "Protocol.tla").exists()
+
+
+@pytest.mark.asyncio
+async def test_run_design_full_generation_decision_falls_back_to_opencode(monkeypatch):
+    def fake_extract(query, *, model=None, client=None):
+        assert "three robots" in query.lower()
+        assert model == "test-model"
+        return ExtractedCoordinationAttributes(
+            coordination_patterns=["Subscription"],
+            number_of_agents=3,
+            agent_roles=["robot", "scheduler"],
+            communication_flow=["request", "grant", "release"],
+            limitations=["one robot in corridor"],
+            number_of_resources=1,
+            number_of_channels=3,
+        )
+
+    opencode_calls: list[tuple[str, str]] = []
+
+    async def fake_run_opencode_agent(agent_name, _cfg, **kwargs):
+        opencode_calls.append((agent_name, kwargs.get("kickoff", "")))
+        return {
+            "status": "success",
+            "events": 0,
+            "stderr_tail": [],
+            "returncode": 0,
+            "provider": None,
+            "model": None,
+        }
+
+    monkeypatch.setattr(design_module, "extract_coordination_attributes", fake_extract)
+    monkeypatch.setattr(design_module, "run_opencode_agent", fake_run_opencode_agent)
+    monkeypatch.setattr(
+        design_module,
+        "_complete_procedure_decision",
+        lambda _prompt: {
+            "selected_procedure": "full_generation",
+            "selected_template_id": None,
+            "reasoning": "No reusable template was selected in this mocked test.",
+            "evidence_used": ["full_generation is deterministically available"],
+        },
+    )
+
+    result = await design_module.run_design(
+        "Coordinate three robots through a shared corridor.",
+        name="pytest_full_generation_fallback",
+        model="openrouter/test-model",
+        timeout=1,
+    )
+
+    ws = Path(result.workspace)
+    timing = json.loads((ws / "output" / "pipeline_timing_report.json").read_text(encoding="utf-8"))
+
+    assert result.status != "procedure_decision_complete"
+    assert any(agent_name == "designer" for agent_name, _kickoff in opencode_calls)
+    assert timing["llm_attribute_extraction"]["template_mapping_status"] == "opencode_fallback_selected"
+    assert any(
+        "Procedure decision selected full_generation: OpenCode fallback was allowed to run." in line
+        for line in result.diagnostics
+    )
+
+
+@pytest.mark.asyncio
+async def test_run_design_reports_attribute_extraction_failure(monkeypatch):
+    def fake_extract(query, *, model=None, client=None):
+        raise AttributeExtractionError("provider unavailable")
+
+    monkeypatch.setattr(design_module, "extract_coordination_attributes", fake_extract)
+
+    result = await design_module.run_design(
+        "Coordinate three robots through a shared corridor.",
+        name="pytest_attr_extract_failure",
+        model="openrouter/test-model",
+        timeout=1,
+    )
+
+    ws = Path(result.workspace)
+    timing = json.loads((ws / "output" / "pipeline_timing_report.json").read_text(encoding="utf-8"))
+
+    assert result.status == "attribute_extraction_failed"
+    assert not (ws / "spec" / "extracted_coordination_attributes.json").exists()
+    assert timing["llm_attribute_extraction"]["template_mapping_status"] == "attribute_extraction_failed"

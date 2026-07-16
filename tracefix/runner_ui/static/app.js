@@ -22,6 +22,7 @@ const state = {
     apiKeyDetected: false,
     envKeyDetected: false,
     model: "gpt-4.1-mini",
+    context: null,
     taskText: "",  // actual TeLLMe spec text — set on handoff, used by startRun()
   },
   synth: {
@@ -46,6 +47,9 @@ const els = {
   tellmeApiKey: document.querySelector("#tellmeApiKey"),
   tellmeKeyRow: document.querySelector("#tellmeKeyRow"),
   tellmeKeyStatus: document.querySelector("#tellmeKeyStatus"),
+  uploadJsonButton: document.querySelector("#uploadJsonButton"),
+  jsonContextFile: document.querySelector("#jsonContextFile"),
+  jsonContextStatus: document.querySelector("#jsonContextStatus"),
   tellmeQuery: document.querySelector("#tellmeQuery"),
   tellmeSpaceId: document.querySelector("#tellmeSpaceId"),
   tellmeWebDataUrl: document.querySelector("#tellmeWebDataUrl"),
@@ -304,6 +308,14 @@ function bindEvents() {
 
   els.tellmeMode.addEventListener("change", () => {
     updateTellMeModeFields();
+  });
+
+  els.uploadJsonButton?.addEventListener("click", () => {
+    els.jsonContextFile?.click();
+  });
+
+  els.jsonContextFile?.addEventListener("change", async () => {
+    await uploadJsonContext();
   });
 
   els.tellmeApiKey.addEventListener("input", () => {
@@ -638,6 +650,63 @@ async function loadTellMeConfig() {
   }
   updateTellMeModeFields();
   updateTellMeTracefixFields();
+}
+
+async function loadJsonContext() {
+  try {
+    const response = await getJson("/api/context/current");
+    state.tellme.context = response.data || null;
+    renderJsonContextStatus();
+  } catch (error) {
+    state.tellme.context = null;
+    renderJsonContextStatus(error.message);
+  }
+}
+
+async function uploadJsonContext() {
+  const file = els.jsonContextFile?.files?.[0];
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith(".json")) {
+    renderJsonContextStatus("Please choose a .json file.");
+    showToast("JSON context upload requires a .json file");
+    return;
+  }
+  const form = new FormData();
+  form.append("file", file, file.name);
+  if (els.jsonContextStatus) els.jsonContextStatus.textContent = `Uploading: ${file.name}`;
+  try {
+    const response = await fetch("/api/context/upload", {
+      method: "POST",
+      body: form,
+    });
+    const data = await response.json();
+    if (!response.ok || data.ok === false) {
+      throw new Error(data.error || data.errors?.join("; ") || `Upload failed: ${response.status}`);
+    }
+    state.tellme.context = data.data || null;
+    renderJsonContextStatus();
+    showToast(`Loaded JSON context: ${state.tellme.context?.filename || file.name}`);
+  } catch (error) {
+    renderJsonContextStatus(error.message);
+    showToast(error.message);
+  } finally {
+    if (els.jsonContextFile) els.jsonContextFile.value = "";
+  }
+}
+
+function renderJsonContextStatus(errorText = "") {
+  if (!els.jsonContextStatus) return;
+  const context = state.tellme.context || {};
+  els.jsonContextStatus.classList.toggle("loaded", context.loaded === true && !errorText);
+  els.jsonContextStatus.classList.toggle("error", Boolean(errorText));
+  if (errorText) {
+    els.jsonContextStatus.textContent = errorText;
+  } else if (context.loaded) {
+    const size = context.size_bytes ? ` (${formatNumber(context.size_bytes)} bytes)` : "";
+    els.jsonContextStatus.textContent = `Loaded: ${context.filename || "uploaded.json"}${size}`;
+  } else {
+    els.jsonContextStatus.textContent = "No JSON context loaded";
+  }
 }
 
 function updateTellMeModeFields() {
@@ -2293,6 +2362,7 @@ async function init() {
   updateModeFields();
   updateWorkflow();
   await loadTellMeConfig();
+  await loadJsonContext();
   await loadTellMeCurrent();
   await loadModelOptions();
   await loadTasks();

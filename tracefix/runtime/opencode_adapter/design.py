@@ -28,9 +28,14 @@ from pathlib import Path
 from typing import Callable
 
 from tracefix.pipeline_timing import PipelineTimingReport
-from tracefix.runtime.coordination_classifier import assess_coordination_pattern
-from tracefix.runtime.template_adaptation_repair import adapt_template_decision
-from tracefix.runtime.pattern_repository import harvest_candidate, repository_enabled
+from tracefix.protocol_templates import get_template, list_pattern_ids
+from tracefix.runtime.deterministic_template_engine import DeterministicTemplateEngine
+from tracefix.runtime.llm_attribute_extractor import extract_coordination_attributes
+from tracefix.runtime.procedure_decision import (
+    ProcedureDecisionError,
+    validate_procedure_decision_response,
+)
+from tracefix.runtime.procedure_prompt import build_procedure_selection_prompt
 from tracefix.runtime.single_agent_fastpath import (
     FastPathDecision,
     _extract_structured_task,
@@ -58,6 +63,49 @@ def _subprocess_python() -> str:
 def repo_root() -> Path:
     return next(p for p in Path(__file__).resolve().parents
                 if (p / "pyproject.toml").exists())
+
+
+def _complete_procedure_decision(prompt: str) -> dict:
+    from tellme_harness.llm_client import OpenAICompatibleLLMClient
+
+    api_key = (
+        (os.getenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY") or "").strip()
+        or (os.getenv("OPENROUTER_API_KEY") or "").strip()
+        or (os.getenv("TELLME_API_KEY") or "").strip()
+        or (os.getenv("OPENAI_API_KEY") or "").strip()
+    )
+    base_url = (os.getenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_BASE_URL") or "").strip()
+    if not base_url:
+        base_url = "https://openrouter.ai/api/v1" if os.getenv("OPENROUTER_API_KEY") else "https://api.openai.com/v1"
+    model = (
+        (os.getenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL") or "").strip()
+        or (os.getenv("TELLME_MODEL") or "").strip()
+        or (os.getenv("OPENAI_MODEL") or "").strip()
+        or "gpt-4.1-mini"
+    )
+    if not api_key:
+        raise RuntimeError(
+            "Procedure-selection LLM requires a provider API key. "
+            "Set OPENROUTER_API_KEY, OPENAI_API_KEY, TELLME_API_KEY, "
+            "or TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY."
+        )
+    return OpenAICompatibleLLMClient(
+        base_url=base_url,
+        model=model,
+        api_key=api_key,
+    ).complete_json(prompt)
+
+
+def _attribute_extractor_model(model: str | None) -> str | None:
+    configured = (os.getenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL") or "").strip()
+    if configured:
+        return configured
+    value = (model or "").strip()
+    if value.startswith("openrouter/"):
+        return value.removeprefix("openrouter/")
+    if value.startswith("openai/"):
+        return value.removeprefix("openai/")
+    return value or None
 
 
 def slugify(task: str) -> str:
@@ -301,90 +349,6 @@ def _load_ir(ws: Path) -> dict | None:
         return safe_read_json(ir_path)
     except (json.JSONDecodeError, OSError):
         return None
-
-
-def _guard_task_agent_ir(ws: Path, task: str, diagnostics: list[str]) -> None:
-    """Repair a single-TASK_AGENT IR when the TeLLMe route was multi_agent.
-
-    If OpenCode produced a stub with only one agent named TASK_AGENT (and no
-    channels), replace it with a verifier_approver 2-agent IR derived from the
-    TeLLMe spec.  This prevents the TASK_AGENT placeholder from propagating
-    through TLC verification.
-
-    The repair is best-effort: if anything goes wrong we log and leave the IR
-    untouched so the normal validation path reports the problem.
-    """
-    from tracefix.runtime.coordination_classifier import (
-        _agents_from_harnesses,
-        _extract_two_agent_roles,
-    )
-
-    try:
-        spec = _extract_structured_task(task)
-        if not spec:
-            return
-        route = str(spec.get("route") or "").strip().lower()
-        if route != "multi_agent":
-            return
-
-        ir = _load_ir(ws)
-        if not isinstance(ir, dict):
-            return
-        existing_agents = [
-            a for a in (ir.get("agents") or [])
-            if isinstance(a, dict)
-        ]
-        existing_channels = ir.get("channels") or []
-        # Only repair when OpenCode produced a degenerate single-TASK_AGENT stub
-        if len(existing_agents) != 1:
-            return
-        agent_id = str(existing_agents[0].get("id") or "").upper()
-        if agent_id != "TASK_AGENT":
-            return
-        if existing_channels:
-            return  # Has channels — may be a real single-agent design; don't touch
-
-        diagnostics.append(
-            "TASK_AGENT guard: multi_agent route produced TASK_AGENT stub — "
-            "repairing with synthetic verifier_approver IR"
-        )
-
-        # Derive agent IDs from harnesses if available
-        harness_agents = _agents_from_harnesses(spec.get("candidate_harnesses") or [])
-        a_id, a_role, b_id, b_role = _extract_two_agent_roles(
-            harness_agents, (spec.get("user_query") or "").lower(), 0, 1
-        )
-
-        repaired_ir = {
-            "agents": [
-                {"id": a_id, "role": a_role},
-                {"id": b_id, "role": b_role},
-            ],
-            "resources": [
-                {"id": f"{a_id}_resource", "type": "Lock"},
-                {"id": f"{b_id}_resource", "type": "Lock"},
-            ],
-            "channels": [
-                {
-                    "id": f"{a_id}_to_{b_id}",
-                    "from": a_id,
-                    "to": b_id,
-                    "labels": ["submit"],
-                },
-            ],
-        }
-        from tracefix.pipeline.pipeline.validator import normalize_ir
-
-        repaired_ir = normalize_ir(repaired_ir)
-        (_spec_dir(ws) / "ir.json").write_text(
-            json.dumps(repaired_ir, indent=2) + "\n", encoding="utf-8"
-        )
-        diagnostics.append(
-            f"TASK_AGENT guard: IR repaired → agents=[{a_id}, {b_id}] "
-            f"channels=[{a_id}_to_{b_id}]"
-        )
-    except Exception as exc:  # noqa: BLE001
-        diagnostics.append(f"TASK_AGENT guard: repair failed (non-fatal): {exc}")
 
 
 def _channel_key(channel: dict) -> str:
@@ -1519,328 +1483,149 @@ async def run_design(
         aggregate=True,
     )
 
-    # --- Coordination-pattern template fast path -----------------------------------
-    # For known 2-agent patterns (sequential_handoff, verifier_approver,
-    # producer_consumer) we can bypass OpenCode entirely: build IR + Protocol.tla
-    # deterministically, validate, run TLC, and extract states — same pipeline as
-    # the single-agent fast path but for multi-agent coordination patterns.
-    coord_template_used = False
-    coord_template_error: str | None = None
-    coord_template_diagnostics: list[str] = []
-    coord_decision = None
-    template_adaptation_result = None
-    coord_template_metadata: dict[str, object] = {}
-    _tspec_route: str = ""
-    _tspec_query: str = ""
-    _tspec_harnesses: list = []
-
+    # --- Coordination attribute extraction ----------------------------------------
+    # This is the only first-stage classifier-related behavior left in this
+    # pipeline. It extracts attributes and writes an artifact, but it does not
+    # select templates, rank candidates, route reuse, or call the reuse validator.
+    attribute_extraction_diagnostics: list[str] = []
+    procedure_decision_complete = False
+    procedure_decision_selected: str | None = None
+    procedure_llm_failed = False
+    template_ranking_failed = False
+    invalid_procedure_decision = False
+    attribute_extraction_failed = False
     if not fast_path_used:
-        coord_started_at = datetime.now(timezone.utc).isoformat()
-        coord_started_ms = time.monotonic() * 1000.0
+        attr_started_at = datetime.now(timezone.utc).isoformat()
+        attr_started_ms = time.monotonic() * 1000.0
+        attr_error: str | None = None
         try:
-            # Extract TeLLMe structured spec so the classifier gets agent IDs,
-            # user_query, and route metadata instead of estimating from raw text.
-            _tellme_spec = _extract_structured_task(task)
-            _tspec_route = str((_tellme_spec or {}).get("route") or "")
-            _tspec_query = str((_tellme_spec or {}).get("user_query") or "")[:120]
-            _tspec_harnesses = (_tellme_spec or {}).get("candidate_harnesses") or []
-            coord_decision = assess_coordination_pattern(task, tellme_spec=_tellme_spec)
-            _scores_str = (
-                ", ".join(f"{pid}={conf:.2f}" for pid, conf in coord_decision.all_scores)
-                if coord_decision.all_scores else "n/a"
+            attributes = extract_coordination_attributes(task, model=_attribute_extractor_model(model))
+            attr_path = _spec_dir(ws) / "extracted_coordination_attributes.json"
+            attr_path.write_text(attributes.to_json(), encoding="utf-8")
+            attribute_extraction_diagnostics.append(
+                f"Coordination attributes extracted: {attr_path.relative_to(ws)}"
             )
-            coord_template_diagnostics.append(
-                f"Coord classifier: considered={coord_decision.considered} "
-                f"pattern={coord_decision.pattern_id!r} "
-                f"template_variant={coord_decision.template_variant or 'n/a'} "
-                f"confidence={coord_decision.confidence:.2f} "
-                f"tellme_route={_tspec_route!r} "
-                f"user_query={_tspec_query!r} "
-                f"harnesses={_tspec_harnesses} "
-                f"scores=[{_scores_str}] "
-                f"fallback_reason={coord_decision.fallback_reason!r}"
-            )
-            coord_template_diagnostics.append(
-                f"coord_classifier considered={coord_decision.considered} "
-                f"pattern={coord_decision.pattern_id or 'none'} "
-                f"template_variant={coord_decision.template_variant or 'none'}"
-            )
-            print(
-                f"coord_classifier considered={coord_decision.considered} "
-                f"pattern={coord_decision.pattern_id or 'none'} "
-                f"template_variant={coord_decision.template_variant or 'none'}",
-                flush=True,
-            )
-            if coord_decision.pattern_id is not None:
-                from tracefix.pipeline.pipeline.validator import normalize_ir
-
-                match_type = str(coord_decision.template_match_type or "exact")
-                repair_agent_used = False
-                repair_stage = None
-                repair_summary = ""
-                adapted_fields: list[str] = []
-                changed_fields: list[str] = []
-                requested_differences: list[str] = []
-                safety_preservation_notes: list[str] = []
-
-                template_metadata = dict(coord_decision.template_metadata or {})
-                if coord_decision.template_variant:
-                    template_metadata["selected_variant"] = coord_decision.template_variant
-                template_metadata.update({
-                    "template_match_type": match_type,
-                    "template_used": coord_decision.pattern_id,
-                    "template_params": coord_decision.template_params,
-                    "template_parameters": coord_decision.template_parameters,
-                    "partial_repair_reason": coord_decision.partial_repair_reason,
-                    "opencode_full_generation": False,
-                    "opencode_skipped_for_initial_design": True,
-                    "repair_agent_used": False,
-                    "repair_stage": None,
-                    "repair_summary": "",
-                    "adapted_fields": [],
-                    "changed_fields": [],
-                    "requested_differences": [],
-                    "requested_changes": [],
-                    "applied_changes": [],
-                    "rejected_changes": [],
-                    "safety_preservation_notes": [],
-                })
-
-                if match_type == "partial":
-                    repair_started_at = datetime.now(timezone.utc).isoformat()
-                    repair_started_ms = time.monotonic() * 1000.0
-                    template_adaptation_result = adapt_template_decision(
-                        task=task,
-                        tellme_spec=_tellme_spec,
-                        decision=coord_decision,
-                    )
-                    repair_duration_ms = time.monotonic() * 1000.0 - repair_started_ms
-                    repair_agent_used = bool(template_adaptation_result.repair_agent_used)
-                    repair_stage = template_adaptation_result.repair_stage
-                    repair_summary = template_adaptation_result.repair_summary
-                    adapted_fields = list(template_adaptation_result.adapted_fields)
-                    changed_fields = list(template_adaptation_result.changed_fields)
-                    requested_differences = list(template_adaptation_result.requested_differences)
-                    requested_changes = list(template_adaptation_result.requested_changes)
-                    applied_changes = list(template_adaptation_result.applied_changes)
-                    rejected_changes = list(template_adaptation_result.rejected_changes)
-                    safety_preservation_notes = list(template_adaptation_result.safety_preservation_notes)
-                    timing.usage.record(
-                        stage="template_adaptation_repair",
-                        provider="deterministic",
-                        model=coord_decision.pattern_id,
-                        started_at=repair_started_at,
-                        ended_at=datetime.now(timezone.utc).isoformat(),
-                        duration_ms=repair_duration_ms,
-                        prompt_tokens=0,
-                        completion_tokens=0,
-                        total_tokens=0,
-                        exact_cost_usd=0.0,
-                        pricing_source="deterministic_template_adaptation",
-                        record_id=f"{ws.name}:template_adaptation_repair",
-                    )
-                    timing.stage(
-                        "template_adaptation_repair",
-                        started_at=repair_started_at,
-                        finished_at=datetime.now(timezone.utc).isoformat(),
-                        duration_ms=repair_duration_ms,
-                        success=template_adaptation_result.accepted,
-                        error=("; ".join(template_adaptation_result.errors) if not template_adaptation_result.accepted else None),
-                        pattern_id=coord_decision.pattern_id,
-                        template_match_type=match_type,
-                        repair_agent_used=repair_agent_used,
-                        adapted_fields=adapted_fields,
-                        changed_fields=changed_fields,
-                        requested_differences=requested_differences,
-                        requested_changes=requested_changes,
-                        applied_changes=applied_changes,
-                        rejected_changes=rejected_changes,
-                    )
-                    if not template_adaptation_result.accepted:
-                        raise ValueError(
-                            template_adaptation_result.repair_summary
-                            or "; ".join(template_adaptation_result.errors)
-                            or "partial template adaptation was rejected"
-                        )
-                    coord_decision.ir_data = template_adaptation_result.ir_data
-                    coord_decision.protocol_tla = template_adaptation_result.protocol_tla
-                    coord_decision.template_params = template_adaptation_result.params
-                    coord_decision.template_parameters = template_adaptation_result.params
-                    coord_decision.template_variant = template_adaptation_result.template_variant
-                    coord_decision.agents = coord_decision.ir_data.get("agents", [])
-                    coord_decision.resources = coord_decision.ir_data.get("resources", [])
-                    coord_decision.channels = coord_decision.ir_data.get("channels", [])
-                    template_metadata.update({
-                        "template_params": coord_decision.template_params,
-                        "template_parameters": coord_decision.template_parameters,
-                        "selected_variant": coord_decision.template_variant,
-                        "repair_agent_used": repair_agent_used,
-                        "repair_stage": repair_stage,
-                        "repair_summary": repair_summary,
-                        "adapted_fields": adapted_fields,
-                        "changed_fields": changed_fields,
-                        "requested_differences": requested_differences,
-                        "requested_changes": requested_changes,
-                        "applied_changes": applied_changes,
-                        "rejected_changes": rejected_changes,
-                        "safety_preservation_notes": safety_preservation_notes,
-                    })
-                else:
-                    timing.usage.record(
-                        stage="deterministic_template",
-                        provider="deterministic",
-                        model=coord_decision.pattern_id,
-                        prompt_tokens=0,
-                        completion_tokens=0,
-                        total_tokens=0,
-                        exact_cost_usd=0.0,
-                        pricing_source="deterministic_template",
-                        record_id=f"{ws.name}:deterministic_template",
-                    )
-
-                coord_decision.ir_data = normalize_ir(coord_decision.ir_data)
-                coord_template_metadata = template_metadata
-                # Write IR
-                (_spec_dir(ws) / "ir.json").write_text(
-                    json.dumps(coord_decision.ir_data, indent=2) + "\n",
+            try:
+                templates = [get_template(pattern_id) for pattern_id in list_pattern_ids()]
+                engine = DeterministicTemplateEngine()
+                rankings = engine.rank(attributes, templates)
+                rankings_path = _spec_dir(ws) / "template_rankings.json"
+                rankings_path.write_text(
+                    json.dumps([ranking.to_dict() for ranking in rankings], indent=2),
                     encoding="utf-8",
                 )
-                # Write Protocol.tla
-                (_spec_dir(ws) / "Protocol.tla").write_text(
-                    coord_decision.protocol_tla + "\n",
+                top_template = (
+                    next(template for template in templates if template.get_template_id() == rankings[0].template_id)
+                    if rankings
+                    else None
+                )
+                validation = engine.validate(attributes, top_template) if top_template else None
+                validation_path = _spec_dir(ws) / "template_validation_result.json"
+                validation_path.write_text(
+                    json.dumps(
+                        validation.to_dict() if validation else {
+                            "valid": False,
+                            "reason": "No templates available for validation.",
+                        },
+                        indent=2,
+                    ),
                     encoding="utf-8",
                 )
-                # Persist template metadata beside verified artifacts without
-                # polluting ir.json, whose schema remains strict.
-                (_spec_dir(ws) / "template_metadata.json").write_text(
-                    json.dumps(template_metadata, indent=2) + "\n",
+                procedure_options = engine.procedure_options(rankings, validation, templates)
+                options_path = _spec_dir(ws) / "procedure_options.json"
+                options_path.write_text(
+                    json.dumps(procedure_options.to_dict(), indent=2),
                     encoding="utf-8",
                 )
-                # Validate IR
-                valid_coord_ir, coord_ir_errors, coord_ir_diag = validate_design_ir(ws)
-                coord_template_diagnostics.extend(coord_ir_diag)
-                if not valid_coord_ir:
-                    raise ValueError("; ".join(coord_ir_errors))
-                # Generate TLC config (do NOT overwrite our Protocol.tla)
-                coord_template_diagnostics.extend(_scaffold_coord_ir(ws))
-                coord_template_diagnostics.extend(_run_tlc_and_extract(ws, timing))
-                coord_status, coord_errs, coord_diag = classify_design_artifacts(ws)
-                coord_template_diagnostics.extend(coord_diag)
-                if coord_status != "ready":
-                    raise ValueError(
-                        "; ".join(coord_errs)
-                        or f"coord template verification ended with status {coord_status}"
-                    )
-                coord_template_used = True
-                coord_template_diagnostics.append(
-                    f"Coord template {coord_decision.pattern_id!r} completed "
-                    f"{match_type} verification"
+                procedure_prompt = build_procedure_selection_prompt(
+                    query=task,
+                    extracted_data=attributes,
+                    rankings=rankings,
+                    validation=validation,
+                    procedure_options=procedure_options,
                 )
-                coord_template_diagnostics.append(
-                    f"opencode_skipped=true "
-                    f"template_used={coord_decision.pattern_id} "
-                    f"template_variant={coord_decision.template_variant or 'none'} "
-                    f"template_match_type={match_type} "
-                    f"repair_agent_used={str(repair_agent_used).lower()}"
+                prompt_path = _spec_dir(ws) / "procedure_selection_prompt.txt"
+                prompt_path.write_text(procedure_prompt, encoding="utf-8")
+                raw_decision = _complete_procedure_decision(procedure_prompt)
+                decision = validate_procedure_decision_response(raw_decision, procedure_options)
+                decision_path = _spec_dir(ws) / "procedure_decision.json"
+                decision_path.write_text(
+                    json.dumps(decision.to_dict(), indent=2),
+                    encoding="utf-8",
                 )
-                print(
-                    f"opencode_skipped=true "
-                    f"template_used={coord_decision.pattern_id} "
-                    f"template_variant={coord_decision.template_variant or 'none'} "
-                    f"template_match_type={match_type} "
-                    f"repair_agent_used={str(repair_agent_used).lower()}",
-                    flush=True,
-                )
-        except Exception as exc:  # noqa: BLE001 - fallback is the safety boundary
-            coord_template_error = str(exc)
-            coord_template_diagnostics.append(
-                f"Coord template fell back to OpenCode: {exc}"
+                procedure_decision_complete = True
+                procedure_decision_selected = decision.selected_procedure
+                attribute_extraction_diagnostics.extend([
+                    f"Template rankings written: {rankings_path.relative_to(ws)}",
+                    f"Template validation written: {validation_path.relative_to(ws)}",
+                    f"Procedure options written: {options_path.relative_to(ws)}",
+                    f"Procedure decision written: {decision_path.relative_to(ws)}",
+                    (
+                        "Procedure decision selected full_generation: continuing into "
+                        "OpenCode fallback because no reusable template was safe enough."
+                        if procedure_decision_selected == "full_generation"
+                        else f"Procedure decision selected {procedure_decision_selected}: stopping before OpenCode."
+                    ),
+                ])
+            except ProcedureDecisionError as exc:
+                invalid_procedure_decision = True
+                attr_error = str(exc)
+                attribute_extraction_diagnostics.append(f"Invalid procedure decision: {attr_error}")
+            except RuntimeError as exc:
+                procedure_llm_failed = True
+                attr_error = str(exc)
+                attribute_extraction_diagnostics.append(f"Procedure LLM failed: {attr_error}")
+            except Exception as exc:  # noqa: BLE001 - ranking/validation failures should be explicit
+                template_ranking_failed = True
+                attr_error = str(exc)
+                attribute_extraction_diagnostics.append(f"Template ranking or validation failed: {attr_error}")
+        except Exception as exc:  # noqa: BLE001 - extraction failures should be explicit
+            attr_error = str(exc)
+            attribute_extraction_failed = True
+            attribute_extraction_diagnostics.append(
+                f"Coordination attribute extraction failed: {attr_error}"
             )
-            coord_template_used = False
-
-        coord_duration_ms = time.monotonic() * 1000.0 - coord_started_ms
-        coord_report = {
-            "considered": coord_decision.considered if coord_decision else False,
-            "used": coord_template_used,
-            "pattern_id": coord_decision.pattern_id if coord_decision else None,
-            "confidence": coord_decision.confidence if coord_decision else 0.0,
-            "reason": coord_decision.reason if coord_decision else None,
-            "fallback_reason": coord_decision.fallback_reason if coord_decision else None,
-            "fallback_to_opencode": not coord_template_used,
-            "opencode_skipped": coord_template_used,
-            "opencode_full_generation": not coord_template_used,
-            "opencode_skipped_for_initial_design": coord_template_used,
-            "template_match_type": (
-                coord_decision.template_match_type if coord_decision else "none"
-            ),
-            "template_used": (
-                coord_decision.pattern_id
-                if coord_template_used and coord_decision
-                else None
-            ),
-            "template_variant": (
-                coord_decision.template_variant
-                if coord_template_used and coord_decision
-                else None
-            ),
-            "repair_agent_used": bool(
-                coord_template_metadata.get("repair_agent_used")
-            ),
-            "repair_stage": coord_template_metadata.get("repair_stage"),
-            "repair_summary": coord_template_metadata.get("repair_summary"),
-            "adapted_fields": coord_template_metadata.get("adapted_fields", []),
-            "changed_fields": coord_template_metadata.get("changed_fields", []),
-            "requested_differences": coord_template_metadata.get("requested_differences", []),
-            "template_metadata": (
-                coord_template_metadata
-                if coord_template_used and coord_decision
-                else {}
-            ),
-            "error": coord_template_error,
-            # Diagnostic fields — visible in run JSON for post-run investigation
-            "tellme_route": _tspec_route if coord_decision else None,
-            "user_query_excerpt": _tspec_query if coord_decision else None,
-            "candidate_harnesses": _tspec_harnesses if coord_decision else [],
-            "pattern_scores": {
-                pid: conf for pid, conf in (coord_decision.all_scores if coord_decision else [])
-            },
-            "evidence_sources_detected": (
-                coord_decision.evidence_sources_detected if coord_decision else []
-            ),
-            "evidence_source_count": (
-                coord_decision.evidence_source_count if coord_decision else 0
-            ),
-            "decision_agent_id": (
-                coord_decision.decision_agent_id if coord_decision else None
-            ),
-            "fan_in_decision_used": bool(
-                coord_template_used
-                and coord_decision
-                and coord_decision.pattern_id == "fan_in_decision"
-            ),
-            "template_priority_reason": (
-                coord_decision.template_priority_reason if coord_decision else None
-            ),
-            "app_agent_count": (
-                coord_decision.app_agent_count if coord_decision else 0
-            ),
-            "monitor_count": (
-                coord_decision.monitor_count if coord_decision else 1
-            ),
-        }
+        attr_duration_ms = time.monotonic() * 1000.0 - attr_started_ms
         timing.stage(
-            "coordination_pattern_template",
-            started_at=coord_started_at,
+            "llm_attribute_extraction",
+            started_at=attr_started_at,
             finished_at=datetime.now(timezone.utc).isoformat(),
-            duration_ms=coord_duration_ms,
-            success=coord_template_used or (coord_decision is not None and not coord_decision.considered),
-            error=coord_template_error,
-            coord_template=coord_report,
+            duration_ms=attr_duration_ms,
+            success=attr_error is None,
+            error=attr_error,
+            extracted_coordination_attributes=(attributes.as_dict() if attr_error is None else {}),
+            template_mapping_status=(
+                (
+                    "opencode_fallback_selected"
+                    if procedure_decision_selected == "full_generation"
+                    else "procedure_decision_complete"
+                )
+                if procedure_decision_complete
+                else (
+                    "invalid_procedure_decision"
+                    if invalid_procedure_decision
+                    else (
+                        "procedure_llm_failed"
+                        if procedure_llm_failed
+                        else (
+                            "template_ranking_failed"
+                            if template_ranking_failed
+                            else "attribute_extraction_failed"
+                        )
+                    )
+                )
+            ),
             aggregate=True,
         )
     # -------------------------------------------------------------------------------
-
-    if fast_path_used or coord_template_used:
+    if (
+        fast_path_used
+        or (procedure_decision_complete and procedure_decision_selected != "full_generation")
+        or invalid_procedure_decision
+        or procedure_llm_failed
+        or template_ranking_failed
+        or attribute_extraction_failed
+    ):
         disposition = {
             "status": "incomplete",
             "events": 0,
@@ -1868,24 +1653,35 @@ async def run_design(
         f"Workspace initialized: {ws_rel}",
         f"Model requested: {model or '(opencode default)'}",
         *fast_path_diagnostics,
-        *coord_template_diagnostics,
+        *attribute_extraction_diagnostics,
         (
-            "OpenCode initial design skipped: single-agent deterministic fast path verified"
-            if fast_path_used
-            else (
-                f"OpenCode initial design skipped: coord template {coord_decision.pattern_id!r} verified"
-                if coord_template_used and coord_decision
-                else "OpenCode design attempt finished"
+                "OpenCode initial design skipped: single-agent deterministic fast path verified"
+                if fast_path_used
+                else (
+                    "OpenCode initial design skipped: reusable procedure decision completed"
+                    if (procedure_decision_complete and procedure_decision_selected != "full_generation")
+                    else (
+                        "OpenCode initial design skipped: procedure decision failed"
+                        if (invalid_procedure_decision or procedure_llm_failed or template_ranking_failed)
+                        else (
+                            "OpenCode initial design skipped: coordination attribute extraction failed"
+                            if attribute_extraction_failed
+                            else "OpenCode design attempt finished"
+                        )
+                    )
             )
         ),
     ]
     run_diagnostics.extend(_workspace_stage_diagnostics(ws, "after initial design"))
-    if not fast_path_used and not coord_template_used:
+    if not (
+        fast_path_used
+        or procedure_decision_complete
+        or invalid_procedure_decision
+        or procedure_llm_failed
+        or template_ranking_failed
+        or attribute_extraction_failed
+    ):
         run_diagnostics.extend(_opencode_provider_diagnostics(ws, disposition))
-        # Guard: if TeLLMe route is multi_agent but OpenCode produced a single
-        # TASK_AGENT stub, repair the IR with a synthetic 2-agent structure so
-        # downstream validation has something meaningful to work with.
-        _guard_task_agent_ir(ws, task, run_diagnostics)
     validation_started_at = datetime.now(timezone.utc).isoformat()
     validation_started_ms = time.monotonic() * 1000.0
     sanitization_report: dict = {}
@@ -1904,6 +1700,38 @@ async def run_design(
         ir_sanitization=sanitization_report,
     )
     diagnostics = [*run_diagnostics, *diagnostics]
+    if procedure_decision_complete and procedure_decision_selected == "full_generation" and not fast_path_used:
+        diagnostics.append(
+            "Procedure decision selected full_generation: OpenCode fallback was allowed to run."
+        )
+    elif procedure_decision_complete and not fast_path_used:
+        status = "procedure_decision_complete"
+        ir_errors = []
+        diagnostics.append(
+            "Procedure decision complete: stopping before protocol generation, "
+            "OpenCode fallback, IR generation, PlusCal, or TLC."
+        )
+    elif invalid_procedure_decision and not fast_path_used:
+        status = "invalid_procedure_decision"
+        ir_errors = ["Procedure decision response failed deterministic validation."]
+        diagnostics.append("Invalid procedure decision: stopping before generation.")
+    elif procedure_llm_failed and not fast_path_used:
+        status = "procedure_llm_failed"
+        ir_errors = ["Downstream procedure-selection LLM failed."]
+        diagnostics.append("Procedure-selection LLM failed: stopping before generation.")
+    elif template_ranking_failed and not fast_path_used:
+        status = "template_ranking_failed"
+        ir_errors = ["Template ranking, validation, or procedure option generation failed."]
+        diagnostics.append("Template ranking failed: stopping before generation.")
+    elif attribute_extraction_failed and not fast_path_used:
+        status = "attribute_extraction_failed"
+        ir_errors = [
+            "Coordination attribute extraction failed before template mapping."
+        ]
+        diagnostics.append(
+            "Coordination attribute extraction failed: stopping before template "
+            "reuse, OpenCode fallback, IR generation, PlusCal, or TLC."
+        )
     repair_disposition = None
     continuation_disposition = None
     prompt_disposition = None
@@ -2087,7 +1915,7 @@ async def run_design(
     if _verified_protocol_ready(ws) and not timed_out:
         diagnostics.append("Prompt gate started")
         diagnostics.extend(_ensure_plan_before_prompts(ws))
-        if (fast_path_used or coord_template_used) and not _runtime_prompts_current(ws):
+        if fast_path_used and not _runtime_prompts_current(ws):
             deterministic_prompt_started_at = datetime.now(timezone.utc).isoformat()
             deterministic_prompt_started_ms = time.monotonic() * 1000.0
             try:
@@ -2096,19 +1924,6 @@ async def run_design(
                 prompt_dir = ws / "prompts" / "runtime_b"
                 prompt_dir.mkdir(parents=True, exist_ok=True)
                 prompt_decisions = [fast_path_decision]
-                if coord_template_used and coord_decision:
-                    prompt_decisions = [
-                        FastPathDecision(
-                            considered=True,
-                            eligible=True,
-                            reason=f"deterministic {coord_decision.pattern_id} template",
-                            task_text=task,
-                            agent_id=str(agent.get("id") or ""),
-                            structured_input=bool(_extract_structured_task(task)),
-                        )
-                        for agent in coord_decision.agents
-                        if agent.get("id")
-                    ]
                 prompt_paths = []
                 for prompt_decision in prompt_decisions:
                     prompt_text = render_verified_runtime_prompt(
@@ -2230,55 +2045,6 @@ async def run_design(
                 success=True,
             )
 
-    # --- Pattern candidate harvest -----------------------------------------
-    # Only after a successful verified run that used OpenCode fallback OR had no
-    # static template match. Single-agent fast path is not harvested by default.
-    opencode_fallback_used = not fast_path_used and not coord_template_used
-    if result.success and _verified_protocol_ready(ws):
-        harvest_started_at = datetime.now(timezone.utc).isoformat()
-        harvest_started_ms = time.monotonic() * 1000.0
-        harvest_result = harvest_candidate(
-            ws,
-            task_text=task,
-            used_opencode_fallback=opencode_fallback_used,
-            matched_existing_template=(
-                coord_decision.pattern_id is not None if coord_decision is not None else False
-            ),
-            is_single_agent=fast_path_used,
-            is_custom_task=True,
-            timing_report_path=timing.json_path if hasattr(timing, "json_path") else None,
-        )
-        repo_report = {
-            "pattern_repository_enabled": repository_enabled(),
-            "candidate_harvest_attempted": harvest_result.attempted,
-            "candidate_saved": harvest_result.saved,
-            "candidate_id": harvest_result.candidate_id or None,
-            "normalized_topology_hash": harvest_result.topology_hash or None,
-            "candidate_deduplicated": harvest_result.deduplicated,
-            "candidate_usage_count": harvest_result.usage_count,
-            "candidate_path": harvest_result.candidate_path or None,
-            "harvest_skip_reason": harvest_result.skip_reason or None,
-        }
-        timing.stage(
-            "pattern_candidate_harvest",
-            started_at=harvest_started_at,
-            finished_at=datetime.now(timezone.utc).isoformat(),
-            duration_ms=time.monotonic() * 1000.0 - harvest_started_ms,
-            success=harvest_result.saved or bool(harvest_result.skip_reason),
-            error=harvest_result.error or None,
-            pattern_repository=repo_report,
-            aggregate=True,
-        )
-        if harvest_result.saved:
-            diagnostics.append(
-                f"Pattern candidate {'deduplicated' if harvest_result.deduplicated else 'saved'}: "
-                f"{harvest_result.candidate_id} "
-                f"(hash={harvest_result.topology_hash})"
-            )
-        elif harvest_result.skip_reason:
-            diagnostics.append(f"Pattern harvest skipped: {harvest_result.skip_reason}")
-    # -----------------------------------------------------------------------
-
     if live and bus is not None:
         if watcher_task is not None:
             watcher_task.cancel()
@@ -2297,3 +2063,4 @@ async def run_design(
 
     timing.finalize()
     return result
+
