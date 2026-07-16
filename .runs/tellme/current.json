@@ -1,8 +1,8 @@
 {
-  "run_id": "tellme_d7c30100865d",
+  "run_id": "tellme_f84375414146",
   "tellme": {
-    "query_id": "tellme_d7c30100865d",
-    "query": "How many people were in the room in total in the last week of recordings?",
+    "query_id": "tellme_f84375414146",
+    "query": "How many people are in the room on July 15th?",
     "mode": "llm",
     "model": "gpt-4.1-mini",
     "api_key_detected": true,
@@ -88,7 +88,7 @@
         ]
       },
       "plan_type": "tracefix",
-      "query_id": "tellme_d7c30100865d",
+      "query_id": "tellme_f84375414146",
       "required_harnesses": [
         "occupancy_context_harness"
       ],
@@ -161,7 +161,7 @@
         "success_condition": "Return a privacy-bounded answer packet with confidence and evidence refs.",
         "user_intent": "occupancy_lookup"
       },
-      "brief_id": "brief_task_d7c30100865d",
+      "brief_id": "brief_task_f84375414146",
       "candidate_harnesses": [
         "occupancy_context_harness",
         "answer_synthesis_harness"
@@ -340,7 +340,7 @@
         "medical_diagnosis",
         "unsupported_behavioral_inference"
       ],
-      "normalized_query": "how many people were in the room in total in the last week of recordings?",
+      "normalized_query": "how many people are in the room on july 15th?",
       "privacy_policy": {
         "forbidden_inferences": [
           "raw_sensor_access",
@@ -358,8 +358,8 @@
         "privacy_scope": "cityos_structured_context_only",
         "raw_sensor_access_allowed": false
       },
-      "query_id": "tellme_d7c30100865d",
-      "reasoning_summary": "Deterministic template proposal generated for query tellme_d7c30100865d.",
+      "query_id": "tellme_f84375414146",
+      "reasoning_summary": "Deterministic template proposal generated for query tellme_f84375414146.",
       "required_modalities": [
         "video"
       ],
@@ -412,7 +412,7 @@
           "privacy_scope": "cityos_structured_context_only",
           "raw_sensor_access_allowed": false
         },
-        "query_id": "tellme_d7c30100865d",
+        "query_id": "tellme_f84375414146",
         "relevant_sensors": [
           {
             "allowed_api_names": [
@@ -586,7 +586,7 @@
       "space_id": "smart_room_1",
       "task_category": "occupancy_count",
       "time_windows": [],
-      "user_query": "How many people were in the room in total in the last week of recordings?",
+      "user_query": "How many people are in the room on July 15th?",
       "validation_policy": {
         "bounded_time_windows_required": true,
         "llm_proposal_untrusted": true,
@@ -598,9 +598,9 @@
       }
     },
     "tracefix_task_spec": {
-      "task_id": "task_d7c30100865d",
-      "query_id": "tellme_d7c30100865d",
-      "user_query": "How many people were in the room in total in the last week of recordings?",
+      "task_id": "task_f84375414146",
+      "query_id": "tellme_f84375414146",
+      "user_query": "How many people are in the room on July 15th?",
       "space_id": "smart_room_1",
       "intent": "occupancy_lookup",
       "tracefix_reason": "Preserve routing, privacy, and output verification.",
@@ -909,7 +909,7 @@
         "presence_state",
         "timestamped_event_summary"
       ],
-      "reasoning_summary": "Deterministic template proposal generated for query tellme_d7c30100865d.",
+      "reasoning_summary": "Deterministic template proposal generated for query tellme_f84375414146.",
       "executable": true,
       "reason": "occupancy_lookup",
       "target_tracefix_path": "TraceFix-main/",
@@ -987,7 +987,7 @@
           "limitations"
         ]
       },
-      "query_id": "tellme_d7c30100865d",
+      "query_id": "tellme_f84375414146",
       "resources": [
         {
           "modalities": [
@@ -1000,12 +1000,12 @@
         },
         {
           "name": "tellme_query_logs",
-          "query_id": "tellme_d7c30100865d",
+          "query_id": "tellme_f84375414146",
           "type": "local_query_run_directory"
         }
       ],
-      "task_description": "# TraceFix Dry-Run Task\n\n## User Query\nHow many people were in the room in total in the last week of recordings?\n\n## Scope\n- space_id: smart_room_1\n- privacy boundary: CityOS structured context only\n- raw sensor policy: no raw sensor data may be used; inputs are CityOS structured context, not raw sensor data\n\n## Time Windows\n- none specified\n\n## Required Modalities\n- video\n\n## Candidate Harnesses\n- answer_synthesis_harness\n- occupancy_context_harness\n\n## Application Goal\n- failure_condition: Return insufficient_evidence or escalate when the structured context is inadequate.\n- goal_type: occupancy_count\n- non_goals: ['identify person', 'face recognition', 'medical diagnosis', 'infer cause or intent']\n- success_condition: Return a privacy-bounded answer packet with confidence and evidence refs.\n- user_intent: occupancy_lookup\n\n## Evidence Plan\n- conflicting_evidence_checks: []\n- minimum_sufficient_evidence: ['occupancy_context_packet']\n- primary_evidence: ['occupancy_context_packet']\n- supporting_evidence: []\n\n## Answer Packet Requirements\n- allowed_claims: ['bounded_count', 'presence_state', 'timestamped_event_summary']\n- answer_type: direct_answer\n- fallback_answer_type: insufficient_evidence\n- forbidden_claims: ['raw_sensor_access', 'face_identity', 'personal_identity', 'medical_diagnosis', 'unsupported_behavioral_inference']\n- must_include_confidence: True\n- must_include_evidence_refs: True\n- must_include_limitations: True\n- required_fields: ['answer', 'confidence', 'evidence_refs', 'caveats', 'privacy_scope', 'limitations']\n\n## Allowed Claims\n- bounded_count, presence_state, timestamped_event_summary\n\n## Forbidden Claims\n- raw_sensor_access, face_identity, personal_identity, medical_diagnosis, unsupported_behavioral_inference\n\n## Expected Output Contract\n- required_fields: answer, confidence, evidence_refs, caveats, privacy_scope, limitations\n- field_types:\n  - answer: string\n  - caveats: array\n  - confidence: number\n  - evidence_refs: array\n  - limitations: array\n  - privacy_scope: string\n\n## Privacy Constraints\n- Use only CityOS-approved structured context.\n- Do not use or request raw sensor data.\n- All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts.",
-      "task_id": "task_d7c30100865d",
+      "task_description": "# TraceFix Dry-Run Task\n\n## User Query\nHow many people are in the room on July 15th?\n\n## Scope\n- space_id: smart_room_1\n- privacy boundary: CityOS structured context only\n- raw sensor policy: no raw sensor data may be used; inputs are CityOS structured context, not raw sensor data\n\n## Time Windows\n- none specified\n\n## Required Modalities\n- video\n\n## Candidate Harnesses\n- answer_synthesis_harness\n- occupancy_context_harness\n\n## Application Goal\n- failure_condition: Return insufficient_evidence or escalate when the structured context is inadequate.\n- goal_type: occupancy_count\n- non_goals: ['identify person', 'face recognition', 'medical diagnosis', 'infer cause or intent']\n- success_condition: Return a privacy-bounded answer packet with confidence and evidence refs.\n- user_intent: occupancy_lookup\n\n## Evidence Plan\n- conflicting_evidence_checks: []\n- minimum_sufficient_evidence: ['occupancy_context_packet']\n- primary_evidence: ['occupancy_context_packet']\n- supporting_evidence: []\n\n## Answer Packet Requirements\n- allowed_claims: ['bounded_count', 'presence_state', 'timestamped_event_summary']\n- answer_type: direct_answer\n- fallback_answer_type: insufficient_evidence\n- forbidden_claims: ['raw_sensor_access', 'face_identity', 'personal_identity', 'medical_diagnosis', 'unsupported_behavioral_inference']\n- must_include_confidence: True\n- must_include_evidence_refs: True\n- must_include_limitations: True\n- required_fields: ['answer', 'confidence', 'evidence_refs', 'caveats', 'privacy_scope', 'limitations']\n\n## Allowed Claims\n- bounded_count, presence_state, timestamped_event_summary\n\n## Forbidden Claims\n- raw_sensor_access, face_identity, personal_identity, medical_diagnosis, unsupported_behavioral_inference\n\n## Expected Output Contract\n- required_fields: answer, confidence, evidence_refs, caveats, privacy_scope, limitations\n- field_types:\n  - answer: string\n  - caveats: array\n  - confidence: number\n  - evidence_refs: array\n  - limitations: array\n  - privacy_scope: string\n\n## Privacy Constraints\n- Use only CityOS-approved structured context.\n- Do not use or request raw sensor data.\n- All inputs are CityOS structured context summaries, not raw video, audio, radar, or Wi-Fi artifacts.",
+      "task_id": "task_f84375414146",
       "tool_manifest": {
         "answer_synthesis_harness": [
           "synthesize_answer_packet"
@@ -1014,10 +1014,10 @@
           "get_occupancy_context"
         ]
       },
-      "user_query": "How many people were in the room in total in the last week of recordings?"
+      "user_query": "How many people are in the room on July 15th?"
     },
     "answer_packet": {
-      "query_id": "tellme_d7c30100865d",
+      "query_id": "tellme_f84375414146",
       "status": "needs_tracefix",
       "answer": "This query requires a future TraceFix multi-agent workflow and cannot be fully answered in V0.",
       "confidence": 0.0,
@@ -1049,7 +1049,7 @@
       },
       "agent_plan": {},
       "raw_outputs": {
-        "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_d7c30100865d",
+        "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_f84375414146",
         "logging_fallback_used": false,
         "llm_operational": {
           "agent_backend_mode": "llm",
@@ -1060,16 +1060,16 @@
           "decomposition": {
             "model": "gpt-4.1-mini",
             "last_used": "primary",
-            "last_latency_ms": 22359.0,
+            "last_latency_ms": 17625.0,
             "fallback_reason": null,
             "primary_calls": 1,
             "fallback_calls": 0,
             "last_request": {
-              "request_start": "2026-07-13T18:21:43.626695+00:00",
-              "first_response_time": "2026-07-13T18:22:05.991106+00:00",
-              "request_end": "2026-07-13T18:22:05.999082+00:00",
-              "total_duration_ms": 22359.0,
-              "time_to_first_response_ms": 22359.0,
+              "request_start": "2026-07-16T15:42:51.360805+00:00",
+              "first_response_time": "2026-07-16T15:43:08.995426+00:00",
+              "request_end": "2026-07-16T15:43:08.995426+00:00",
+              "total_duration_ms": 17625.0,
+              "time_to_first_response_ms": 17625.0,
               "model": "gpt-4.1-mini",
               "provider": "https://api.openai.com/v1",
               "failed": false,
@@ -1080,9 +1080,9 @@
         },
         "agent_backend_mode": "llm",
         "tracefix_task_spec": {
-          "task_id": "task_d7c30100865d",
-          "query_id": "tellme_d7c30100865d",
-          "user_query": "How many people were in the room in total in the last week of recordings?",
+          "task_id": "task_f84375414146",
+          "query_id": "tellme_f84375414146",
+          "user_query": "How many people are in the room on July 15th?",
           "space_id": "smart_room_1",
           "intent": "occupancy_lookup",
           "tracefix_reason": "Preserve routing, privacy, and output verification.",
@@ -1391,7 +1391,7 @@
             "presence_state",
             "timestamped_event_summary"
           ],
-          "reasoning_summary": "Deterministic template proposal generated for query tellme_d7c30100865d.",
+          "reasoning_summary": "Deterministic template proposal generated for query tellme_f84375414146.",
           "executable": true,
           "reason": "occupancy_lookup",
           "target_tracefix_path": "TraceFix-main/",
@@ -1410,7 +1410,7 @@
           ]
         },
         "tracefix_bundle_summary": {
-          "task_id": "task_d7c30100865d",
+          "task_id": "task_f84375414146",
           "agent_names": [
             "answer_synthesis_harness",
             "occupancy_context_harness"
@@ -1425,9 +1425,9 @@
         }
       },
       "tracefix_task_spec": {
-        "task_id": "task_d7c30100865d",
-        "query_id": "tellme_d7c30100865d",
-        "user_query": "How many people were in the room in total in the last week of recordings?",
+        "task_id": "task_f84375414146",
+        "query_id": "tellme_f84375414146",
+        "user_query": "How many people are in the room on July 15th?",
         "space_id": "smart_room_1",
         "intent": "occupancy_lookup",
         "tracefix_reason": "Preserve routing, privacy, and output verification.",
@@ -1736,7 +1736,7 @@
           "presence_state",
           "timestamped_event_summary"
         ],
-        "reasoning_summary": "Deterministic template proposal generated for query tellme_d7c30100865d.",
+        "reasoning_summary": "Deterministic template proposal generated for query tellme_f84375414146.",
         "executable": true,
         "reason": "occupancy_lookup",
         "target_tracefix_path": "TraceFix-main/",
@@ -1756,27 +1756,39 @@
       },
       "error_message": null
     },
-    "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_d7c30100865d",
+    "run_dir": "C:\\Users\\shrey\\TraceFixCityOS\\.runs\\tellme\\tellme_f84375414146",
     "warnings": [],
-    "answer_summary": "Latest recording rec_20260709_016 from day_09_2026-07-09. cam1; peak occupancy 3; last observed occupancy 2; activities person; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260713-142207-synthesis-20260713-182214-320029\\source_data\\frames\\day_09_2026-07-09_rec_20260709_016_cam1_t2.5.jpg.",
-    "chat_answer": "For the latest recording (day_09_2026-07-09 / rec_20260709_016), cam 1 peaked at 3 people. Across the observed time window, the peak occupancy was 3 people overall. At the latest observed moment, cam 1 most recently showed 2 people. Detected activities/poses included cam 1: person.",
+    "answer_summary": "Recording rec_20260715_003 from day_13_2026-07-15 matched requested date July 15. cam2-d455; peak occupancy 2; last observed occupancy 1; activities idle, jump, not fully in frame, person, run, stand, turn, yolo; tracks 3; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260716-114310-synthesis-20260716-154352-665176\\source_data\\frames\\day_13_2026-07-15_rec_20260715_003_cam2-d455_t5.0.jpg. cam2-d435; peak occupancy 3; last observed occupancy 1; activities person; tracks 2; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260716-114310-synthesis-20260716-154352-665176\\source_data\\frames\\day_13_2026-07-15_rec_20260715_003_cam2-d435_t5.0.jpg.",
+    "chat_answer": "For July 15 (day_13_2026-07-15 / rec_20260715_003), cam2-d455 peaked at 2 people, and cam2-d435 peaked at 3 people. Across the observed time window, the peak occupancy was 3 people overall. At the latest observed moment, cam2-d455 most recently showed 1 person, and cam2-d435 most recently showed 1 person. Detected activities/poses included cam2-d455: idle, jump, not fully in frame, person, run, stand, turn, yolo; cam2-d435: person.",
     "web_data_answer": {
-      "question": "How many people were in the room in total in the last week of recordings?",
-      "text": "Latest recording rec_20260709_016 from day_09_2026-07-09. cam1; peak occupancy 3; last observed occupancy 2; activities person; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260713-142207-synthesis-20260713-182214-320029\\source_data\\frames\\day_09_2026-07-09_rec_20260709_016_cam1_t2.5.jpg.",
-      "chatAnswer": "For the latest recording (day_09_2026-07-09 / rec_20260709_016), cam 1 peaked at 3 people. Across the observed time window, the peak occupancy was 3 people overall. At the latest observed moment, cam 1 most recently showed 2 people. Detected activities/poses included cam 1: person.",
-      "chat_answer": "For the latest recording (day_09_2026-07-09 / rec_20260709_016), cam 1 peaked at 3 people. Across the observed time window, the peak occupancy was 3 people overall. At the latest observed moment, cam 1 most recently showed 2 people. Detected activities/poses included cam 1: person.",
+      "question": "How many people are in the room on July 15th?",
+      "text": "Recording rec_20260715_003 from day_13_2026-07-15 matched requested date July 15. cam2-d455; peak occupancy 2; last observed occupancy 1; activities idle, jump, not fully in frame, person, run, stand, turn, yolo; tracks 3; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260716-114310-synthesis-20260716-154352-665176\\source_data\\frames\\day_13_2026-07-15_rec_20260715_003_cam2-d455_t5.0.jpg. cam2-d435; peak occupancy 3; last observed occupancy 1; activities person; tracks 2; sample frame C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260716-114310-synthesis-20260716-154352-665176\\source_data\\frames\\day_13_2026-07-15_rec_20260715_003_cam2-d435_t5.0.jpg.",
+      "chatAnswer": "For July 15 (day_13_2026-07-15 / rec_20260715_003), cam2-d455 peaked at 2 people, and cam2-d435 peaked at 3 people. Across the observed time window, the peak occupancy was 3 people overall. At the latest observed moment, cam2-d455 most recently showed 1 person, and cam2-d435 most recently showed 1 person. Detected activities/poses included cam2-d455: idle, jump, not fully in frame, person, run, stand, turn, yolo; cam2-d435: person.",
+      "chat_answer": "For July 15 (day_13_2026-07-15 / rec_20260715_003), cam2-d455 peaked at 2 people, and cam2-d435 peaked at 3 people. Across the observed time window, the peak occupancy was 3 people overall. At the latest observed moment, cam2-d455 most recently showed 1 person, and cam2-d435 most recently showed 1 person. Detected activities/poses included cam2-d455: idle, jump, not fully in frame, person, run, stand, turn, yolo; cam2-d435: person.",
       "recording": {
-        "day": "day_09_2026-07-09",
-        "rec": "rec_20260709_016"
+        "day": "day_13_2026-07-15",
+        "rec": "rec_20260715_003"
       },
       "selection": {
-        "mode": "latest",
-        "requestedDate": null,
-        "requestedDateLabel": null,
-        "reason": "selected newest recording because the question did not include a specific date"
+        "mode": "requested_date",
+        "requestedDate": {
+          "year": null,
+          "month": 7,
+          "day": 15,
+          "label": "July 15"
+        },
+        "requestedDateLabel": "July 15",
+        "reason": "matched requested date July 15"
       },
       "activityCounts": {
-        "person": 3
+        "idle": 9,
+        "jump": 9,
+        "not fully in frame": 9,
+        "person": 4,
+        "run": 9,
+        "stand": 9,
+        "turn": 9,
+        "yolo": 9
       },
       "requestedActivities": [],
       "requestedActivityCounts": {},
@@ -1784,17 +1796,57 @@
       "requestedActivityAnswer": "",
       "cameras": [
         {
-          "camera": "cam1",
-          "node": "smartroom1",
-          "durationSec": 5,
-          "peakPeople": 3,
-          "lastPeople": 2,
-          "trackCount": null,
-          "actions": [],
+          "camera": "cam2-d455",
+          "node": "smartroom2",
+          "durationSec": 15,
+          "peakPeople": 2,
+          "lastPeople": 1,
+          "trackCount": 3,
+          "actions": [
+            "jump",
+            "run",
+            "stand",
+            "turn"
+          ],
           "activities": [
-            "person"
+            "idle",
+            "jump",
+            "not fully in frame",
+            "person",
+            "run",
+            "stand",
+            "turn",
+            "yolo"
           ],
           "activityEvents": [
+            {
+              "model": "action-hmdb",
+              "label": "idle"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "jump"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "not fully in frame"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "run"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "stand"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "turn"
+            },
+            {
+              "model": "action-hmdb",
+              "label": "yolo"
+            },
             {
               "model": "yolo26l",
               "label": "person"
@@ -1802,14 +1854,137 @@
             {
               "model": "yolo26n-pose",
               "label": "person"
+            },
+            {
+              "model": "yolo26m",
+              "label": "person"
+            },
+            {
+              "model": "yolo26n",
+              "label": "person"
+            },
+            {
+              "model": "yolo26s",
+              "label": "person"
             }
           ],
           "activityCounts": {
-            "person": 3
+            "idle": 9,
+            "jump": 9,
+            "not fully in frame": 9,
+            "person": 2,
+            "run": 9,
+            "stand": 9,
+            "turn": 9,
+            "yolo": 9
           },
-          "activityTrackIds": {},
+          "activityTrackIds": {
+            "idle": [
+              "1",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "jump": [
+              "1",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "not fully in frame": [
+              "1",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "person": [
+              "1"
+            ],
+            "run": [
+              "1",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "stand": [
+              "1",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "turn": [
+              "1",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ],
+            "yolo": [
+              "1",
+              "model",
+              "nativeFps",
+              "persons",
+              "poseSource",
+              "schemaVersion",
+              "source",
+              "sourceMtimeMs",
+              "stride",
+              "window"
+            ]
+          },
           "pose": {
             "models": [
+              {
+                "model": "action-hmdb",
+                "labels": [
+                  "idle",
+                  "jump",
+                  "not fully in frame",
+                  "run",
+                  "stand",
+                  "turn",
+                  "yolo"
+                ],
+                "keypointSets": 306,
+                "segmentSets": 12,
+                "centroidSets": 456,
+                "hasKeypoints": true
+              },
               {
                 "model": "yolo26n-pose",
                 "labels": [
@@ -1819,21 +1994,172 @@
                 "segmentSets": 0,
                 "centroidSets": 0,
                 "hasKeypoints": true
+              },
+              {
+                "model": "geo",
+                "labels": [],
+                "keypointSets": 0,
+                "segmentSets": 0,
+                "centroidSets": 85,
+                "hasKeypoints": false
               }
             ],
             "available": true
           },
           "endpoints": {
-            "yolo26l": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_09_2026-07-09/rec_20260709_016/cam1/inference/yolo26l",
-            "yolo26n-pose": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_09_2026-07-09/rec_20260709_016/cam1/inference/yolo26n-pose"
+            "action-hmdb": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d455/inference/action-hmdb",
+            "yolo26l": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d455/inference/yolo26l",
+            "yolo26n-pose": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d455/inference/yolo26n-pose",
+            "geo": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d455/inference/geo",
+            "yolo26m": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d455/inference/yolo26m",
+            "yolo26n": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d455/inference/yolo26n",
+            "yolo26s": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d455/inference/yolo26s"
           },
           "models": {
+            "action-hmdb": {
+              "status": "done",
+              "durationSec": 15,
+              "peakPeople": null,
+              "lastPeople": null,
+              "samples": 0,
+              "tracks": 1,
+              "actions": [
+                "stand",
+                "jump",
+                "turn",
+                "run"
+              ],
+              "trackActions": {
+                "1": "stand"
+              },
+              "activityLabels": [
+                "idle",
+                "jump",
+                "not fully in frame",
+                "run",
+                "stand",
+                "turn",
+                "yolo"
+              ],
+              "activityCounts": {
+                "idle": 9,
+                "jump": 9,
+                "not fully in frame": 9,
+                "run": 9,
+                "stand": 9,
+                "turn": 9,
+                "yolo": 9
+              },
+              "activityTrackIds": {
+                "idle": [
+                  "1",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "jump": [
+                  "1",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "not fully in frame": [
+                  "1",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "run": [
+                  "1",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "stand": [
+                  "1",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "turn": [
+                  "1",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ],
+                "yolo": [
+                  "1",
+                  "model",
+                  "nativeFps",
+                  "persons",
+                  "poseSource",
+                  "schemaVersion",
+                  "source",
+                  "sourceMtimeMs",
+                  "stride",
+                  "window"
+                ]
+              },
+              "pose": {
+                "model": "action-hmdb",
+                "labels": [
+                  "idle",
+                  "jump",
+                  "not fully in frame",
+                  "run",
+                  "stand",
+                  "turn",
+                  "yolo"
+                ],
+                "keypointSets": 306,
+                "segmentSets": 12,
+                "centroidSets": 456,
+                "hasKeypoints": true
+              },
+              "jumps": 0
+            },
             "yolo26l": {
               "status": "done",
-              "durationSec": 5,
-              "peakPeople": 2,
-              "lastPeople": 2,
-              "samples": 23,
+              "durationSec": 15,
+              "peakPeople": 1,
+              "lastPeople": 1,
+              "samples": 75,
               "tracks": null,
               "actions": [],
               "trackActions": {},
@@ -1847,10 +2173,10 @@
             },
             "yolo26n-pose": {
               "status": "done",
-              "durationSec": 5,
-              "peakPeople": 3,
-              "lastPeople": 2,
-              "samples": 23,
+              "durationSec": 15,
+              "peakPeople": 2,
+              "lastPeople": 1,
+              "samples": 75,
               "tracks": null,
               "actions": [],
               "trackActions": {},
@@ -1858,9 +2184,13 @@
                 "person"
               ],
               "activityCounts": {
-                "person": 3
+                "person": 2
               },
-              "activityTrackIds": {},
+              "activityTrackIds": {
+                "person": [
+                  "1"
+                ]
+              },
               "pose": {
                 "model": "yolo26n-pose",
                 "labels": [
@@ -1872,63 +2202,340 @@
                 "hasKeypoints": true
               },
               "jumps": null
+            },
+            "geo": {
+              "status": "done",
+              "durationSec": 14.8,
+              "peakPeople": null,
+              "lastPeople": null,
+              "samples": 0,
+              "tracks": 3,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": {
+                "model": "geo",
+                "labels": [],
+                "keypointSets": 0,
+                "segmentSets": 0,
+                "centroidSets": 85,
+                "hasKeypoints": false
+              },
+              "jumps": null
+            },
+            "yolo26m": {
+              "status": "done",
+              "durationSec": 15,
+              "peakPeople": 2,
+              "lastPeople": 1,
+              "samples": 75,
+              "tracks": null,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": null,
+              "jumps": null
+            },
+            "yolo26n": {
+              "status": "done",
+              "durationSec": 15,
+              "peakPeople": 2,
+              "lastPeople": 0,
+              "samples": 75,
+              "tracks": null,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": null,
+              "jumps": null
+            },
+            "yolo26s": {
+              "status": "done",
+              "durationSec": 15,
+              "peakPeople": 2,
+              "lastPeople": 1,
+              "samples": 75,
+              "tracks": null,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": null,
+              "jumps": null
             }
           },
-          "framePath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260713-142207-synthesis-20260713-182214-320029\\source_data\\frames\\day_09_2026-07-09_rec_20260709_016_cam1_t2.5.jpg"
+          "framePath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260716-114310-synthesis-20260716-154352-665176\\source_data\\frames\\day_13_2026-07-15_rec_20260715_003_cam2-d455_t5.0.jpg"
+        },
+        {
+          "camera": "cam2-d435",
+          "node": "smartroom2",
+          "durationSec": 15,
+          "peakPeople": 3,
+          "lastPeople": 1,
+          "trackCount": 2,
+          "actions": [],
+          "activities": [
+            "person"
+          ],
+          "activityEvents": [
+            {
+              "model": "yolo26l",
+              "label": "person"
+            },
+            {
+              "model": "yolo26n-pose",
+              "label": "person"
+            },
+            {
+              "model": "yolo26m",
+              "label": "person"
+            },
+            {
+              "model": "yolo26n",
+              "label": "person"
+            },
+            {
+              "model": "yolo26s",
+              "label": "person"
+            }
+          ],
+          "activityCounts": {
+            "person": 2
+          },
+          "activityTrackIds": {
+            "person": [
+              "1"
+            ]
+          },
+          "pose": {
+            "models": [
+              {
+                "model": "yolo26n-pose",
+                "labels": [
+                  "person"
+                ],
+                "keypointSets": 8,
+                "segmentSets": 0,
+                "centroidSets": 0,
+                "hasKeypoints": true
+              },
+              {
+                "model": "geo",
+                "labels": [],
+                "keypointSets": 0,
+                "segmentSets": 0,
+                "centroidSets": 81,
+                "hasKeypoints": false
+              }
+            ],
+            "available": true
+          },
+          "endpoints": {
+            "yolo26l": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d435/inference/yolo26l",
+            "yolo26n-pose": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d435/inference/yolo26n-pose",
+            "geo": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d435/inference/geo",
+            "yolo26m": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d435/inference/yolo26m",
+            "yolo26n": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d435/inference/yolo26n",
+            "yolo26s": "https://smartroom-mirror.vercel.app/api/v1/recordings/day_13_2026-07-15/rec_20260715_003/cam2-d435/inference/yolo26s"
+          },
+          "models": {
+            "yolo26l": {
+              "status": "done",
+              "durationSec": 14.946,
+              "peakPeople": 2,
+              "lastPeople": 1,
+              "samples": 80,
+              "tracks": null,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": null,
+              "jumps": null
+            },
+            "yolo26n-pose": {
+              "status": "done",
+              "durationSec": 14.946,
+              "peakPeople": 2,
+              "lastPeople": 1,
+              "samples": 80,
+              "tracks": null,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {
+                "person": 2
+              },
+              "activityTrackIds": {
+                "person": [
+                  "1"
+                ]
+              },
+              "pose": {
+                "model": "yolo26n-pose",
+                "labels": [
+                  "person"
+                ],
+                "keypointSets": 8,
+                "segmentSets": 0,
+                "centroidSets": 0,
+                "hasKeypoints": true
+              },
+              "jumps": null
+            },
+            "geo": {
+              "status": "done",
+              "durationSec": 14.8,
+              "peakPeople": null,
+              "lastPeople": null,
+              "samples": 0,
+              "tracks": 2,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": {
+                "model": "geo",
+                "labels": [],
+                "keypointSets": 0,
+                "segmentSets": 0,
+                "centroidSets": 81,
+                "hasKeypoints": false
+              },
+              "jumps": null
+            },
+            "yolo26m": {
+              "status": "done",
+              "durationSec": 14.946,
+              "peakPeople": 2,
+              "lastPeople": 2,
+              "samples": 80,
+              "tracks": null,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": null,
+              "jumps": null
+            },
+            "yolo26n": {
+              "status": "done",
+              "durationSec": 14.946,
+              "peakPeople": 3,
+              "lastPeople": 1,
+              "samples": 80,
+              "tracks": null,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": null,
+              "jumps": null
+            },
+            "yolo26s": {
+              "status": "done",
+              "durationSec": 14.946,
+              "peakPeople": 2,
+              "lastPeople": 1,
+              "samples": 80,
+              "tracks": null,
+              "actions": [],
+              "trackActions": {},
+              "activityLabels": [
+                "person"
+              ],
+              "activityCounts": {},
+              "activityTrackIds": {},
+              "pose": null,
+              "jumps": null
+            }
+          },
+          "framePath": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260716-114310-synthesis-20260716-154352-665176\\source_data\\frames\\day_13_2026-07-15_rec_20260715_003_cam2-d435_t5.0.jpg"
         }
       ],
       "errors": []
     },
-    "web_data_answer_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260713-142207-synthesis-20260713-182214-320029\\smartroom-answer.json",
+    "web_data_answer_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260716-114310-synthesis-20260716-154352-665176\\smartroom-answer.json",
     "web_data_snapshot_summary": {
-      "recordingCount": 33,
-      "selectedDay": "day_09_2026-07-09",
-      "selectedRecording": "rec_20260709_016",
+      "recordingCount": 5,
+      "selectedDay": "day_13_2026-07-15",
+      "selectedRecording": "rec_20260715_003",
       "cameras": [
-        "cam1"
+        "cam2-d455",
+        "cam2-d435"
       ],
-      "selectionMode": "latest",
-      "selectionReason": "selected newest recording because the question did not include a specific date",
-      "requestedDate": null,
-      "requestedDateLabel": null,
-      "question": "How many people were in the room in total in the last week of recordings?",
+      "selectionMode": "requested_date",
+      "selectionReason": "matched requested date July 15",
+      "requestedDate": {
+        "year": null,
+        "month": 7,
+        "day": 15,
+        "label": "July 15"
+      },
+      "requestedDateLabel": "July 15",
+      "question": "How many people are in the room on July 15th?",
       "errors": 0
     },
-    "web_data_payload_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260713-142207-synthesis-20260713-182214-320029\\source_data\\20260713-182217-585017_web_payload.json",
+    "web_data_payload_path": "C:\\Users\\shrey\\TraceFixCityOS\\.tracefix-ui\\web-data-runs\\tracefix-tellme-structured-smart-room-application-20260716-114310-synthesis-20260716-154352-665176\\source_data\\20260716-154356-284033_web_payload.json",
     "web_data_source_url": "https://smartroom-mirror.vercel.app/api/v1",
     "web_data_source_kind": "smartroom-control"
   },
   "tracefix": {
-    "run_id": "d9eec8b47e",
-    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207"
+    "run_id": "fccb43aa38",
+    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310"
   },
   "cityos": {
-    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207",
-    "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\spec\\cityos_module_plan.json",
+    "workspace": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310",
+    "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\spec\\cityos_module_plan.json",
     "appsDir": "C:\\Users\\shrey\\cityos\\apps",
-    "manifestPath": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260713-142207-synthesis.json",
+    "manifestPath": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260716-114310-synthesis.json",
     "outputDir": "C:\\Users\\shrey\\cityos\\apps",
     "apps": [
       {
-        "name": "tracefix-tellme-structured-smart-room-application-20260713-142207-occupa",
+        "name": "tracefix-tellme-structured-smart-room-application-20260716-114310-occupa",
         "kind": "agent",
         "agent": "OCCUPANCY_ANALYZER",
-        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260713-142207-occupa",
-        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260713-142207-occupa"
+        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260716-114310-occupa",
+        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260716-114310-occupa"
       },
       {
-        "name": "tracefix-tellme-structured-smart-room-application-20260713-142207-monito",
+        "name": "tracefix-tellme-structured-smart-room-application-20260716-114310-monito",
         "kind": "monitor",
         "agent": null,
-        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260713-142207-monito",
-        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260713-142207-monito"
+        "path": "C:\\Users\\shrey\\cityos\\apps\\tracefix-tellme-structured-smart-room-application-20260716-114310-monito",
+        "buildCommand": "just build app=tracefix-tellme-structured-smart-room-application-20260716-114310-monito"
       }
     ],
     "summary": {
-      "name": "tellme_structured_smart_room_application_20260713_142207",
-      "path": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207",
-      "lastModified": 1783966932.181662,
-      "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\spec\\cityos_module_plan.json",
+      "name": "tellme_structured_smart_room_application_20260716_114310",
+      "path": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310",
+      "lastModified": 1784216595.6105745,
+      "planPath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\spec\\cityos_module_plan.json",
       "hasPlan": true,
       "productionReady": true,
       "verificationStatus": "verified",
@@ -1946,7 +2553,7 @@
       "tlcStatus": "passed",
       "planStatus": "ready",
       "workspaceType": "custom",
-      "taskText": "How many people were in the room in total in the last week of recordings?",
+      "taskText": "How many people are in the room on July 15th?",
       "taskSource": "tellme",
       "agents": [
         "OCCUPANCY_ANALYZER"
@@ -1956,56 +2563,56 @@
       "requirements": [
         {
           "path": "spec/cityos_module_plan.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\spec\\cityos_module_plan.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\spec\\cityos_module_plan.json",
           "exists": true,
           "createdBy": "Generate Verified Plan or Export Intermediary Plan",
           "required": true
         },
         {
           "path": "spec/ir.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\spec\\ir.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\spec\\ir.json",
           "exists": true,
           "createdBy": "Generate Verified Plan",
           "required": true
         },
         {
           "path": "spec/states.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\spec\\states.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\spec\\states.json",
           "exists": true,
           "createdBy": "Run TraceFix verification until TLC/state extraction completes",
           "required": true
         },
         {
           "path": "spec/Protocol.tla",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\spec\\Protocol.tla",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\spec\\Protocol.tla",
           "exists": true,
           "createdBy": "Run TraceFix protocol generation",
           "required": true
         },
         {
           "path": "spec/Protocol.cfg",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\spec\\Protocol.cfg",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\spec\\Protocol.cfg",
           "exists": true,
           "createdBy": "Run TraceFix protocol generation",
           "required": true
         },
         {
           "path": "spec/summary.json",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\spec\\summary.json",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\spec\\summary.json",
           "exists": true,
           "createdBy": "Run TraceFix verification until summary is written",
           "required": false
         },
         {
           "path": "spec/Protocol_translated.tla",
-          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\spec\\Protocol_translated.tla",
+          "absolutePath": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\spec\\Protocol_translated.tla",
           "exists": true,
           "createdBy": "PlusCal translation",
           "required": false
         }
       ],
       "missingRequired": [],
-      "outputDir": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260713_142207\\output\\cityos_synthesis",
+      "outputDir": "C:\\Users\\shrey\\TraceFixCityOS\\workspace\\tellme_structured_smart_room_application_20260716_114310\\output\\cityos_synthesis",
       "ready": true
     }
   }
