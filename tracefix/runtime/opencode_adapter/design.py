@@ -1,4 +1,4 @@
-﻿"""``tracefix design`` — drive an UNMODIFIED headless opencode through the
+"""``tracefix design`` — drive an UNMODIFIED headless opencode through the
 /tla-verify-pluscal skill to turn a natural-language requirement into a
 verified workspace (spec/ + prompts/runtime_b/ + spec/cityos_module_plan.json).
 
@@ -387,6 +387,103 @@ def _guard_task_agent_ir(ws: Path, task: str, diagnostics: list[str]) -> None:
         diagnostics.append(f"TASK_AGENT guard: repair failed (non-fatal): {exc}")
 
 
+def _guard_init_stub_ir(ws: Path, task: str, diagnostics: list[str]) -> None:
+    """Repair the AGENT_A/AGENT_B init stub for TeLLMe multi-agent tasks.
+
+    OpenCode/provider startup failures can leave the initialized placeholder IR
+    untouched. When the structured TeLLMe spec has already committed to a
+    multi-agent route, replace that exact placeholder with a minimal, task-bound
+    handoff topology so validation and PlusCal scaffolding can continue.
+    """
+    from tracefix.runtime.coordination_classifier import (
+        _agents_from_harnesses,
+        _extract_two_agent_roles,
+    )
+
+    try:
+        spec = _extract_structured_task(task)
+        if not spec:
+            return
+        route = str(spec.get("route") or "").strip().lower()
+        if route != "multi_agent":
+            return
+
+        ir = _load_ir(ws)
+        if not _looks_like_init_stub(ir):
+            return
+
+        task_text = "\n".join(
+            str(part or "")
+            for part in (
+                spec.get("user_query"),
+                spec.get("task"),
+                spec.get("description"),
+                task,
+            )
+        ).lower()
+        structured_agents = [
+            agent
+            for agent in (spec.get("agents") or [])
+            if isinstance(agent, dict)
+        ]
+        harness_agents = _agents_from_harnesses(spec.get("candidate_harnesses") or [])
+        agents = structured_agents or harness_agents
+        is_smartroom_task = any(
+            token in task_text
+            for token in ("smart-room", "smart room", "camera", "recording", "occupancy")
+        )
+        if len(agents) == 1 and is_smartroom_task:
+            agents = [
+                agents[0],
+                {
+                    "id": "answer_synthesizer",
+                    "role": "synthesize a grounded answer from collected observations",
+                },
+            ]
+        elif len(agents) < 2 and is_smartroom_task:
+            agents = [
+                {
+                    "id": "evidence_collector",
+                    "role": "collect smart-room camera evidence and produce bounded observations",
+                },
+                {
+                    "id": "answer_synthesizer",
+                    "role": "synthesize a grounded answer from collected observations",
+                },
+            ]
+
+        a_id, a_role, b_id, b_role = _extract_two_agent_roles(agents, task_text, 0, 1)
+        if a_id == b_id:
+            b_id = f"{b_id}_synthesizer"
+        channel_id = f"{a_id}_to_{b_id}"
+        repaired_ir = {
+            "agents": [
+                {"id": a_id, "role": a_role},
+                {"id": b_id, "role": b_role},
+            ],
+            "resources": [],
+            "channels": [
+                {
+                    "id": channel_id,
+                    "from": a_id,
+                    "to": b_id,
+                    "labels": ["evidence_ready", "answer_ready"],
+                },
+            ],
+        }
+        from tracefix.pipeline.pipeline.validator import normalize_ir
+
+        repaired_ir = normalize_ir(repaired_ir)
+        (_spec_dir(ws) / "ir.json").write_text(
+            json.dumps(repaired_ir, indent=2) + "\n", encoding="utf-8"
+        )
+        diagnostics.append(
+            "Init stub guard: multi_agent route produced AGENT_A/AGENT_B stub; "
+            f"repaired with channel {channel_id}"
+        )
+    except Exception as exc:  # noqa: BLE001
+        diagnostics.append(f"Init stub guard: repair failed (non-fatal): {exc}")
+
 def _channel_key(channel: dict) -> str:
     return str(channel.get("id") or f"{channel.get('from')}->{channel.get('to')}")
 
@@ -501,6 +598,8 @@ def _opencode_provider_diagnostics(ws: Path, disposition: dict) -> list[str]:
         "model not found",
         "unsupported model",
         "model is not supported",
+        "no endpoints found that support tool use",
+        "does not support tool use",
     ]
     if any(marker in lowered for marker in auth_markers):
         return [
@@ -1886,6 +1985,7 @@ async def run_design(
         # TASK_AGENT stub, repair the IR with a synthetic 2-agent structure so
         # downstream validation has something meaningful to work with.
         _guard_task_agent_ir(ws, task, run_diagnostics)
+        _guard_init_stub_ir(ws, task, run_diagnostics)
     validation_started_at = datetime.now(timezone.utc).isoformat()
     validation_started_ms = time.monotonic() * 1000.0
     sanitization_report: dict = {}
