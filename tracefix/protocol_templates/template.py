@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from typing import ClassVar
+import re
 from tracefix.runtime.coordination_patterns import normalize_coordination_patterns
 
 
@@ -11,6 +13,100 @@ class Template:
     This class intentionally has no matching, ranking, scoring, selection, or
     confidence behavior.
     """
+
+    IDENTITY_FIELDS: ClassVar[tuple[str, ...]] = (
+        "template_id",
+        "name_of_template",
+    )
+    COORDINATION_ATTRIBUTE_FIELDS: ClassVar[tuple[str, ...]] = (
+        "coordination_patterns",
+        "number_of_agents",
+        "agent_roles",
+        "communication_flow",
+        "limitations",
+        "number_of_resources",
+        "number_of_channels",
+    )
+    REUSE_POLICY_FIELDS: ClassVar[tuple[str, ...]] = (
+        "parameterizable_fields",
+        "adaptable_fields",
+        "fatal_mismatch_fields",
+    )
+    CANONICAL_FIELDS: ClassVar[tuple[str, ...]] = (
+        *IDENTITY_FIELDS,
+        *COORDINATION_ATTRIBUTE_FIELDS,
+        *REUSE_POLICY_FIELDS,
+    )
+    ATTRIBUTE_SEMANTICS: ClassVar[dict[str, str]] = {
+        "coordination_patterns": "The coordination mechanisms required by the protocol.",
+        "number_of_agents": "The number of participating coordinating agents.",
+        "agent_roles": "The functional roles performed by participating agents.",
+        "communication_flow": "The ordered logical communication sequence between agents.",
+        "limitations": "The constraints and guarantees that must hold during protocol execution.",
+        "number_of_resources": "The number of coordinated shared resources.",
+        "number_of_channels": "The number of logical communication channels between agents.",
+        "parameterizable_fields": "Canonical attributes that may change through parameterized reuse.",
+        "adaptable_fields": "Canonical attributes that may change through partial recomposition.",
+        "fatal_mismatch_fields": "Canonical attributes whose mismatch blocks ordinary reuse.",
+    }
+    TEMPLATE_ID_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+    WINDOWS_RESERVED_IDS: ClassVar[frozenset[str]] = frozenset(
+        {"con", "prn", "aux", "nul"}
+        | {f"com{i}" for i in range(1, 10)}
+        | {f"lpt{i}" for i in range(1, 10)}
+    )
+
+    @classmethod
+    def validate_template_id(cls, value: object) -> str:
+        """Return a safe registry slug or reject filesystem-capable input."""
+
+        if not isinstance(value, str) or value != value.strip() or not value:
+            raise ValueError("template_id must be a non-empty canonical slug")
+        if not cls.TEMPLATE_ID_PATTERN.fullmatch(value):
+            raise ValueError("template_id may contain only lowercase letters, digits, underscores, and hyphens")
+        if value in cls.WINDOWS_RESERVED_IDS:
+            raise ValueError(f"template_id is reserved by the filesystem: {value}")
+        return value
+
+    @classmethod
+    def empty_coordination_attributes(cls) -> dict[str, object]:
+        """Return the canonical extractor shape owned by Template."""
+
+        return {
+            "coordination_patterns": [],
+            "number_of_agents": None,
+            "agent_roles": [],
+            "communication_flow": [],
+            "limitations": [],
+            "number_of_resources": None,
+            "number_of_channels": None,
+        }
+
+    @classmethod
+    def validate_canonical_keys(
+        cls,
+        data: Mapping[str, object],
+        *,
+        include_identity: bool,
+        include_reuse_policy: bool,
+    ) -> None:
+        """Reject missing or alternate coordination-schema field names."""
+
+        expected = set(cls.COORDINATION_ATTRIBUTE_FIELDS)
+        if include_identity:
+            expected.update(cls.IDENTITY_FIELDS)
+        if include_reuse_policy:
+            expected.update(cls.REUSE_POLICY_FIELDS)
+        actual = set(data)
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        if missing or extra:
+            details = []
+            if missing:
+                details.append(f"missing canonical fields: {missing}")
+            if extra:
+                details.append(f"unsupported alternate fields: {extra}")
+            raise ValueError("; ".join(details))
 
     def __init__(
         self,
@@ -27,7 +123,7 @@ class Template:
         adaptable_fields: list[str] | tuple[str, ...] | None = None,
         fatal_mismatch_fields: list[str] | tuple[str, ...] | None = None,
     ) -> None:
-        self._template_id = _clean_required_string(template_id, "template_id")
+        self._template_id = self.validate_template_id(template_id)
         self._name_of_template = _clean_required_string(name_of_template, "name_of_template")
         self._coordination_patterns = tuple(normalize_coordination_patterns(coordination_patterns))
         self._number_of_agents = _normalize_optional_count(number_of_agents, "number_of_agents")
@@ -107,20 +203,32 @@ class Template:
 
         if not isinstance(data, Mapping):
             raise ValueError("template data must be a mapping")
+        # Reuse-policy fields are optional constructor metadata.  Normalize
+        # their omissions to canonical defaults before validating the schema;
+        # alternate or extra field names remain invalid.
+        canonical = dict(data)
+        canonical.setdefault("parameterizable_fields", [])
+        canonical.setdefault("adaptable_fields", [])
+        canonical.setdefault("fatal_mismatch_fields", ["coordination_patterns"])
+        cls.validate_canonical_keys(
+            canonical,
+            include_identity=True,
+            include_reuse_policy=True,
+        )
         return cls(
-            template_id=_required(data, "template_id"),
-            name_of_template=_required(data, "name_of_template"),
-            coordination_patterns=_sequence(data.get("coordination_patterns"), "coordination_patterns"),
-            number_of_agents=_optional_int(data.get("number_of_agents"), "number_of_agents"),
-            agent_roles=_sequence(data.get("agent_roles"), "agent_roles"),
-            communication_flow=_sequence(data.get("communication_flow"), "communication_flow"),
-            limitations=_sequence(data.get("limitations"), "limitations"),
-            number_of_resources=_optional_int(data.get("number_of_resources"), "number_of_resources"),
-            number_of_channels=_optional_int(data.get("number_of_channels"), "number_of_channels"),
-            parameterizable_fields=_sequence(data.get("parameterizable_fields"), "parameterizable_fields"),
-            adaptable_fields=_sequence(data.get("adaptable_fields"), "adaptable_fields"),
-            fatal_mismatch_fields=_sequence(data.get("fatal_mismatch_fields"), "fatal_mismatch_fields")
-            if data.get("fatal_mismatch_fields") is not None
+            template_id=_required(canonical, "template_id"),
+            name_of_template=_required(canonical, "name_of_template"),
+            coordination_patterns=_sequence(canonical.get("coordination_patterns"), "coordination_patterns"),
+            number_of_agents=_optional_int(canonical.get("number_of_agents"), "number_of_agents"),
+            agent_roles=_sequence(canonical.get("agent_roles"), "agent_roles"),
+            communication_flow=_sequence(canonical.get("communication_flow"), "communication_flow"),
+            limitations=_sequence(canonical.get("limitations"), "limitations"),
+            number_of_resources=_optional_int(canonical.get("number_of_resources"), "number_of_resources"),
+            number_of_channels=_optional_int(canonical.get("number_of_channels"), "number_of_channels"),
+            parameterizable_fields=_sequence(canonical.get("parameterizable_fields"), "parameterizable_fields"),
+            adaptable_fields=_sequence(canonical.get("adaptable_fields"), "adaptable_fields"),
+            fatal_mismatch_fields=_sequence(canonical.get("fatal_mismatch_fields"), "fatal_mismatch_fields")
+            if canonical.get("fatal_mismatch_fields") is not None
             else None,
         )
 
@@ -197,15 +305,7 @@ def _normalize_machine_terms(value: list[str] | tuple[str, ...], field_name: str
     return result
 
 
-_ALLOWED_TEMPLATE_ATTRIBUTE_FIELDS = {
-    "coordination_patterns",
-    "number_of_agents",
-    "agent_roles",
-    "communication_flow",
-    "limitations",
-    "number_of_resources",
-    "number_of_channels",
-}
+_ALLOWED_TEMPLATE_ATTRIBUTE_FIELDS = set(Template.COORDINATION_ATTRIBUTE_FIELDS)
 
 _IDENTITY_FIELDS = {"template_id", "name_of_template", "pattern_id"}
 

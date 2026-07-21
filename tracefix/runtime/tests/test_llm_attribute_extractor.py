@@ -1,7 +1,9 @@
 import json
+import urllib.request
 
 import pytest
 
+from tracefix.protocol_templates.template import Template
 from tracefix.runtime.coordination_patterns import (
     COORDINATION_PATTERNS,
     is_valid_coordination_pattern,
@@ -15,15 +17,17 @@ from tracefix.runtime.llm_attribute_extractor import (
     ExtractedCoordinationAttributes,
     build_attribute_extraction_prompt,
     extract_coordination_attributes,
+    _build_default_client,
 )
+from tellme_harness.llm_client import OpenAICompatibleLLMClient
 
 
 def _valid_payload(**overrides):
     payload = {
-        "coordination_patterns": ["request-grant", "Exclusive Resource Access"],
+        "coordination_patterns": ["Request-Grant", "Exclusive Resource Access"],
         "number_of_agents": 3,
         "agent_roles": ["robot", "scheduler", "robot", ""],
-        "communication_flow": ["request", "grant", "release"],
+        "communication_flow": [],
         "limitations": ["no starvation", "no starvation"],
         "number_of_resources": 1,
         "number_of_channels": 3,
@@ -32,20 +36,18 @@ def _valid_payload(**overrides):
     return payload
 
 
-def test_coordination_pattern_helpers_are_case_insensitive_and_dedupe():
-    assert normalize_coordination_pattern("request-grant") == "Request-Grant"
-    assert normalize_coordination_pattern("  TOKEN PASSING ") == "Token Passing"
-    assert normalize_coordination_patterns([
-        "request-grant",
-        "Request-Grant",
-        "exclusive resource access",
-    ]) == ["Request-Grant", "Exclusive Resource Access"]
+def test_coordination_pattern_helpers_require_exact_values_and_reject_duplicates():
+    assert normalize_coordination_pattern("Request-Grant") == "Request-Grant"
+    with pytest.raises(ValueError):
+        normalize_coordination_pattern("request-grant")
+    with pytest.raises(ValueError, match="duplicate"):
+        normalize_coordination_patterns(["Request-Grant", "Request-Grant"])
     assert is_valid_coordination_pattern("Majority Voting") is True
     assert is_valid_coordination_pattern("made up") is False
 
 
 def test_attributes_accept_valid_empty_and_complete_payloads():
-    assert ExtractedCoordinationAttributes().as_dict() == {
+    assert ExtractedCoordinationAttributes.from_payload({
         "coordination_patterns": [],
         "number_of_agents": None,
         "agent_roles": [],
@@ -53,7 +55,7 @@ def test_attributes_accept_valid_empty_and_complete_payloads():
         "limitations": [],
         "number_of_resources": None,
         "number_of_channels": None,
-    }
+    }).as_dict() == Template.empty_coordination_attributes()
 
     result = ExtractedCoordinationAttributes.from_payload(_valid_payload())
 
@@ -61,7 +63,7 @@ def test_attributes_accept_valid_empty_and_complete_payloads():
         "coordination_patterns": ["Request-Grant", "Exclusive Resource Access"],
         "number_of_agents": 3,
         "agent_roles": ["robot", "scheduler"],
-        "communication_flow": ["request", "grant", "release"],
+        "communication_flow": ["request", "grant", "enter", "exit", "release"],
         "limitations": ["no starvation"],
         "number_of_resources": 1,
         "number_of_channels": 3,
@@ -115,6 +117,34 @@ def test_attributes_reject_unknown_patterns():
         )
 
 
+@pytest.mark.parametrize("field", Template.COORDINATION_ATTRIBUTE_FIELDS)
+def test_attributes_reject_each_missing_canonical_key(field):
+    payload = _valid_payload()
+    del payload[field]
+    with pytest.raises(AttributeExtractionResponseError, match="missing canonical fields"):
+        ExtractedCoordinationAttributes.from_payload(payload)
+
+
+@pytest.mark.parametrize("value", ["Queue Scheduling", "Queue Based Scheduling", "Producer Consumer", "request-grant"])
+def test_attributes_reject_aliases_punctuation_and_capitalization(value):
+    with pytest.raises(AttributeExtractionResponseError):
+        ExtractedCoordinationAttributes.from_payload(_valid_payload(coordination_patterns=[value]))
+
+
+def test_extractor_rejects_duplicate_json_keys():
+    raw = json.dumps(_valid_payload()).replace('"number_of_agents": 3', '"number_of_agents": 3, "number_of_agents": 4')
+    with pytest.raises(AttributeExtractionResponseError, match="duplicate JSON key"):
+        extract_coordination_attributes("coordinate", client=lambda _request: raw)
+
+
+def test_every_canonical_pattern_is_accepted():
+    for pattern in COORDINATION_PATTERNS:
+        result = ExtractedCoordinationAttributes.from_payload(
+            _valid_payload(coordination_patterns=[pattern], communication_flow=[])
+        )
+        assert result.coordination_patterns == [pattern]
+
+
 def test_prompt_is_extraction_only_and_includes_pattern_vocabulary():
     messages = build_attribute_extraction_prompt("two robots share a corridor")
     rendered = json.dumps(messages)
@@ -128,6 +158,33 @@ def test_prompt_is_extraction_only_and_includes_pattern_vocabulary():
     assert "template_id" not in rendered
     for pattern in COORDINATION_PATTERNS:
         assert pattern in rendered
+    assert "canonical TraceFix Template" in rendered
+    assert set(Template.empty_coordination_attributes()) == set(
+        ExtractedCoordinationAttributes.model_fields
+    )
+
+
+def test_known_patterns_populate_missing_communication_flow_deterministically():
+    result = ExtractedCoordinationAttributes.from_payload(
+        _valid_payload(
+            coordination_patterns=[
+                "Exclusive Resource Access",
+                "Queue-Based Scheduling",
+            ],
+            communication_flow=[],
+        )
+    )
+
+    assert result.communication_flow == [
+        "request",
+        "grant",
+        "enter",
+        "exit",
+        "release",
+        "enqueue",
+        "dequeue",
+        "complete",
+    ]
 
 
 def test_extractor_uses_dependency_injected_client_and_model():
@@ -185,3 +242,63 @@ def test_extractor_without_client_fails_visibly_when_no_api_key(monkeypatch):
 
     with pytest.raises(AttributeExtractionError, match="requires an API key"):
         extract_coordination_attributes("robots coordinate")
+
+
+def test_openrouter_extractor_client_uses_selected_runtime_configuration(monkeypatch):
+    monkeypatch.setenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY", "selected-ui-key")
+    monkeypatch.setenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL", "z-ai/glm-5.2")
+
+    client = _build_default_client("z-ai/glm-5.2")
+
+    assert isinstance(client, OpenAICompatibleLLMClient)
+    assert client.api_key == "selected-ui-key"
+    assert client.base_url == "https://openrouter.ai/api/v1"
+    assert client.model == "z-ai/glm-5.2"
+
+
+def test_openrouter_http_request_sends_bearer_authorization_and_model(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({
+                "choices": [{"message": {"content": json.dumps({"ok": True})}}]
+            }).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["authorization"] = request.get_header("Authorization")
+        captured["payload"] = json.loads(request.data.decode("utf-8"))
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    client = OpenAICompatibleLLMClient(
+        base_url="https://openrouter.ai/api/v1",
+        model="z-ai/glm-5.2",
+        api_key="selected-ui-key",
+        timeout_seconds=17,
+    )
+
+    assert client.complete_json("return JSON") == {"ok": True}
+    assert captured == {
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authorization": "Bearer selected-ui-key",
+        "payload": {
+            "model": "z-ai/glm-5.2",
+            "messages": [
+                {"role": "system", "content": "Return only valid JSON matching the requested schema."},
+                {"role": "user", "content": "return JSON"},
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0,
+        },
+        "timeout": 17,
+    }

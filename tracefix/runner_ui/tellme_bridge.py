@@ -219,6 +219,17 @@ class TellMeBridge:
             ]
         )
 
+    def tracefix_task_spec_path(self) -> Path:
+        """Return the official, immutable TeLLMe TaskSpec artifact path."""
+
+        current = self.current() or {}
+        tellme = current.get("tellme") if isinstance(current.get("tellme"), dict) else {}
+        run_dir = Path(str(tellme.get("run_dir") or ""))
+        path = (run_dir / "tracefix_task_spec.json").resolve()
+        if not path.is_file():
+            raise ValueError("The current TeLLMe run has no persisted tracefix_task_spec.json artifact.")
+        return path
+
     def record_tracefix_run(self, run_id: str) -> dict[str, Any]:
         state = self.current()
         if not state:

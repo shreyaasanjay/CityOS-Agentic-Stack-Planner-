@@ -6,6 +6,8 @@ from tracefix.protocol_templates.attendance_verification import (
 )
 from tracefix.runner_ui.server import (
     _api_envelope,
+    _build_design_command,
+    _env_updates_for_provider,
     _synth_file_requirements,
     _synth_workspace_summary,
 )
@@ -156,6 +158,50 @@ def test_tellme_bridge_persists_tracefix_handoff(tmp_path: Path) -> None:
     task_text = bridge.tracefix_task_text()
     assert SAMPLE_QUERY in task_text
     assert "Do not execute production agents" in task_text
+
+    task_spec_path = bridge.tracefix_task_spec_path()
+    assert task_spec_path.name == "tracefix_task_spec.json"
+    assert json.loads(task_spec_path.read_text(encoding="utf-8"))["user_query"] == SAMPLE_QUERY
+
+
+def test_design_command_passes_official_taskspec_path_for_tellme_handoff(tmp_path: Path) -> None:
+    bridge = TellMeBridge(tmp_path)
+    bridge.process_query(query=SAMPLE_QUERY, space_id="smart_room_1")
+
+    command, _env_updates, _env_flags = _build_design_command(
+        tmp_path,
+        {
+            "taskMode": "custom",
+            "customTask": _PLACEHOLDER,
+            "provider": "ollama",
+            "model": "test-model",
+            "verbose": False,
+        },
+    )
+
+    task_spec_index = command.index("--task-spec")
+    assert Path(command[task_spec_index + 1]) == bridge.tracefix_task_spec_path()
+
+
+def test_openrouter_ui_key_and_model_override_stale_extractor_environment(monkeypatch) -> None:
+    monkeypatch.setenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY", "stale-extractor-key")
+    monkeypatch.setenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_BASE_URL", "https://stale.invalid/v1")
+    monkeypatch.setenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL", "stale/model")
+    ui_key = "ui-openrouter-key"
+
+    env = _env_updates_for_provider(
+        {
+            "provider": "openrouter",
+            "model": "z-ai/glm-5.2",
+            "openrouterKey": ui_key,
+        },
+        require_key=False,
+    )
+
+    assert env["OPENROUTER_API_KEY"] == ui_key
+    assert env["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY"] == ui_key
+    assert env["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_BASE_URL"] == "https://openrouter.ai/api/v1"
+    assert env["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL"] == "z-ai/glm-5.2"
 
 
 def test_api_envelope_has_stable_shape() -> None:

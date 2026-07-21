@@ -50,20 +50,33 @@ COORDINATION_PATTERNS: tuple[str, ...] = (
     "Publish-Subscribe",
 )
 
-_CANONICAL_BY_CASEFOLD = {pattern.casefold(): pattern for pattern in COORDINATION_PATTERNS}
+_CANONICAL_PATTERN_SET = frozenset(COORDINATION_PATTERNS)
+
+# Canonical logical message/phase sequences for patterns whose communication
+# order is deterministic. The extractor may identify the pattern, but it does
+# not need to rediscover these stable protocol steps.
+COORDINATION_PATTERN_FLOWS: dict[str, tuple[str, ...]] = {
+    "Exclusive Resource Access": ("request", "grant", "enter", "exit", "release"),
+    "Queue-Based Scheduling": ("enqueue", "dequeue", "complete"),
+    "Barrier Synchronization": ("arrive", "wait", "release"),
+    "Request-Grant": ("request", "grant"),
+    "Producer-Consumer": ("produce", "send", "receive", "consume"),
+    "Sequential Handoff": ("work", "handoff", "receive", "continue"),
+    "Broadcast": ("broadcast", "receive"),
+    "Consensus": ("propose", "vote", "decide"),
+}
 
 
 def normalize_coordination_pattern(value: str) -> str:
     """Return canonical pattern spelling, or raise ValueError."""
 
-    key = str(value or "").strip().casefold()
-    if key not in _CANONICAL_BY_CASEFOLD:
+    if not isinstance(value, str) or value not in _CANONICAL_PATTERN_SET:
         raise ValueError(f"unknown coordination pattern: {value!r}")
-    return _CANONICAL_BY_CASEFOLD[key]
+    return value
 
 
 def normalize_coordination_patterns(values: Iterable[str]) -> list[str]:
-    """Normalize and deduplicate coordination patterns in first-seen order."""
+    """Validate exact canonical spelling and reject duplicate patterns."""
 
     if values is None:
         return []
@@ -71,9 +84,10 @@ def normalize_coordination_patterns(values: Iterable[str]) -> list[str]:
     seen: set[str] = set()
     for value in values:
         canonical = normalize_coordination_pattern(value)
-        if canonical not in seen:
-            seen.add(canonical)
-            normalized.append(canonical)
+        if canonical in seen:
+            raise ValueError(f"duplicate coordination pattern: {canonical!r}")
+        seen.add(canonical)
+        normalized.append(canonical)
     return normalized
 
 
@@ -85,3 +99,16 @@ def is_valid_coordination_pattern(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def deterministic_communication_flow(patterns: Iterable[str]) -> list[str]:
+    """Expand recognized patterns into one stable, deduplicated flow."""
+
+    flow: list[str] = []
+    seen: set[str] = set()
+    for pattern in normalize_coordination_patterns(patterns):
+        for step in COORDINATION_PATTERN_FLOWS.get(pattern, ()):
+            if step not in seen:
+                seen.add(step)
+                flow.append(step)
+    return flow

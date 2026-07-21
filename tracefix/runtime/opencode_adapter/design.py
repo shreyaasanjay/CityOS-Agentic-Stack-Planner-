@@ -25,23 +25,33 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, Mapping
 
 from tracefix.pipeline_timing import PipelineTimingReport
 from tracefix.protocol_templates import get_template, list_pattern_ids
+from tracefix.runtime.audit import audit_json_text, write_audit_json, write_audit_text
 from tracefix.runtime.deterministic_template_engine import DeterministicTemplateEngine
 from tracefix.runtime.llm_attribute_extractor import extract_coordination_attributes
-from tracefix.runtime.procedure_decision import (
-    ProcedureDecisionError,
-    validate_procedure_decision_response,
+from tracefix.runtime.procedure_execution import (
+    ProcedureExecutionError,
+    instantiate_exact_reuse,
+    instantiate_parameterized_reuse,
 )
-from tracefix.runtime.procedure_prompt import build_procedure_selection_prompt
+from tracefix.runtime.procedure_prompt import (
+    build_procedure_execution_context,
+    build_procedure_execution_prompt,
+)
 from tracefix.runtime.single_agent_fastpath import (
     FastPathDecision,
     _extract_structured_task,
     assess_single_agent_fast_path,
     generate_single_agent_ir,
     render_verified_runtime_prompt,
+)
+from tracefix.runtime.template_promotion import promote_verified_workspace_template
+from tracefix.runtime.taskspec_attribute_validation import (
+    MAX_ATTRIBUTE_CORRECTION_ATTEMPTS,
+    extract_with_taskspec_reevaluation,
 )
 from tracefix.textio import safe_read_json, safe_read_text
 from tracefix.runtime.opencode_adapter.config_gen import build_design_config
@@ -56,6 +66,72 @@ _PROMPT_GEN_SKILL = ".claude/skills/tla-prompt-gen/SKILL.md"
 DEFAULT_TIMEOUT = 1800.0
 
 
+def _print_audit_block(label: str, payload: object) -> None:
+    print(f"[TRACEFIX {label} START]", flush=True)
+    print(audit_json_text(payload), end="", flush=True)
+    print(f"[TRACEFIX {label} END]", flush=True)
+
+
+def _execution_artifacts(ws: Path) -> list[str]:
+    spec = _spec_dir(ws)
+    paths = [spec / "ir.json", spec / "Protocol.tla", spec / "Protocol.cfg", spec / "states.json"]
+    artifacts: list[str] = []
+    for path in paths:
+        if not path.is_file():
+            continue
+        if path.name == "ir.json" and _looks_like_init_stub(safe_read_json(path, {})):
+            continue
+        artifacts.append(str(path.relative_to(ws)).replace("\\", "/"))
+    return artifacts
+
+
+def _execution_marker_name(mode: str) -> str:
+    return {
+        "exact_reuse": "EXACT REUSE",
+        "parameterized_reuse": "PARAMETERIZED REUSE",
+        "partial_recomposition": "PARTIAL RECOMPOSITION",
+        "full_generation": "FULL GENERATION",
+    }[mode]
+
+
+def _write_deterministic_reuse_prompts(ws: Path, task: str) -> list[str]:
+    """Render minimal verified-plan prompts without invoking OpenCode."""
+
+    plan = safe_read_json(_spec_dir(ws) / "cityos_module_plan.json", {})
+    verification = plan.get("verification")
+    if not isinstance(verification, dict) or not verification.get("production_ready"):
+        raise ValueError("deterministic reuse prompts require a production-ready CityOS plan")
+    agents = plan.get("agents")
+    if not isinstance(agents, list) or not agents:
+        raise ValueError("verified CityOS plan has no agents")
+    prompt_dir = ws / "prompts" / "runtime_b"
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[str] = []
+    for agent in agents:
+        if not isinstance(agent, dict) or not agent.get("name"):
+            continue
+        agent_id = str(agent["name"])
+        prompt = "\n".join([
+            f"# {agent_id} Verified Template Runtime",
+            "",
+            "## Read-only task",
+            task,
+            "",
+            "## Deterministic runtime contract",
+            "- Execute only the verified Template protocol in spec/states.json.",
+            "- Follow the verified CityOS module plan and declared coordination operations.",
+            "- Do not redesign the protocol or alter canonical Template attributes.",
+            "- Signal completion only after reaching a legal terminal state.",
+            "",
+        ])
+        path = prompt_dir / f"{agent_id}.md"
+        path.write_text(prompt, encoding="utf-8")
+        paths.append(str(path))
+    if not paths:
+        raise ValueError("verified CityOS plan yielded no deterministic runtime prompts")
+    return paths
+
+
 def _subprocess_python() -> str:
     return os.environ.get("TRACEFIX_PYTHON_EXE", "").strip() or sys.executable
 
@@ -63,37 +139,6 @@ def _subprocess_python() -> str:
 def repo_root() -> Path:
     return next(p for p in Path(__file__).resolve().parents
                 if (p / "pyproject.toml").exists())
-
-
-def _complete_procedure_decision(prompt: str) -> dict:
-    from tellme_harness.llm_client import OpenAICompatibleLLMClient
-
-    api_key = (
-        (os.getenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY") or "").strip()
-        or (os.getenv("OPENROUTER_API_KEY") or "").strip()
-        or (os.getenv("TELLME_API_KEY") or "").strip()
-        or (os.getenv("OPENAI_API_KEY") or "").strip()
-    )
-    base_url = (os.getenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_BASE_URL") or "").strip()
-    if not base_url:
-        base_url = "https://openrouter.ai/api/v1" if os.getenv("OPENROUTER_API_KEY") else "https://api.openai.com/v1"
-    model = (
-        (os.getenv("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL") or "").strip()
-        or (os.getenv("TELLME_MODEL") or "").strip()
-        or (os.getenv("OPENAI_MODEL") or "").strip()
-        or "gpt-4.1-mini"
-    )
-    if not api_key:
-        raise RuntimeError(
-            "Procedure-selection LLM requires a provider API key. "
-            "Set OPENROUTER_API_KEY, OPENAI_API_KEY, TELLME_API_KEY, "
-            "or TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY."
-        )
-    return OpenAICompatibleLLMClient(
-        base_url=base_url,
-        model=model,
-        api_key=api_key,
-    ).complete_json(prompt)
 
 
 def _attribute_extractor_model(model: str | None) -> str | None:
@@ -122,12 +167,11 @@ below with these adjustments:
 - NEVER pause to ask the user anything. At the Phase 1.5 review gate, write
   `plan.md` into the workspace and proceed immediately (it is kept for
   after-the-fact review).
-- The requirement may be plain prose with no explicit agent/resource lists.
-  Derive the coordination structure yourself, and record EVERY structural
-  choice the prose does not state outright — how many agents and why, what
-  each shared resource is and why it is exclusive (Lock) vs a capacity pool
-  (Counter), and the channel topology — in `plan.md` under an
-  `## Assumptions` heading. Unrecorded assumptions count as silent guessing.
+- TraceFix has already extracted canonical Template attributes and selected a
+  deterministic procedure. Treat both as authoritative. Never rediscover,
+  rename, replace, or contradict roles, patterns, flow, counts, limitations,
+  or procedure. Derive only low-level IR/PlusCal/TLC/CityOS implementation
+  details within those fixed boundaries and record those details in `plan.md`.
 - The IR schema allows ONLY these topology fields: `agents`, `resources`, and
   `channels` (plus documented planner metadata such as `state_tasks`,
   `agent_resources`, and `tool_resource_map`). Do NOT emit top-level or nested
@@ -151,8 +195,9 @@ below with these adjustments:
   — read them when the workflow points to them.
 - Work ONLY inside the workspace directory given in the task message; run the
   `tla-verify-pluscal` CLI via bash (it is on PATH).
-- If verification still fails after 5 attempts, record `"tlc_passed": false` in
-  `summary.json`, write an honest failure report, and stop — never fake a pass.
+- If verification still fails after 5 attempts, write an honest failure report
+  and stop. Never create or edit `summary.json`; its `tlc_passed` value belongs
+  exclusively to the deterministic TraceFix TLC execution gate.
 - After TLC passes and `states.json` is extracted, export/read
   `spec/cityos_module_plan.json` before generating Runtime B prompts. Runtime
   prompts must be downstream of the verified module plan, never raw IR alone.
@@ -170,6 +215,34 @@ def build_designer_prompt(root: Path) -> str:
         end = skill_text.find("\n---", 3)
         if end != -1:
             skill_text = skill_text[end + 4:]
+    phase1 = skill_text.find("### Phase 1: Structured Analysis")
+    phase2 = skill_text.find("### Phase 2: Write PlusCal Process Bodies", phase1)
+    if phase1 != -1 and phase2 != -1:
+        skill_text = (
+            skill_text[:phase1]
+            + "### Phase 1: Structured Analysis\n\n"
+            + "Read the authoritative procedure execution context and canonical Template attributes "
+            + "provided by TraceFix. Do not identify or rediscover agents, roles, coordination patterns, "
+            + "communication flow, counts, limitations, or procedure from description.md. Validate the "
+            + "existing IR against those fixed values. Derive only schema-valid low-level implementation "
+            + "details for attributes explicitly marked unknown, without contradicting any canonical value.\n\n"
+            + skill_text[phase2:]
+        )
+    # The reusable skill predates the canonical runtime ownership boundary.
+    # Replace its verification bookkeeping section in the composed prompt so
+    # OpenCode can run tools but cannot author the TLC verdict consumed later.
+    phase3 = skill_text.find("### Phase 3: Verify & Repair")
+    phase4 = skill_text.find("### Phase 4", phase3)
+    if phase3 != -1 and phase4 != -1:
+        skill_text = (
+            skill_text[:phase3]
+            + "### Phase 3: Verify & Repair\n\n"
+            + "Run the verification tool and repair Protocol.tla up to five times. "
+            + "Never create or edit summary.json or tlc_passed; TraceFix's deterministic "
+            + "post-scaffold TLC gate owns that verdict. Record optional repair history "
+            + "in repair_notes.md.\n\n"
+            + skill_text[phase4:]
+        )
     preamble = _HEADLESS_PREAMBLE.replace("{prompt_gen_skill}", _PROMPT_GEN_SKILL)
     return preamble + skill_text.lstrip("\n")
 
@@ -200,12 +273,10 @@ def ir_repair_kickoff(workspace_rel: str, errors: list[str]) -> str:
     error_text = "\n".join(f"- {error}" for error in errors) or "- unknown IR validation failure"
     return (
         f"Repair ONLY `{workspace_rel}/spec/ir.json`.\n\n"
-        f"First read `{workspace_rel}/description.md`; it is the source of "
-        "truth for the application task, agent names, shared resources, and "
-        "coordination requirements. If the current IR still looks like a "
-        "generic init stub such as AGENT_A/AGENT_B with empty resources or "
-        "channels, replace that stub with a task-faithful IR derived from "
-        "`description.md`.\n\n"
+        f"First read `{workspace_rel}/spec/procedure_execution_context.json` and "
+        f"`{workspace_rel}/spec/extracted_coordination_attributes.json`; they are "
+        "the authoritative source for the selected procedure and canonical Template attributes. "
+        "Do not rediscover or change those values from description.md.\n\n"
         f"Current IR validation errors:\n{error_text}\n\n"
         "Rules:\n"
         "- Do not remove agents.\n"
@@ -216,8 +287,8 @@ def ir_repair_kickoff(workspace_rel: str, errors: list[str]) -> str:
         "counter-like behavior belongs in `resources` as type `Counter` with config.initial.\n"
         "- Normalize agents to objects like {\"id\": \"DEVELOPER_A\"} if needed.\n"
         "- If two or more agents remain, channels must be non-empty.\n"
-        "- Infer the minimal directed FIFO channels from task handoffs, shared-resource "
-        "coordination, review/approval flow, data dependencies, or failure/retry paths.\n"
+        "- Repair channel schema/topology only within the authoritative number_of_channels and communication_flow; "
+        "derive a minimal topology only when the canonical count is explicitly unknown.\n"
         "- Do not add arbitrary complete-graph channels just to satisfy validation.\n"
         "- If agents are truly independent, collapse to a single-agent IR and explain why.\n"
         "- Each channel must include id, from, to, and labels.\n"
@@ -786,19 +857,7 @@ def _verification_needed_after_scaffold(ws: Path) -> tuple[bool, list[str]]:
     if not (spec / "Protocol.cfg").is_file():
         return False, [*diagnostics, "Post-scaffold verification skipped: Protocol.cfg missing"]
 
-    summary = {}
-    if (spec / "summary.json").is_file():
-        try:
-            summary = safe_read_json(spec / "summary.json", {})
-        except (json.JSONDecodeError, OSError):
-            summary = {}
-    if summary.get("tlc_passed") in (True, False):
-        return False, [*diagnostics, "Post-scaffold verification already has summary.json"]
-    if (spec / "states.json").is_file():
-        return False, [*diagnostics, "Post-scaffold verification already has states.json"]
-    if (spec / "tlc_error.md").is_file():
-        return False, [*diagnostics, "Post-scaffold verification already has tlc_error.md"]
-    return True, [*diagnostics, "Post-scaffold verification required"]
+    return True, [*diagnostics, "Deterministic post-scaffold TLC verification required"]
 
 
 def _run_tlc_and_extract(
@@ -814,6 +873,13 @@ def _run_tlc_and_extract(
     - Success: Protocol_translated.tla, tlc_output.log, states.json, summary.json
     - Failure: tlc_error.md, tlc_output.log (and summary.json with tlc_passed=false)
     """
+    spec = _spec_dir(ws)
+    # Discard status-shaped files that may have been produced by OpenCode.
+    # This function recreates them only from the deterministic compiler/TLC
+    # execution below, so stale or LLM-authored booleans cannot survive an
+    # exception and be consumed as a verification verdict.
+    for name in ("summary.json", "states.json", "Protocol_translated.tla", "tlc_output.log", "tlc_error.md"):
+        (spec / name).unlink(missing_ok=True)
     from tracefix.pipeline.pipeline.pluscal_compiler import translate_pluscal
     from tracefix.pipeline.pipeline.tlc_runner import run_tlc
     from tracefix.pipeline.pipeline.trace_parser import parse_trace
@@ -821,7 +887,6 @@ def _run_tlc_and_extract(
     from tracefix.pipeline.pipeline.pluscal_parser import parse_pluscal
     from tracefix.pipeline.pipeline.toolchain import resolve_java, resolve_jar
 
-    spec = _spec_dir(ws)
     tla_path = spec / "Protocol.tla"
     cfg_path = spec / "Protocol.cfg"
     ir_path = spec / "ir.json"
@@ -1287,6 +1352,8 @@ class DesignWatcher:
 async def run_design(
     task: str,
     *,
+    task_spec: Mapping[str, Any] | None = None,
+    task_spec_path: Path | str | None = None,
     name: str | None = None,
     model: str | None = None,
     opencode_cmd: list[str] | None = None,
@@ -1304,7 +1371,24 @@ async def run_design(
     root = repo_root()
 
     # --- Early diagnostics: print task spec metadata before anything else --------
-    _diag_spec = _extract_structured_task(task)
+    task_spec_source = "embedded_task_projection"
+    task_spec_original_bytes: bytes | None = None
+    resolved_task_spec_path: Path | None = None
+    if task_spec_path is not None:
+        resolved_task_spec_path = Path(task_spec_path).resolve()
+        task_spec_original_bytes = resolved_task_spec_path.read_bytes()
+        loaded_task_spec = json.loads(task_spec_original_bytes.decode("utf-8-sig"))
+        if not isinstance(loaded_task_spec, dict):
+            raise ValueError("TeLLMe TaskSpec JSON must contain an object")
+        task_spec_payload = loaded_task_spec
+        task_spec_source = str(resolved_task_spec_path)
+    elif task_spec is not None:
+        task_spec_payload = json.loads(json.dumps(dict(task_spec), ensure_ascii=False))
+        task_spec_source = "in_memory_taskspec"
+    else:
+        task_spec_payload = _extract_structured_task(task) or {}
+    task_spec_snapshot = json.dumps(task_spec_payload, sort_keys=True, ensure_ascii=False)
+    _diag_spec = task_spec_payload or _extract_structured_task(task)
     _diag_route = str((_diag_spec or {}).get("route") or "")
     _diag_query = str((_diag_spec or {}).get("user_query") or "")[:120]
     _diag_harnesses = (_diag_spec or {}).get("candidate_harnesses") or []
@@ -1424,7 +1508,7 @@ async def run_design(
     fast_path_diagnostics = [
         f"Single-agent fast path considered: {fast_path_decision.reason}"
     ]
-    if fast_path_decision.eligible:
+    if fast_path_decision.eligible and not task_spec_payload:
         try:
             fast_path_ir_started_ms = time.monotonic() * 1000.0
             fast_ir = generate_single_agent_ir(fast_path_decision)
@@ -1484,24 +1568,58 @@ async def run_design(
     )
 
     # --- Coordination attribute extraction ----------------------------------------
-    # This is the only first-stage classifier-related behavior left in this
-    # pipeline. It extracts attributes and writes an artifact, but it does not
-    # select templates, rank candidates, route reuse, or call the reuse validator.
+    # The LLM only extracts schema-bound attributes here. Ranking, validation,
+    # and procedure selection below are deterministic; any later LLM call only
+    # executes the selected mode.
     attribute_extraction_diagnostics: list[str] = []
     procedure_decision_complete = False
     procedure_decision_selected: str | None = None
-    procedure_llm_failed = False
+    procedure_execution_prompt: str | None = None
+    procedure_decision = None
+    procedure_execution_audit: dict | None = None
+    deterministic_reuse_instantiated = False
+    procedure_execution_failed = False
+    procedure_execution_error: str | None = None
     template_ranking_failed = False
-    invalid_procedure_decision = False
     attribute_extraction_failed = False
+    attributes = None
     if not fast_path_used:
         attr_started_at = datetime.now(timezone.utc).isoformat()
         attr_started_ms = time.monotonic() * 1000.0
         attr_error: str | None = None
         try:
-            attributes = extract_coordination_attributes(task, model=_attribute_extractor_model(model))
+            extractor_input = json.dumps({
+                "read_only_taskspec": task_spec_payload,
+                "secondary_original_request": task,
+            }, indent=2, ensure_ascii=False)
+            extractor_input_path = _spec_dir(ws) / "extractor_input.txt"
+            write_audit_text(extractor_input_path, extractor_input)
+            print("[TRACEFIX EXTRACTOR INPUT START]", flush=True)
+            print(extractor_input, flush=True)
+            print("[TRACEFIX EXTRACTOR INPUT END]", flush=True)
+            extraction_result = extract_with_taskspec_reevaluation(
+                task_spec=task_spec_payload,
+                original_request=task,
+                extractor=extract_coordination_attributes,
+                model=_attribute_extractor_model(model),
+            )
+            validation_report_path = _spec_dir(ws) / "attribute_validation_report.json"
+            write_audit_json(validation_report_path, {
+                **extraction_result.diagnostic.to_dict(),
+                "attempts": extraction_result.attempts,
+                "maximum_correction_attempts": MAX_ATTRIBUTE_CORRECTION_ATTEMPTS,
+                "task_spec_source": task_spec_source,
+                "task_spec_unchanged": json.dumps(task_spec_payload, sort_keys=True, ensure_ascii=False) == task_spec_snapshot,
+                "artifact_reuse": "not_implemented_no_existing_safe_version_relationship",
+            })
+            if extraction_result.attributes is None:
+                raise ValueError("TaskSpec attribute contradictions persisted after bounded reevaluation")
+            attributes = extraction_result.attributes
+            if resolved_task_spec_path is not None and resolved_task_spec_path.read_bytes() != task_spec_original_bytes:
+                raise ValueError("TraceFix modified the read-only TeLLMe TaskSpec")
             attr_path = _spec_dir(ws) / "extracted_coordination_attributes.json"
-            attr_path.write_text(attributes.to_json(), encoding="utf-8")
+            write_audit_json(attr_path, attributes)
+            _print_audit_block("EXTRACTOR OUTPUT", attributes)
             attribute_extraction_diagnostics.append(
                 f"Coordination attributes extracted: {attr_path.relative_to(ws)}"
             )
@@ -1510,71 +1628,145 @@ async def run_design(
                 engine = DeterministicTemplateEngine()
                 rankings = engine.rank(attributes, templates)
                 rankings_path = _spec_dir(ws) / "template_rankings.json"
-                rankings_path.write_text(
-                    json.dumps([ranking.to_dict() for ranking in rankings], indent=2),
-                    encoding="utf-8",
+                write_audit_json(rankings_path, rankings)
+                validation_audit, candidate_validations = engine.validation_audit(
+                    attributes,
+                    rankings,
+                    templates,
                 )
+                validation_audit_path = _spec_dir(ws) / "template_validation_results.json"
+                write_audit_json(validation_audit_path, validation_audit)
+                _print_audit_block("VALIDATOR OUTPUT", validation_audit)
                 top_template = (
                     next(template for template in templates if template.get_template_id() == rankings[0].template_id)
                     if rankings
                     else None
                 )
-                validation = engine.validate(attributes, top_template) if top_template else None
+                validation = candidate_validations[0] if top_template and candidate_validations else None
                 validation_path = _spec_dir(ws) / "template_validation_result.json"
-                validation_path.write_text(
-                    json.dumps(
-                        validation.to_dict() if validation else {
-                            "valid": False,
-                            "reason": "No templates available for validation.",
-                        },
-                        indent=2,
-                    ),
-                    encoding="utf-8",
+                write_audit_json(
+                    validation_path,
+                    validation if validation else {
+                        "valid": False,
+                        "reason": "No templates available for validation.",
+                    },
                 )
                 procedure_options = engine.procedure_options(rankings, validation, templates)
                 options_path = _spec_dir(ws) / "procedure_options.json"
-                options_path.write_text(
-                    json.dumps(procedure_options.to_dict(), indent=2),
-                    encoding="utf-8",
+                write_audit_json(options_path, procedure_options)
+                decision = engine.select_procedure(
+                    attributes,
+                    rankings,
+                    validation,
+                    procedure_options,
+                    templates,
                 )
-                procedure_prompt = build_procedure_selection_prompt(
+                procedure_decision = decision
+                decision_path = _spec_dir(ws) / "procedure_decision.json"
+                write_audit_json(decision_path, decision)
+                selected_template_log = decision.selected_template_id or "none"
+                print(
+                    f"[TRACEFIX PROCEDURE SELECTED] mode={decision.selected_procedure} "
+                    f"template={selected_template_log}",
+                    flush=True,
+                )
+                _print_audit_block("PROCEDURE DECISION", decision)
+                selected_metadata = (
+                    get_template(decision.selected_template_id).to_dict()
+                    if decision.selected_template_id
+                    else {}
+                )
+                execution_context = build_procedure_execution_context(
                     query=task,
                     extracted_data=attributes,
-                    rankings=rankings,
-                    validation=validation,
-                    procedure_options=procedure_options,
+                    decision=decision,
+                    template_metadata=selected_metadata,
+                    task_spec=task_spec_payload,
                 )
-                prompt_path = _spec_dir(ws) / "procedure_selection_prompt.txt"
-                prompt_path.write_text(procedure_prompt, encoding="utf-8")
-                raw_decision = _complete_procedure_decision(procedure_prompt)
-                decision = validate_procedure_decision_response(raw_decision, procedure_options)
-                decision_path = _spec_dir(ws) / "procedure_decision.json"
-                decision_path.write_text(
-                    json.dumps(decision.to_dict(), indent=2),
-                    encoding="utf-8",
-                )
+                context_path = _spec_dir(ws) / "procedure_execution_context.json"
+                write_audit_json(context_path, execution_context)
                 procedure_decision_complete = True
                 procedure_decision_selected = decision.selected_procedure
+                if procedure_decision_selected in {"exact_reuse", "parameterized_reuse"}:
+                    started_at = datetime.now(timezone.utc).isoformat()
+                    procedure_execution_audit = {
+                        "selected_procedure": decision.selected_procedure,
+                        "selected_template_id": decision.selected_template_id,
+                        "executor": "deterministic_builder",
+                        "allowed_fields": (
+                            list(decision.parameterizable_fields)
+                            if procedure_decision_selected == "parameterized_reuse"
+                            else []
+                        ),
+                        "protected_fields": list(decision.protected_fields),
+                        "llm_expected": False,
+                        "started_at": started_at,
+                        "ended_at": None,
+                        "success": False,
+                        "artifacts_written": [],
+                    }
+                    print(
+                        f"[TRACEFIX PROCEDURE EXECUTION START] mode={procedure_decision_selected} "
+                        f"template={selected_template_log}",
+                        flush=True,
+                    )
+                    print(f"[TRACEFIX {_execution_marker_name(procedure_decision_selected)} START] template={selected_template_log}", flush=True)
+                    try:
+                        reuse_result = (
+                            instantiate_exact_reuse(ws, execution_context)
+                            if procedure_decision_selected == "exact_reuse"
+                            else instantiate_parameterized_reuse(ws, execution_context)
+                        )
+                    except Exception:
+                        procedure_execution_audit["ended_at"] = datetime.now(timezone.utc).isoformat()
+                        write_audit_json(
+                            _spec_dir(ws) / "procedure_execution.json",
+                            procedure_execution_audit,
+                        )
+                        print(f"[TRACEFIX {_execution_marker_name(procedure_decision_selected)} END] result=fail", flush=True)
+                        print(
+                            f"[TRACEFIX PROCEDURE EXECUTION END] mode={procedure_decision_selected} result=fail",
+                            flush=True,
+                        )
+                        raise
+                    procedure_execution_audit.update({
+                        "ended_at": datetime.now(timezone.utc).isoformat(),
+                        "success": True,
+                        "artifacts_written": [
+                            str(path.relative_to(ws)).replace("\\", "/")
+                            for path in reuse_result.artifact_paths
+                        ],
+                    })
+                    write_audit_json(
+                        _spec_dir(ws) / "procedure_execution.json",
+                        procedure_execution_audit,
+                    )
+                    print(f"[TRACEFIX {_execution_marker_name(procedure_decision_selected)} END] result=pass", flush=True)
+                    print(
+                        f"[TRACEFIX PROCEDURE EXECUTION END] mode={procedure_decision_selected} result=pass",
+                        flush=True,
+                    )
+                    deterministic_reuse_instantiated = True
+                else:
+                    procedure_execution_prompt = build_procedure_execution_prompt(
+                        execution_context,
+                        workspace_rel=ws_rel,
+                    )
+                    prompt_path = _spec_dir(ws) / "procedure_execution_prompt.txt"
+                    write_audit_text(prompt_path, procedure_execution_prompt)
                 attribute_extraction_diagnostics.extend([
                     f"Template rankings written: {rankings_path.relative_to(ws)}",
                     f"Template validation written: {validation_path.relative_to(ws)}",
                     f"Procedure options written: {options_path.relative_to(ws)}",
                     f"Procedure decision written: {decision_path.relative_to(ws)}",
-                    (
-                        "Procedure decision selected full_generation: continuing into "
-                        "OpenCode fallback because no reusable template was safe enough."
-                        if procedure_decision_selected == "full_generation"
-                        else f"Procedure decision selected {procedure_decision_selected}: stopping before OpenCode."
-                    ),
+                    f"Procedure execution context written: {context_path.relative_to(ws)}",
+                    f"Deterministic procedure selected: {procedure_decision_selected}.",
                 ])
-            except ProcedureDecisionError as exc:
-                invalid_procedure_decision = True
+            except ProcedureExecutionError as exc:
+                procedure_execution_failed = True
+                procedure_execution_error = str(exc)
                 attr_error = str(exc)
-                attribute_extraction_diagnostics.append(f"Invalid procedure decision: {attr_error}")
-            except RuntimeError as exc:
-                procedure_llm_failed = True
-                attr_error = str(exc)
-                attribute_extraction_diagnostics.append(f"Procedure LLM failed: {attr_error}")
+                attribute_extraction_diagnostics.append(f"Fixed procedure execution failed: {attr_error}")
             except Exception as exc:  # noqa: BLE001 - ranking/validation failures should be explicit
                 template_ranking_failed = True
                 attr_error = str(exc)
@@ -1593,25 +1785,17 @@ async def run_design(
             duration_ms=attr_duration_ms,
             success=attr_error is None,
             error=attr_error,
-            extracted_coordination_attributes=(attributes.as_dict() if attr_error is None else {}),
+            extracted_coordination_attributes=(attributes.as_dict() if attributes is not None else {}),
             template_mapping_status=(
-                (
-                    "opencode_fallback_selected"
-                    if procedure_decision_selected == "full_generation"
-                    else "procedure_decision_complete"
-                )
+                f"deterministic_{procedure_decision_selected}_selected"
                 if procedure_decision_complete
                 else (
-                    "invalid_procedure_decision"
-                    if invalid_procedure_decision
+                    "procedure_execution_failed"
+                    if procedure_execution_failed
                     else (
-                        "procedure_llm_failed"
-                        if procedure_llm_failed
-                        else (
-                            "template_ranking_failed"
-                            if template_ranking_failed
-                            else "attribute_extraction_failed"
-                        )
+                        "template_ranking_failed"
+                        if template_ranking_failed
+                        else "attribute_extraction_failed"
                     )
                 )
             ),
@@ -1620,9 +1804,8 @@ async def run_design(
     # -------------------------------------------------------------------------------
     if (
         fast_path_used
-        or (procedure_decision_complete and procedure_decision_selected != "full_generation")
-        or invalid_procedure_decision
-        or procedure_llm_failed
+        or deterministic_reuse_instantiated
+        or procedure_execution_failed
         or template_ranking_failed
         or attribute_extraction_failed
     ):
@@ -1635,18 +1818,87 @@ async def run_design(
             "model": None,
         }
     else:
-        disposition = await run_opencode_agent(
-            "designer", cfg,
-            opencode_cmd=opencode_cmd or ["opencode"],
-            output_dir=root,                      # --dir = repo root: skills + workspace/ resolve
-            kickoff=design_kickoff(ws_rel),
-            timeout=timeout,
-            on_event=on_event,
-            env_overrides=env,
-            usage_tracker=timing.usage,
-            usage_stage="opencode_initial_design",
+        if not procedure_execution_prompt or not procedure_decision_selected or procedure_decision is None:
+            raise RuntimeError("deterministic procedure selection produced no execution prompt")
+        usage_stage = f"opencode_procedure_execution_{procedure_decision_selected}"
+        selected_template_log = procedure_decision.selected_template_id or "none"
+        allowed_fields = (
+            list(procedure_decision.parameterizable_fields)
+            if procedure_decision_selected == "parameterized_reuse"
+            else list(dict.fromkeys([
+                *procedure_decision.adaptable_fields,
+                *procedure_decision.recomposable_fields,
+            ]))
+            if procedure_decision_selected == "partial_recomposition"
+            else []
         )
-        timing.opencode_call("opencode_initial_design", disposition)
+        procedure_execution_audit = {
+            "selected_procedure": procedure_decision_selected,
+            "selected_template_id": procedure_decision.selected_template_id,
+            "executor": "opencode",
+            "allowed_fields": allowed_fields,
+            "protected_fields": list(procedure_decision.protected_fields),
+            "llm_expected": True,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "ended_at": None,
+            "success": False,
+            "artifacts_written": [],
+        }
+        execution_audit_path = _spec_dir(ws) / "procedure_execution.json"
+        write_audit_json(execution_audit_path, procedure_execution_audit)
+        marker_name = _execution_marker_name(procedure_decision_selected)
+        print(
+            f"[TRACEFIX PROCEDURE EXECUTION START] mode={procedure_decision_selected} "
+            f"template={selected_template_log}",
+            flush=True,
+        )
+        if procedure_decision_selected == "full_generation":
+            print("[TRACEFIX FULL GENERATION START]", flush=True)
+        else:
+            print(f"[TRACEFIX {marker_name} START] template={selected_template_log}", flush=True)
+        try:
+            disposition = await run_opencode_agent(
+                "designer", cfg,
+                opencode_cmd=opencode_cmd or ["opencode"],
+                output_dir=root,                      # --dir = repo root: skills + workspace/ resolve
+                kickoff=procedure_execution_prompt,
+                timeout=timeout,
+                on_event=on_event,
+                env_overrides=env,
+                usage_tracker=timing.usage,
+                usage_stage=usage_stage,
+                procedure=procedure_decision_selected,
+                template_id=procedure_decision.selected_template_id,
+            )
+        except Exception:
+            procedure_execution_audit["ended_at"] = datetime.now(timezone.utc).isoformat()
+            write_audit_json(execution_audit_path, procedure_execution_audit)
+            print(f"[TRACEFIX {marker_name} END] result=fail", flush=True)
+            print(
+                f"[TRACEFIX PROCEDURE EXECUTION END] mode={procedure_decision_selected} result=fail",
+                flush=True,
+            )
+            raise
+        artifacts_written = _execution_artifacts(ws)
+        execution_success = (
+            disposition.get("status") not in {"timeout", "error", "cost_limit", "correction_failed"}
+            and disposition.get("returncode") in {0, None}
+            and bool(artifacts_written)
+        )
+        execution_result = "pass" if execution_success else "fail"
+        procedure_execution_audit.update({
+            "ended_at": datetime.now(timezone.utc).isoformat(),
+            "success": execution_success,
+            "artifacts_written": artifacts_written,
+        })
+        write_audit_json(execution_audit_path, procedure_execution_audit)
+        print(f"[TRACEFIX {marker_name} END] result={execution_result}", flush=True)
+        print(
+            f"[TRACEFIX PROCEDURE EXECUTION END] mode={procedure_decision_selected} "
+            f"result={execution_result}",
+            flush=True,
+        )
+        timing.opencode_call(usage_stage, disposition)
 
     timed_out = disposition["status"] == "timeout"
     run_diagnostics = [
@@ -1658,11 +1910,11 @@ async def run_design(
                 "OpenCode initial design skipped: single-agent deterministic fast path verified"
                 if fast_path_used
                 else (
-                    "OpenCode initial design skipped: reusable procedure decision completed"
-                    if (procedure_decision_complete and procedure_decision_selected != "full_generation")
+                    "OpenCode initial design skipped: deterministic reuse instantiated template artifacts"
+                    if deterministic_reuse_instantiated
                     else (
-                        "OpenCode initial design skipped: procedure decision failed"
-                        if (invalid_procedure_decision or procedure_llm_failed or template_ranking_failed)
+                        "OpenCode initial design skipped: fixed procedure setup failed"
+                        if (procedure_execution_failed or template_ranking_failed)
                         else (
                             "OpenCode initial design skipped: coordination attribute extraction failed"
                             if attribute_extraction_failed
@@ -1675,9 +1927,8 @@ async def run_design(
     run_diagnostics.extend(_workspace_stage_diagnostics(ws, "after initial design"))
     if not (
         fast_path_used
-        or procedure_decision_complete
-        or invalid_procedure_decision
-        or procedure_llm_failed
+        or deterministic_reuse_instantiated
+        or procedure_execution_failed
         or template_ranking_failed
         or attribute_extraction_failed
     ):
@@ -1700,25 +1951,19 @@ async def run_design(
         ir_sanitization=sanitization_report,
     )
     diagnostics = [*run_diagnostics, *diagnostics]
-    if procedure_decision_complete and procedure_decision_selected == "full_generation" and not fast_path_used:
+    if procedure_execution_failed and not fast_path_used:
+        status = f"{procedure_decision_selected or 'procedure'}_execution_failed"
+        ir_errors = [procedure_execution_error or "Fixed procedure execution failed."]
+        diagnostics.append("Fixed procedure execution failed before valid artifacts were produced.")
+    elif procedure_decision_complete and not deterministic_reuse_instantiated and not fast_path_used:
         diagnostics.append(
-            "Procedure decision selected full_generation: OpenCode fallback was allowed to run."
+            f"Deterministic {procedure_decision_selected} execution was run through OpenCode."
         )
-    elif procedure_decision_complete and not fast_path_used:
-        status = "procedure_decision_complete"
-        ir_errors = []
+    elif deterministic_reuse_instantiated and not fast_path_used:
         diagnostics.append(
-            "Procedure decision complete: stopping before protocol generation, "
-            "OpenCode fallback, IR generation, PlusCal, or TLC."
+            f"{procedure_decision_selected} instantiated IR, Protocol.tla, and Protocol.cfg without an LLM call; "
+            "normal validation and TLC continue."
         )
-    elif invalid_procedure_decision and not fast_path_used:
-        status = "invalid_procedure_decision"
-        ir_errors = ["Procedure decision response failed deterministic validation."]
-        diagnostics.append("Invalid procedure decision: stopping before generation.")
-    elif procedure_llm_failed and not fast_path_used:
-        status = "procedure_llm_failed"
-        ir_errors = ["Downstream procedure-selection LLM failed."]
-        diagnostics.append("Procedure-selection LLM failed: stopping before generation.")
     elif template_ranking_failed and not fast_path_used:
         status = "template_ranking_failed"
         ir_errors = ["Template ranking, validation, or procedure option generation failed."]
@@ -1738,6 +1983,8 @@ async def run_design(
     if (
         status == "ir_incomplete"
         and not timed_out
+        and not deterministic_reuse_instantiated
+        and procedure_decision_selected in {"partial_recomposition", "full_generation"}
         and any("before PlusCal scaffolding" in error for error in ir_errors)
     ):
         diagnostics.append("PlusCal scaffold fallback started")
@@ -1775,6 +2022,8 @@ async def run_design(
                 env_overrides=env,
                 usage_tracker=timing.usage,
                 usage_stage="opencode_pluscal_continuation",
+                procedure=procedure_decision_selected,
+                template_id=(procedure_decision.selected_template_id if procedure_decision else None),
             )
             diagnostics.append("PlusCal continuation pass finished")
             status, ir_errors, continuation_diagnostics = classify_design_artifacts(
@@ -1796,6 +2045,8 @@ async def run_design(
     if (
         status == "ir_incomplete"
         and not timed_out
+        and not deterministic_reuse_instantiated
+        and procedure_decision_selected in {"partial_recomposition", "full_generation"}
         and any("no communication channels" in error for error in ir_errors)
     ):
         diagnostics.append("IR repair pass started")
@@ -1811,6 +2062,8 @@ async def run_design(
             env_overrides=env,
             usage_tracker=timing.usage,
             usage_stage="opencode_ir_repair",
+            procedure=procedure_decision_selected,
+            template_id=(procedure_decision.selected_template_id if procedure_decision else None),
         )
         timing.opencode_call("opencode_ir_repair", repair_disposition)
         diagnostics.append("IR repair pass finished")
@@ -1863,6 +2116,8 @@ async def run_design(
                     env_overrides=env,
                     usage_tracker=timing.usage,
                     usage_stage="opencode_pluscal_continuation_post_repair",
+                    procedure=procedure_decision_selected,
+                    template_id=(procedure_decision.selected_template_id if procedure_decision else None),
                 )
                 timing.opencode_call(
                     "opencode_pluscal_continuation_post_repair",
@@ -1915,7 +2170,7 @@ async def run_design(
     if _verified_protocol_ready(ws) and not timed_out:
         diagnostics.append("Prompt gate started")
         diagnostics.extend(_ensure_plan_before_prompts(ws))
-        if fast_path_used and not _runtime_prompts_current(ws):
+        if (fast_path_used or deterministic_reuse_instantiated) and not _runtime_prompts_current(ws):
             deterministic_prompt_started_at = datetime.now(timezone.utc).isoformat()
             deterministic_prompt_started_ms = time.monotonic() * 1000.0
             try:
@@ -1923,16 +2178,16 @@ async def run_design(
                 plan = safe_read_json(plan_path, {})
                 prompt_dir = ws / "prompts" / "runtime_b"
                 prompt_dir.mkdir(parents=True, exist_ok=True)
-                prompt_decisions = [fast_path_decision]
-                prompt_paths = []
-                for prompt_decision in prompt_decisions:
-                    prompt_text = render_verified_runtime_prompt(
-                        prompt_decision,
-                        plan,
-                    )
-                    prompt_path = prompt_dir / f"{prompt_decision.agent_id}.md"
-                    prompt_path.write_text(prompt_text, encoding="utf-8")
-                    prompt_paths.append(str(prompt_path))
+                if fast_path_used:
+                    prompt_decisions = [fast_path_decision]
+                    prompt_paths = []
+                    for prompt_decision in prompt_decisions:
+                        prompt_text = render_verified_runtime_prompt(prompt_decision, plan)
+                        prompt_path = prompt_dir / f"{prompt_decision.agent_id}.md"
+                        prompt_path.write_text(prompt_text, encoding="utf-8")
+                        prompt_paths.append(str(prompt_path))
+                else:
+                    prompt_paths = _write_deterministic_reuse_prompts(ws, task)
             except Exception as exc:  # noqa: BLE001
                 timing.stage(
                     "deterministic_runtime_prompt",
@@ -1964,7 +2219,11 @@ async def run_design(
                     "Deterministic runtime prompt generated from verified "
                     f"CityOS plan: {', '.join(prompt_paths)}"
                 )
-        if not _runtime_prompts_current(ws):
+        if (
+            not _runtime_prompts_current(ws)
+            and not deterministic_reuse_instantiated
+            and procedure_decision_selected in {"partial_recomposition", "full_generation"}
+        ):
             diagnostics.append("Prompt generation pass started")
             prompt_disposition = await run_opencode_agent(
                 "designer",
@@ -1977,6 +2236,8 @@ async def run_design(
                 env_overrides=env,
                 usage_tracker=timing.usage,
                 usage_stage="opencode_runtime_prompt_generation",
+                procedure=procedure_decision_selected,
+                template_id=(procedure_decision.selected_template_id if procedure_decision else None),
             )
             timing.opencode_call("opencode_runtime_prompt_generation", prompt_disposition)
             timing.opencode_call("opencode_pluscal_continuation", continuation_disposition)
@@ -2043,6 +2304,47 @@ async def run_design(
                 finished_at=datetime.now(timezone.utc).isoformat(),
                 duration_ms=time.monotonic() * 1000.0 - plan_started_ms,
                 success=True,
+            )
+
+    if (
+        result.success
+        and attributes is not None
+        and procedure_decision_selected != "exact_reuse"
+    ):
+        promotion_started_at = datetime.now(timezone.utc).isoformat()
+        promotion_started_ms = time.monotonic() * 1000.0
+        try:
+            promoted_template, promoted_dir = promote_verified_workspace_template(
+                ws,
+                extracted=attributes,
+                tlc_passed=result.tlc_passed,
+            )
+        except Exception as exc:  # noqa: BLE001 - promotion is an explicit completion gate
+            timing.stage(
+                "generated_template_promotion",
+                started_at=promotion_started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_ms=time.monotonic() * 1000.0 - promotion_started_ms,
+                success=False,
+                error=str(exc),
+            )
+            result.success = False
+            result.status = "template_promotion_failed"
+            result.stderr_tail = [*result.stderr_tail, f"template promotion failed: {exc}"]
+            diagnostics.append(f"Verified template promotion failed: {exc}")
+        else:
+            timing.stage(
+                "generated_template_promotion",
+                started_at=promotion_started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_ms=time.monotonic() * 1000.0 - promotion_started_ms,
+                success=True,
+                template_id=promoted_template.get_template_id(),
+                registry_dir=str(promoted_dir),
+            )
+            diagnostics.append(
+                "Verified canonical Template promoted and persisted: "
+                f"{promoted_template.get_template_id()}"
             )
 
     if live and bus is not None:

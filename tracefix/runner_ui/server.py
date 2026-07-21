@@ -1387,7 +1387,7 @@ class RunState:
 
 
 def _env_updates_for_provider(payload: dict[str, Any], *, require_key: bool) -> dict[str, str]:
-    provider = str(payload.get("provider", "openai"))
+    provider = str(payload.get("provider", "openai")).strip().lower() or "openai"
     env_updates: dict[str, str] = {}
     key_map = {
         "openai": ("OPENAI_API_KEY", "openaiKey"),
@@ -1415,11 +1415,10 @@ def _add_attribute_extractor_env(payload: dict[str, Any], env_updates: dict[str,
 
     if provider == "openrouter":
         key = env_updates.get("OPENROUTER_API_KEY") or current_env.get("OPENROUTER_API_KEY", "")
-        if key and not current_env.get("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY"):
+        if key:
             env_updates["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY"] = key
-        if not current_env.get("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_BASE_URL"):
-            env_updates["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_BASE_URL"] = "https://openrouter.ai/api/v1"
-        if model and not current_env.get("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL"):
+        env_updates["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_BASE_URL"] = "https://openrouter.ai/api/v1"
+        if model:
             env_updates["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL"] = (
                 model.removeprefix("openrouter/") if model.startswith("openrouter/") else model
             )
@@ -1427,9 +1426,12 @@ def _add_attribute_extractor_env(payload: dict[str, Any], env_updates: dict[str,
 
     if provider == "openai":
         key = env_updates.get("OPENAI_API_KEY") or current_env.get("OPENAI_API_KEY", "")
-        if key and not current_env.get("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY"):
+        if key:
             env_updates["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_API_KEY"] = key
-        if model and not current_env.get("TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL"):
+        env_updates["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_BASE_URL"] = (
+            current_env.get("OPENAI_BASE_URL", "").strip() or "https://api.openai.com/v1"
+        )
+        if model:
             env_updates["TRACEFIX_LLM_ATTRIBUTE_EXTRACTOR_MODEL"] = (
                 model.removeprefix("openai/") if model.startswith("openai/") else model
             )
@@ -1565,6 +1567,10 @@ def _build_design_command(root: Path, payload: dict[str, Any]) -> tuple[list[str
         "--opencode-bin",
         opencode_bin,
     ]
+    task_mode = str(payload.get("taskMode", "benchmark"))
+    custom_task = str(payload.get("customTask", "")).strip()
+    if task_mode == "custom" and custom_task in {"", _TELLME_PLACEHOLDER}:
+        command.extend(["--task-spec", str(TellMeBridge(root).tracefix_task_spec_path())])
     model = _model_for_tracefix(payload)
     if model:
         command.extend(["--model", model])

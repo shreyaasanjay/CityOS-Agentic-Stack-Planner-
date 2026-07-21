@@ -1,5 +1,6 @@
 import json
 
+from tracefix.protocol_templates import get_template
 from tracefix.protocol_templates.template import Template
 from tracefix.runtime.deterministic_template_engine import (
     DeterministicTemplateEngine,
@@ -126,13 +127,14 @@ def test_unknown_values_do_not_lower_score():
         number_of_channels=None,
         coordination_patterns=[],
         agent_roles=[],
+        communication_flow=[],
     )
 
     ranking = DeterministicTemplateEngine().rank(extracted, [_priority_template()])[0]
 
-    assert ranking.match_count == 3
+    assert ranking.match_count == 2
     assert ranking.mismatch_count == 0
-    assert ranking.unknown_count == 3
+    assert ranking.unknown_count == 4
     assert ranking.score == 1.0
 
 
@@ -292,3 +294,187 @@ def test_no_templates_emits_all_options_with_full_generation_available():
         "full_generation",
     ]
     assert options.option_for("full_generation").deterministically_available is True
+
+
+def _select(engine, extracted, templates):
+    rankings = engine.rank(extracted, templates)
+    top = next(
+        (template for template in templates if rankings and template.get_template_id() == rankings[0].template_id),
+        None,
+    )
+    validation = engine.validate(extracted, top) if top else None
+    options = engine.procedure_options(rankings, validation, templates)
+    return engine.select_procedure(extracted, rankings, validation, options, templates)
+
+
+def test_selector_chooses_exact_reuse_with_sufficient_structural_evidence():
+    decision = _select(
+        DeterministicTemplateEngine(),
+        _sample_extracted(number_of_channels=3),
+        [_priority_template()],
+    )
+
+    assert decision.selected_procedure == "exact_reuse"
+    assert decision.selected_template_id == "priority_shared_resource"
+    assert decision.evidence_sufficient is True
+
+
+def test_exact_reuse_is_blocked_when_only_pattern_evidence_is_known():
+    # Construct canonical validator input directly so this remains a test of
+    # pattern-only evidence, independent of the LLM boundary's deterministic
+    # communication-flow completion.
+    extracted = ExtractedCoordinationData.model_validate(
+        {
+            "coordination_patterns": [
+                "Request-Grant",
+                "Exclusive Resource Access",
+                "Task Prioritization",
+            ],
+            "number_of_agents": None,
+            "agent_roles": [],
+            "communication_flow": [],
+            "limitations": [],
+            "number_of_resources": None,
+            "number_of_channels": None,
+        }
+    )
+    decision = _select(DeterministicTemplateEngine(), extracted, [_priority_template()])
+
+    assert decision.selected_procedure == "full_generation"
+    assert decision.evidence_sufficient is False
+    assert "insufficient_reuse_evidence" in decision.reason_codes
+
+
+def test_selector_chooses_parameterized_reuse_before_partial_or_full():
+    template = _priority_template(parameterizable_fields=["number_of_agents"])
+    decision = _select(
+        DeterministicTemplateEngine(),
+        _sample_extracted(number_of_agents=4, number_of_channels=3),
+        [template],
+    )
+
+    assert decision.selected_procedure == "parameterized_reuse"
+    assert decision.mismatched_fields == ["number_of_agents"]
+
+
+def test_selector_chooses_partial_recomposition_for_bounded_adaptation():
+    template = _priority_template(
+        communication_flow=["request", "grant", "release"],
+        adaptable_fields=["communication_flow"],
+    )
+    decision = _select(
+        DeterministicTemplateEngine(),
+        _sample_extracted(number_of_channels=3),
+        [template],
+    )
+
+    assert decision.selected_procedure == "partial_recomposition"
+    assert "communication_flow" in decision.adaptable_fields
+
+
+def test_selector_chooses_full_generation_for_fatal_pattern_mismatch():
+    decision = _select(
+        DeterministicTemplateEngine(),
+        _sample_extracted(number_of_channels=3),
+        [_producer_consumer_template()],
+    )
+
+    assert decision.selected_procedure == "full_generation"
+    assert decision.selected_template_id is None
+    assert "coordination_patterns" in decision.fatal_mismatch_fields
+
+
+def test_selector_chooses_full_generation_when_no_template_exists():
+    decision = _select(DeterministicTemplateEngine(), _sample_extracted(), [])
+
+    assert decision.selected_procedure == "full_generation"
+    assert decision.selected_template_id is None
+    assert decision.reason_codes == ["no_ranked_template", "full_generation_fallback"]
+
+
+def test_selector_is_repeatable_and_auditable():
+    engine = DeterministicTemplateEngine()
+    extracted = _sample_extracted(number_of_channels=3)
+    template = _priority_template()
+
+    first = _select(engine, extracted, [template]).to_dict()
+    second = _select(engine, extracted, [template]).to_dict()
+
+    assert first == second
+    assert first["reason_codes"]
+    assert first["matched_fields"]
+    assert "available_procedures" in first
+
+
+def test_validation_audit_preserves_ranking_order_and_field_results():
+    engine = DeterministicTemplateEngine()
+    extracted = _sample_extracted(number_of_channels=3)
+    templates = [_producer_consumer_template(), _priority_template(), _consensus_template()]
+    rankings = engine.rank(extracted, templates)
+
+    payload, validations = engine.validation_audit(extracted, rankings, templates)
+
+    candidates = payload["ranked_candidates"]
+    assert [candidate["template_id"] for candidate in candidates] == [
+        ranking.template_id for ranking in rankings
+    ]
+    assert [candidate["rank"] for candidate in candidates] == [1, 2, 3]
+    assert candidates[0]["template_id"] == validations[0].template_id
+    assert candidates[0]["field_results"]["coordination_patterns"]["result"] is True
+    assert "request_value" in candidates[0]["field_results"]["number_of_agents"]
+    json.dumps(payload)
+
+
+def test_medication_robot_overlap_counts_route_to_partial_recomposition():
+    extracted = ExtractedCoordinationData.from_payload({
+        "coordination_patterns": [
+            "Request-Grant",
+            "Exclusive Resource Access",
+            "Priority Escort",
+            "Queue-Based Scheduling",
+        ],
+        "number_of_agents": 3,
+        "agent_roles": ["medication-delivery robot"],
+        "communication_flow": [],
+        "limitations": [
+            "Only one robot may occupy the corridor at a time",
+            "Emergency deliveries have priority",
+            "Ordinary deliveries must not starve",
+            "Do not execute production agents or bypass PlusCal/TLC verification",
+        ],
+        "number_of_resources": 1,
+        "number_of_channels": 3,
+    })
+    template = get_template("traffic_signal_coordination")
+    engine = DeterministicTemplateEngine()
+    rankings = engine.rank(extracted, [template])
+    validation_audit, _ = engine.validation_audit(extracted, rankings, [template])
+
+    decision = _select(engine, extracted, [template])
+    candidate = validation_audit["ranked_candidates"][0]
+
+    assert decision.selected_procedure == "partial_recomposition"
+    assert decision.selected_template_id == "traffic_signal_coordination"
+    assert decision.fatal_mismatch_fields == []
+    assert decision.mismatched_fields == ["coordination_patterns", "limitations"]
+    assert decision.unknown_fields == [
+        "number_of_agents",
+        "agent_roles",
+        "number_of_channels",
+    ]
+    assert decision.recomposable_fields == ["coordination_patterns"]
+    assert "coordination_patterns" not in decision.protected_fields
+    assert decision.evidence["coordination_pattern_match"] is False
+    assert decision.evidence["coordination_pattern_overlap_count"] == 3
+    assert decision.evidence["meaningful_structural_match_count"] == 3
+    assert decision.evidence["unknown_count"] == 3
+    assert "coordination_pattern_overlap_sufficient" in decision.reason_codes
+    assert candidate["match_count"] == 2
+    assert candidate["mismatch_count"] == 1
+    assert candidate["unknown_count"] == 3
+    assert candidate["validation_match_count"] == 2
+    assert candidate["validation_mismatch_count"] == 2
+    assert candidate["validation_unknown_count"] == 3
+    assert candidate["coordination_pattern_overlap_count"] == 3
+    assert candidate["count_qualified_recomposition_fields"] == ["coordination_patterns"]
+    assert candidate["eligible_for_partial_recomposition"] is True
