@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 interface VerifyRequest {
-  provider?: 'openai' | 'anthropic' | 'local'
+  provider?: 'openai' | 'anthropic' | 'openrouter' | 'local'
   model?: string
   apiKey?: string
 }
@@ -19,8 +19,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'The verification request must be valid JSON.' }, { status: 400 })
   }
 
-  const uiProvider = body.provider || 'openai'
-  if (!['openai', 'anthropic', 'local'].includes(uiProvider)) {
+  const uiProvider = body.provider || 'openrouter'
+  if (!['openai', 'anthropic', 'openrouter', 'local'].includes(uiProvider)) {
     return NextResponse.json({ error: 'Choose a supported TraceFix provider.' }, { status: 400 })
   }
   const apiKey = body.apiKey?.trim() || ''
@@ -36,7 +36,9 @@ export async function POST(request: Request) {
     ? { openaiKey: apiKey }
     : provider === 'anthropic'
       ? { anthropicKey: apiKey }
-      : {}
+      : provider === 'openrouter'
+        ? { openrouterKey: apiKey }
+        : {}
 
   try {
     const { response, payload } = await runnerJson('/api/tracefix/from-tellme', {
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider,
-        model: body.model?.trim() || (provider === 'ollama' ? 'llama3.2:3b' : 'gpt-5-mini'),
+        model: body.model?.trim() || (provider === 'ollama' ? 'llama3.2:3b' : provider === 'openrouter' ? 'z-ai/glm-5.2' : 'gpt-5-mini'),
         ...providerKey,
         timeout: 1800,
         verbose: false,

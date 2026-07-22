@@ -56,8 +56,8 @@ const DEFAULT_RUNTIME_CONFIG: RuntimeConfig = {
   spaceId: 'smart_room_1',
   mirrorApiUrl: 'https://smartroom-mirror.vercel.app/api/v1',
   timestamp: '',
-  tracefixProvider: 'openai',
-  tracefixModel: 'gpt-5-mini',
+  tracefixProvider: 'openrouter',
+  tracefixModel: 'z-ai/glm-5.2',
   tracefixApiKey: '',
 }
 
@@ -629,6 +629,7 @@ export default function Page() {
                       {turn.status === 'loading' && (
                         <ThinkingIndicator
                           stage={turn.progressStage ?? 'planning'}
+                          backendRunId={turn.backendRunId}
                           onStop={() => stopTurn(turn.id)}
                         />
                       )}

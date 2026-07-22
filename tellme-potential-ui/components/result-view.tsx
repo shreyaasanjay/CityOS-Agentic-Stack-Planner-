@@ -253,9 +253,9 @@ export function ResultView({
         {tab === 'agents' && (
           <div className="flex flex-col gap-4">
             <p className="text-[13px] leading-relaxed text-muted-foreground">
-              These are the only sensors and systems TeLLMe used to locate your
-              keys. Each was limited to what was needed -- nothing more was
-              accessed or stored.
+              These are the only sensors and systems TeLLMe used for this
+              answer. Each was limited to what was needed; nothing more was
+              exposed in the user-facing result.
             </p>
             <ul className="flex flex-col gap-3">
               {result.agents.map((agent) => (

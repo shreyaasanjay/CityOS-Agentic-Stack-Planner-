@@ -1,6 +1,6 @@
 'use client'
 
-import { MessageSquareText, ListChecks, Layers, Wifi } from 'lucide-react'
+import { ArrowUpRight, MessageSquareText, ListChecks, Layers, Server, Wifi } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   SettingsMenu,
@@ -48,39 +48,58 @@ export function AppHeader({
           </div>
         </div>
 
-        <nav
-          aria-label="Workspace views"
-          className="flex shrink-0 items-center gap-1 rounded-full border border-border bg-card p-1"
-        >
-          <TabButton
-            active={activeTab === 'conversation'}
-            onClick={() => onTabChange('conversation')}
+        <div className="flex shrink-0 items-center gap-2">
+          <BackendLink />
+          <nav
+            aria-label="Workspace views"
+            className="flex items-center gap-1 rounded-full border border-border bg-card p-1"
           >
-            <MessageSquareText className="size-3.5" aria-hidden="true" />
-            <span className="hidden sm:inline">Conversation</span>
-          </TabButton>
-          <TabButton
-            active={activeTab === 'guidelines'}
-            onClick={() => onTabChange('guidelines')}
-          >
-            <ListChecks className="size-3.5" aria-hidden="true" />
-            <span className="hidden sm:inline">Guidelines</span>
-            {guidelineCount > 0 && (
-              <span
-                className={cn(
-                  'ml-0.5 inline-flex min-w-4.5 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums',
-                  activeTab === 'guidelines'
-                    ? 'bg-primary-foreground/20 text-primary-foreground'
-                    : 'bg-secondary text-muted-foreground',
-                )}
-              >
-                {guidelineCount}
-              </span>
-            )}
-          </TabButton>
-        </nav>
+            <TabButton
+              active={activeTab === 'conversation'}
+              onClick={() => onTabChange('conversation')}
+            >
+              <MessageSquareText className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Conversation</span>
+            </TabButton>
+            <TabButton
+              active={activeTab === 'guidelines'}
+              onClick={() => onTabChange('guidelines')}
+            >
+              <ListChecks className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Guidelines</span>
+              {guidelineCount > 0 && (
+                <span
+                  className={cn(
+                    'ml-0.5 inline-flex min-w-4.5 items-center justify-center rounded-full px-1 text-[10px] font-semibold tabular-nums',
+                    activeTab === 'guidelines'
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'bg-secondary text-muted-foreground',
+                  )}
+                >
+                  {guidelineCount}
+                </span>
+              )}
+            </TabButton>
+          </nav>
+        </div>
       </div>
     </header>
+  )
+}
+
+function BackendLink() {
+  return (
+    <a
+      href="/api/tellme/backend"
+      target="_blank"
+      rel="noreferrer"
+      title="Open the local TraceFix runner and intent decomposition view"
+      className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted sm:px-3"
+    >
+      <Server className="size-3.5" aria-hidden="true" />
+      <span className="hidden sm:inline">TraceFix</span>
+      <ArrowUpRight className="size-3.5" aria-hidden="true" />
+    </a>
   )
 }
 

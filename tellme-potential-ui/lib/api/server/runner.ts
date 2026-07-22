@@ -1,9 +1,12 @@
 export type JsonObject = Record<string, unknown>
 
-const DEFAULT_RUNNER_URL = 'http://127.0.0.1:8788'
-const configuredRunnerUrl = process.env.TRACEFIX_RUNNER_URL?.trim()
+const DEFAULT_BACKEND_URL = 'http://127.0.0.1:8788'
+const configuredRunnerUrl = (
+  process.env.TELLME_BACKEND_URL?.trim()
+  || process.env.TRACEFIX_RUNNER_URL?.trim()
+)
 
-export const RUNNER_URL = (configuredRunnerUrl || DEFAULT_RUNNER_URL).replace(/\/+$/, '')
+export const RUNNER_URL = (configuredRunnerUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '')
 
 export function asObject(value: unknown): JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value)

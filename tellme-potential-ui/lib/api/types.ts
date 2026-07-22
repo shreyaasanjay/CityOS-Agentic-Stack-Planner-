@@ -98,7 +98,7 @@ export interface QueryRequest {
   model: string
   mirrorApiUrl: string
   openaiApiKey?: string
-  tracefixProvider: 'openai' | 'anthropic' | 'local'
+  tracefixProvider: 'openai' | 'anthropic' | 'openrouter' | 'local'
   tracefixModel: string
   tracefixApiKey?: string
 }

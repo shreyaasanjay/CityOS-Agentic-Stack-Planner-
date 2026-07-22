@@ -23,6 +23,13 @@ function safeLabel(value: string) {
   return value.replace(/[^a-z0-9 _-]/gi, '').replace(/\s+/g, ' ').trim().slice(0, 40)
 }
 
+function safeAnswerText(value: string) {
+  const text = value.replace(/\s+/g, ' ').trim()
+  if (!text) return ''
+  if (/[a-z]:\\|\/users\/|source_data|framepath|localpath/i.test(text)) return ''
+  return text.slice(0, 600)
+}
+
 function aggregateAnswer(query: string, answer: JsonObject): string {
   const cameras = asArray(answer.cameras).map(asObject)
   if (/\b(how many people|occupancy|occupied)\b/i.test(query) && cameras.length) {
@@ -56,6 +63,14 @@ function aggregateAnswer(query: string, answer: JsonObject): string {
     return `The approved sensor summary found these activity records: ${summary}. These aggregate counts do not identify people or establish that separate activities involved the same person.`
   }
 
+  const backendAnswer = safeAnswerText(
+    asString(answer.chat_answer) || asString(answer.chatAnswer),
+  )
+  if (backendAnswer) return backendAnswer
+
+  const backendText = cameras.length === 0 ? safeAnswerText(asString(answer.text)) : ''
+  if (backendText) return backendText
+
   return 'The smart-room data was processed, but no privacy-safe aggregate answer was available for this request.'
 }
 
@@ -63,7 +78,7 @@ function safeFinalResult(envelope: JsonObject, query: string, model: string): Qu
   const data = asObject(envelope.data)
   const answer = asObject(data.web_data_answer)
   const cameras = asArray(answer.cameras)
-  const evidenceCount = Math.max(1, cameras.length)
+  const evidenceCount = cameras.length
   const evidence: EvidenceItem[] = Array.from({ length: evidenceCount }, (_, index) => ({
     id: `private-evidence-${index + 1}`,
     kind: 'sensor',

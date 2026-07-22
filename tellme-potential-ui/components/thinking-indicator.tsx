@@ -1,4 +1,4 @@
-import { Check, Circle, Loader2, Search, Square } from 'lucide-react'
+import { ArrowUpRight, Check, Circle, Loader2, Search, Server, Square } from 'lucide-react'
 
 import type { QueryProgressStage } from '@/lib/api/types'
 
@@ -11,12 +11,17 @@ const STEPS = [
 
 export function ThinkingIndicator({
   stage,
+  backendRunId,
   onStop,
 }: {
   stage: QueryProgressStage
+  backendRunId?: string
   onStop?: () => void
 }) {
   const activeIndex = Math.max(0, STEPS.findIndex((step) => step.id === stage))
+  const backendHref = backendRunId
+    ? `/api/tellme/backend?run=${encodeURIComponent(backendRunId)}`
+    : '/api/tellme/backend'
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card px-4 py-3.5 text-sm text-muted-foreground shadow-sm">
@@ -27,16 +32,29 @@ export function ThinkingIndicator({
           </span>
           <span className="font-medium">Preparing grounded answer</span>
         </div>
-        {onStop && (
-          <button
-            type="button"
-            onClick={onStop}
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={backendHref}
+            target="_blank"
+            rel="noreferrer"
+            title="Open TraceFix runner and intent decomposition"
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
           >
-            <Square className="size-3" aria-hidden="true" />
-            Stop
-          </button>
-        )}
+            <Server className="size-3" aria-hidden="true" />
+            {backendRunId ? 'TraceFix run' : 'TraceFix'}
+            <ArrowUpRight className="size-3" aria-hidden="true" />
+          </a>
+          {onStop && (
+            <button
+              type="button"
+              onClick={onStop}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              <Square className="size-3" aria-hidden="true" />
+              Stop
+            </button>
+          )}
+        </div>
       </div>
 
       <ol className="grid gap-2 text-[13px] sm:grid-cols-2 lg:grid-cols-4">

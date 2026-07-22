@@ -34,7 +34,7 @@ export interface RuntimeConfig {
   spaceId: string
   mirrorApiUrl: string
   timestamp: string
-  tracefixProvider: 'openai' | 'anthropic' | 'local'
+  tracefixProvider: 'openai' | 'anthropic' | 'openrouter' | 'local'
   tracefixModel: string
   tracefixApiKey: string
 }
@@ -259,6 +259,7 @@ function ConnectionSetup({
               >
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
+                <option value="openrouter">OpenRouter</option>
                 <option value="local">Local</option>
               </select>
             </Field>

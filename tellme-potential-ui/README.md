@@ -30,7 +30,7 @@ and synthesis, and shape the response before it reaches the UI.
 ## Backend Integration
 
 The browser calls same-origin routes under `/api/tellme`. The Next.js server then
-contacts the backend address configured by `TRACEFIX_RUNNER_URL`. Keeping this
+contacts the backend address configured by `TELLME_BACKEND_URL`. Keeping this
 address server-side avoids coupling browser code to a developer's local backend
 port and provides one place for response validation and privacy filtering.
 
@@ -64,7 +64,7 @@ Copy-Item .env.example .env.local
 3. If necessary, edit `.env.local` so its address matches the running backend:
 
 ```dotenv
-TRACEFIX_RUNNER_URL=http://127.0.0.1:8788
+TELLME_BACKEND_URL=http://127.0.0.1:8788
 ```
 
 4. Install dependencies and start the frontend:

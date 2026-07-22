@@ -9,7 +9,7 @@ type RouteContext = { params: Promise<{ runId: string }> }
 
 async function safeRunId(context: RouteContext) {
   const { runId } = await context.params
-  return /^[a-f0-9]{10}$/i.test(runId) ? runId : ''
+  return /^[a-z0-9][a-z0-9_-]{5,80}$/i.test(runId) ? runId : ''
 }
 
 export async function GET(_request: Request, context: RouteContext) {

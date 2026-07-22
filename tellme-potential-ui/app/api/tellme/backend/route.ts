@@ -7,7 +7,23 @@ export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
   const runId = new URL(request.url).searchParams.get('run')?.trim() || ''
-  if (!/^[a-f0-9]{10}$/i.test(runId)) {
+
+  if (!runId) {
+    try {
+      const { response } = await runnerJson('/api/ui-info', {}, 10_000)
+      if (!response.ok) {
+        return NextResponse.json({ error: 'The local TraceFix service is unavailable.' }, { status: 502 })
+      }
+      return NextResponse.redirect(`${RUNNER_URL}/`)
+    } catch {
+      return NextResponse.json(
+        { error: 'The local TraceFix service is unavailable.' },
+        { status: 502 },
+      )
+    }
+  }
+
+  if (!/^[a-z0-9][a-z0-9_-]{5,80}$/i.test(runId)) {
     return NextResponse.json({ error: 'Invalid TraceFix run.' }, { status: 400 })
   }
 
