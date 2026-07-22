@@ -37,6 +37,13 @@ const state = {
 };
 
 const THEME_STORAGE_KEY = "tracefix-runner-theme";
+const PROCEDURE_LABELS = {
+  single_agent_generation: "Single Agent Generation",
+  exact_reuse: "Exact Reuse",
+  parameterized_reuse: "Parameterized Reuse",
+  partial_recomposition: "Partial Recomposition",
+  full_generation: "Full Generation",
+};
 
 const els = {
   themeToggle: document.querySelector("#themeToggle"),
@@ -1892,7 +1899,7 @@ function connectEvents(runId, completion = null) {
 function handleRunEvent(event) {
   if (event.line) {
     state.logs.push(event.line);
-    appendTimeline(event.type, event.line);
+    appendTimeline(event.type, formatTimelineLine(event.line));
     if (event.type === "turn") {
       state.turns += 1;
       if (els.turnCount) els.turnCount.textContent = String(state.turns);
@@ -1925,6 +1932,13 @@ function handleRunEvent(event) {
   }
 
   renderOutput();
+}
+
+function formatTimelineLine(line) {
+  const match = String(line).match(/^\[TRACEFIX PROCEDURE SELECTED\] mode=([^\s]+)/);
+  if (!match) return line;
+  const label = PROCEDURE_LABELS[match[1]] || match[1].replaceAll("_", " ");
+  return `Procedure: ${label}`;
 }
 
 function appendTimeline(type, line) {

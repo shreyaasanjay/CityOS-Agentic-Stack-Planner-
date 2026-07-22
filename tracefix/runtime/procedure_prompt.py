@@ -13,6 +13,11 @@ from tracefix.runtime.coordination_patterns import COORDINATION_PATTERNS
 
 
 PROCEDURE_EXECUTION_INSTRUCTIONS: dict[ProcedureName, tuple[str, ...]] = {
+    "single_agent_generation": (
+        "Use the deterministic single-agent generation path.",
+        "Do not synthesize a multi-agent coordination protocol.",
+        "Do not select, adapt, or generate a coordination template.",
+    ),
     "exact_reuse": (
         "Use the selected template as-is.",
         "Do not alter protocol topology, coordination patterns, communication flow, or safety invariants.",

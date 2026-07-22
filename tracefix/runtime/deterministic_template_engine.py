@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, Literal
+from typing import Any
 
 from tracefix.protocol_templates.template import Template
 from tracefix.runtime.llm_attribute_extractor import ExtractedCoordinationData
-from tracefix.runtime.procedure_decision import DeterministicProcedureDecision
+from tracefix.runtime.procedure_decision import (
+    DeterministicProcedureDecision,
+    ProcedureName,
+)
 
 PRIMARY_ATTRIBUTES: tuple[str, ...] = (
     "coordination_patterns",
@@ -34,14 +37,6 @@ MEANINGFUL_REUSE_FIELDS = frozenset({
     "communication_flow",
     "number_of_resources",
 })
-
-ProcedureName = Literal[
-    "exact_reuse",
-    "parameterized_reuse",
-    "partial_recomposition",
-    "full_generation",
-]
-
 
 @dataclass(frozen=True)
 class AttributeComparison:
@@ -147,6 +142,93 @@ class ProcedureOptions:
 
 class DeterministicTemplateEngine:
     """Rank and validate templates using shared deterministic comparisons."""
+
+    def is_single_agent_request(
+        self,
+        extracted: ExtractedCoordinationData,
+        *,
+        task_route: str | None = None,
+    ) -> bool:
+        """Return true only when no inter-agent coordination must be synthesized."""
+
+        route = str(task_route or "").strip().lower()
+        one_logical_agent = extracted.number_of_agents == 1 or (
+            route == "single_agent" and extracted.number_of_agents in (None, 1)
+        )
+        no_inter_agent_communication = (
+            not extracted.communication_flow
+            and extracted.number_of_channels in (None, 0)
+        )
+        # Pattern labels can describe an internal one-agent workflow (for example,
+        # request-response or verification) without implying inter-agent coordination.
+        return one_logical_agent and no_inter_agent_communication
+
+    def select_single_agent_procedure(
+        self,
+        extracted: ExtractedCoordinationData,
+        *,
+        task_route: str | None = None,
+    ) -> DeterministicProcedureDecision:
+        """Select the non-protocol generation route before template validation."""
+
+        if not self.is_single_agent_request(extracted, task_route=task_route):
+            raise ValueError("single_agent_generation requires a single-agent request")
+        coordination_only_reason = [
+            "Single-agent requests do not enter coordination-template procedure selection."
+        ]
+        return DeterministicProcedureDecision(
+            selected_procedure="single_agent_generation",
+            selected_template_id=None,
+            selected_template_rank=None,
+            reason_codes=["single_agent_request"],
+            explanation="Single-agent request has no inter-agent coordination to synthesize.",
+            evidence={
+                "task_route": str(task_route or "").strip().lower() or None,
+                "number_of_agents": extracted.number_of_agents,
+                "coordination_pattern_count": len(extracted.coordination_patterns),
+                "communication_step_count": len(extracted.communication_flow),
+                "number_of_channels": extracted.number_of_channels,
+            },
+            matched_fields=[],
+            mismatched_fields=[],
+            unknown_fields=[],
+            parameterizable_fields=[],
+            adaptable_fields=[],
+            recomposable_fields=[],
+            fatal_mismatch_fields=[],
+            protected_fields=[],
+            available_procedures=["single_agent_generation"],
+            rejected_procedures={
+                "exact_reuse": coordination_only_reason,
+                "parameterized_reuse": coordination_only_reason,
+                "partial_recomposition": coordination_only_reason,
+                "full_generation": coordination_only_reason,
+            },
+            evidence_sufficient=True,
+        )
+
+    def single_agent_procedure_options(self) -> ProcedureOptions:
+        """Describe the exclusive non-coordination route without ranking templates."""
+
+        reason = "The request has one logical agent and no inter-agent communication."
+        return ProcedureOptions(
+            top_candidate_template_id=None,
+            top_candidate_template_name=None,
+            options=(
+                _option("single_agent_generation", True, (reason,), (), None, None),
+            ),
+            ranking_summary={
+                "ranking_order": [],
+                "template_count": 0,
+                "skipped": True,
+                "reason": "single_agent_request",
+            },
+            validation_summary={
+                "valid": True,
+                "skipped": True,
+                "reason": "single_agent_request",
+            },
+        )
 
     def rank(
         self,

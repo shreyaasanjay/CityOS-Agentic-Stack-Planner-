@@ -768,6 +768,84 @@ async def test_run_design_exact_reuse_instantiates_artifacts_without_opencode(mo
 
 
 @pytest.mark.asyncio
+async def test_run_design_routes_extracted_single_agent_without_template_validation_or_opencode(
+    monkeypatch,
+    capsys,
+):
+    def fake_extract(_query, *, model=None, client=None):
+        assert model == "test-model"
+        return ExtractedCoordinationAttributes(
+            coordination_patterns=[],
+            number_of_agents=1,
+            agent_roles=["occupancy_analyzer"],
+            communication_flow=[],
+            limitations=[],
+            number_of_resources=0,
+            number_of_channels=0,
+        )
+
+    generated = []
+
+    def fake_single_agent_generation(ws, decision, _timing):
+        generated.append(decision)
+        (ws / "spec" / "ir.json").write_text(
+            json.dumps({
+                "agents": [{"id": decision.agent_id}],
+                "resources": [],
+                "channels": [],
+                "state_tasks": {f"{decision.agent_id}_start": decision.task_text},
+            }),
+            encoding="utf-8",
+        )
+        return ["single-agent test generation completed"]
+
+    async def unexpected_opencode(*_args, **_kwargs):
+        raise AssertionError("single_agent_generation must not invoke OpenCode")
+
+    monkeypatch.setattr(design_module, "extract_coordination_attributes", fake_extract)
+    monkeypatch.setattr(
+        design_module,
+        "_generate_and_verify_single_agent",
+        fake_single_agent_generation,
+    )
+    monkeypatch.setattr(design_module, "run_opencode_agent", unexpected_opencode)
+    monkeypatch.setattr(design_module, "_verification_needed_after_scaffold", lambda _ws: (False, []))
+
+    result = await design_module.run_design(
+        "How many people are in the room?",
+        task_spec={
+            "route": "single_agent",
+            "user_query": "How many people are in the room?",
+        },
+        name="pytest_single_agent_procedure",
+        model="openrouter/test-model",
+        timeout=1,
+    )
+
+    ws = Path(result.workspace)
+    decision = json.loads(
+        (ws / "spec" / "procedure_decision.json").read_text(encoding="utf-8")
+    )
+    rankings = json.loads(
+        (ws / "spec" / "template_rankings.json").read_text(encoding="utf-8")
+    )
+    validation = json.loads(
+        (ws / "spec" / "template_validation_results.json").read_text(encoding="utf-8")
+    )
+    terminal = capsys.readouterr().out
+
+    assert generated
+    assert decision["selected_procedure"] == "single_agent_generation"
+    assert decision["reason_codes"] == ["single_agent_request"]
+    assert "full_generation_fallback" not in decision["reason_codes"]
+    assert rankings == []
+    assert validation["skipped"] is True
+    assert validation["reason"] == "single_agent_request"
+    assert "[TRACEFIX PROCEDURE SELECTED] mode=single_agent_generation" in terminal
+    assert "[TRACEFIX PROCEDURE SELECTED] mode=full_generation" not in terminal
+
+
+@pytest.mark.asyncio
 async def test_run_design_full_generation_decision_falls_back_to_opencode(monkeypatch):
     def fake_extract(query, *, model=None, client=None):
         assert "three robots" in query.lower()

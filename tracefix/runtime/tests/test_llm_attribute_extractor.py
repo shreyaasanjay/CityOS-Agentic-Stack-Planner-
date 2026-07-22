@@ -1,4 +1,6 @@
+import io
 import json
+import urllib.error
 import urllib.request
 
 import pytest
@@ -302,3 +304,81 @@ def test_openrouter_http_request_sends_bearer_authorization_and_model(monkeypatc
         },
         "timeout": 17,
     }
+
+
+def test_openrouter_http_error_logs_sanitized_json_and_preserves_exception(monkeypatch, capsys):
+    api_key = "sk-or-v1-secret-value"
+    error_body = json.dumps({
+        "error": {
+            "message": f"Key limit exceeded for {api_key}",
+            "code": 403,
+            "authorization": f"Bearer {api_key}",
+        }
+    }).encode("utf-8")
+    expected_error = urllib.error.HTTPError(
+        "https://openrouter.ai/api/v1/chat/completions",
+        403,
+        "Forbidden",
+        hdrs={},
+        fp=io.BytesIO(error_body),
+    )
+
+    def fake_urlopen(_request, timeout):
+        assert timeout == 17
+        raise expected_error
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    client = OpenAICompatibleLLMClient(
+        base_url="https://openrouter.ai/api/v1",
+        model="z-ai/glm-5.2",
+        api_key=api_key,
+        timeout_seconds=17,
+    )
+
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        client.complete_json("return JSON")
+
+    assert caught.value is expected_error
+    diagnostic = capsys.readouterr().err
+    assert "TRACEFIX PROVIDER ERROR" in diagnostic
+    assert "Provider: OpenRouter" in diagnostic
+    assert "HTTP Status: 403" in diagnostic
+    assert "Endpoint: https://openrouter.ai/api/v1/chat/completions" in diagnostic
+    assert "Model: z-ai/glm-5.2" in diagnostic
+    assert "Key limit exceeded for [REDACTED]" in diagnostic
+    assert '"authorization": "[REDACTED]"' in diagnostic
+    assert api_key not in diagnostic
+    assert client.last_request_metadata["provider_name"] == "OpenRouter"
+    assert client.last_request_metadata["model"] == "z-ai/glm-5.2"
+    assert client.last_request_metadata["http_status"] == 403
+    assert client.last_request_metadata["error"] == "http_error_403"
+
+
+def test_openrouter_http_error_logs_sanitized_non_json_body(monkeypatch, capsys):
+    api_key = "sk-or-v1-secret-value"
+    expected_error = urllib.error.HTTPError(
+        "https://openrouter.ai/api/v1/chat/completions",
+        429,
+        "Too Many Requests",
+        hdrs={},
+        fp=io.BytesIO(f"limit reached; Authorization: Bearer {api_key}".encode("utf-8")),
+    )
+
+    def fake_urlopen(_request, timeout):
+        assert timeout == 120
+        raise expected_error
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    client = OpenAICompatibleLLMClient(
+        base_url="https://openrouter.ai/api/v1",
+        model="z-ai/glm-5.2",
+        api_key=api_key,
+    )
+
+    with pytest.raises(urllib.error.HTTPError):
+        client.complete_json("return JSON")
+
+    diagnostic = capsys.readouterr().err
+    assert "limit reached" in diagnostic
+    assert "Authorization: [REDACTED]" in diagnostic
+    assert api_key not in diagnostic

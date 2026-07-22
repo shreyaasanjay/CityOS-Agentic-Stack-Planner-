@@ -45,6 +45,7 @@ from tracefix.runtime.single_agent_fastpath import (
     FastPathDecision,
     _extract_structured_task,
     assess_single_agent_fast_path,
+    build_single_agent_generation_input,
     generate_single_agent_ir,
     render_verified_runtime_prompt,
 )
@@ -91,7 +92,40 @@ def _execution_marker_name(mode: str) -> str:
         "parameterized_reuse": "PARAMETERIZED REUSE",
         "partial_recomposition": "PARTIAL RECOMPOSITION",
         "full_generation": "FULL GENERATION",
+        "single_agent_generation": "SINGLE AGENT GENERATION",
     }[mode]
+
+
+def _generate_and_verify_single_agent(
+    ws: Path,
+    decision: FastPathDecision,
+    timing: PipelineTimingReport,
+) -> list[str]:
+    """Run the existing deterministic one-agent generation and verification path."""
+
+    from tracefix.pipeline.pipeline.validator import normalize_ir
+
+    diagnostics: list[str] = []
+    fast_ir = normalize_ir(generate_single_agent_ir(decision))
+    (_spec_dir(ws) / "ir.json").write_text(
+        json.dumps(fast_ir, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    valid_fast_ir, fast_ir_errors, fast_ir_diagnostics = validate_design_ir(ws)
+    diagnostics.extend(fast_ir_diagnostics)
+    if not valid_fast_ir:
+        raise ValueError("; ".join(fast_ir_errors))
+    diagnostics.extend(_scaffold_valid_ir(ws))
+    diagnostics.extend(_run_tlc_and_extract(ws, timing))
+    fast_status, fast_errors, fast_diagnostics = classify_design_artifacts(ws)
+    diagnostics.extend(fast_diagnostics)
+    if fast_status != "ready":
+        raise ValueError(
+            "; ".join(fast_errors)
+            or f"deterministic verification ended with status {fast_status}"
+        )
+    diagnostics.append("Single-agent generation completed deterministic verification")
+    return diagnostics
 
 
 def _write_deterministic_reuse_prompts(ws: Path, task: str) -> list[str]:
@@ -1511,34 +1545,13 @@ async def run_design(
     if fast_path_decision.eligible and not task_spec_payload:
         try:
             fast_path_ir_started_ms = time.monotonic() * 1000.0
-            fast_ir = generate_single_agent_ir(fast_path_decision)
-            from tracefix.pipeline.pipeline.validator import normalize_ir
-
-            fast_ir = normalize_ir(fast_ir)
-            (_spec_dir(ws) / "ir.json").write_text(
-                json.dumps(fast_ir, indent=2) + "\n",
-                encoding="utf-8",
+            fast_path_diagnostics.extend(
+                _generate_and_verify_single_agent(ws, fast_path_decision, timing)
             )
             fast_path_ir_duration_ms = (
                 time.monotonic() * 1000.0 - fast_path_ir_started_ms
             )
-            valid_fast_ir, fast_ir_errors, fast_ir_diagnostics = validate_design_ir(ws)
-            fast_path_diagnostics.extend(fast_ir_diagnostics)
-            if not valid_fast_ir:
-                raise ValueError("; ".join(fast_ir_errors))
-            fast_path_diagnostics.extend(_scaffold_valid_ir(ws))
-            fast_path_diagnostics.extend(_run_tlc_and_extract(ws, timing))
-            fast_status, fast_errors, fast_diagnostics = classify_design_artifacts(ws)
-            fast_path_diagnostics.extend(fast_diagnostics)
-            if fast_status != "ready":
-                raise ValueError(
-                    "; ".join(fast_errors)
-                    or f"deterministic verification ended with status {fast_status}"
-                )
             fast_path_used = True
-            fast_path_diagnostics.append(
-                "Single-agent fast path completed deterministic verification"
-            )
         except Exception as exc:  # noqa: BLE001 - fallback is the safety boundary
             fast_path_error = str(exc)
             fast_path_diagnostics.append(
@@ -1578,6 +1591,8 @@ async def run_design(
     procedure_decision = None
     procedure_execution_audit: dict | None = None
     deterministic_reuse_instantiated = False
+    single_agent_generation_used = False
+    single_agent_generation_decision: FastPathDecision | None = None
     procedure_execution_failed = False
     procedure_execution_error: str | None = None
     template_ranking_failed = False
@@ -1624,16 +1639,33 @@ async def run_design(
                 f"Coordination attributes extracted: {attr_path.relative_to(ws)}"
             )
             try:
-                templates = [get_template(pattern_id) for pattern_id in list_pattern_ids()]
                 engine = DeterministicTemplateEngine()
-                rankings = engine.rank(attributes, templates)
+                task_route = str(task_spec_payload.get("route") or "").strip().lower()
+                single_agent_request = engine.is_single_agent_request(
+                    attributes,
+                    task_route=task_route,
+                )
+                templates = (
+                    []
+                    if single_agent_request
+                    else [get_template(pattern_id) for pattern_id in list_pattern_ids()]
+                )
+                rankings = [] if single_agent_request else engine.rank(attributes, templates)
                 rankings_path = _spec_dir(ws) / "template_rankings.json"
                 write_audit_json(rankings_path, rankings)
-                validation_audit, candidate_validations = engine.validation_audit(
-                    attributes,
-                    rankings,
-                    templates,
-                )
+                if single_agent_request:
+                    validation_audit = {
+                        "candidates": [],
+                        "skipped": True,
+                        "reason": "single_agent_request",
+                    }
+                    candidate_validations = ()
+                else:
+                    validation_audit, candidate_validations = engine.validation_audit(
+                        attributes,
+                        rankings,
+                        templates,
+                    )
                 validation_audit_path = _spec_dir(ws) / "template_validation_results.json"
                 write_audit_json(validation_audit_path, validation_audit)
                 _print_audit_block("VALIDATOR OUTPUT", validation_audit)
@@ -1648,18 +1680,34 @@ async def run_design(
                     validation_path,
                     validation if validation else {
                         "valid": False,
-                        "reason": "No templates available for validation.",
+                        "skipped": single_agent_request,
+                        "reason": (
+                            "single_agent_request"
+                            if single_agent_request
+                            else "No templates available for validation."
+                        ),
                     },
                 )
-                procedure_options = engine.procedure_options(rankings, validation, templates)
+                procedure_options = (
+                    engine.single_agent_procedure_options()
+                    if single_agent_request
+                    else engine.procedure_options(rankings, validation, templates)
+                )
                 options_path = _spec_dir(ws) / "procedure_options.json"
                 write_audit_json(options_path, procedure_options)
-                decision = engine.select_procedure(
-                    attributes,
-                    rankings,
-                    validation,
-                    procedure_options,
-                    templates,
+                decision = (
+                    engine.select_single_agent_procedure(
+                        attributes,
+                        task_route=task_route,
+                    )
+                    if single_agent_request
+                    else engine.select_procedure(
+                        attributes,
+                        rankings,
+                        validation,
+                        procedure_options,
+                        templates,
+                    )
                 )
                 procedure_decision = decision
                 decision_path = _spec_dir(ws) / "procedure_decision.json"
@@ -1687,12 +1735,20 @@ async def run_design(
                 write_audit_json(context_path, execution_context)
                 procedure_decision_complete = True
                 procedure_decision_selected = decision.selected_procedure
-                if procedure_decision_selected in {"exact_reuse", "parameterized_reuse"}:
+                if procedure_decision_selected in {
+                    "single_agent_generation",
+                    "exact_reuse",
+                    "parameterized_reuse",
+                }:
                     started_at = datetime.now(timezone.utc).isoformat()
                     procedure_execution_audit = {
                         "selected_procedure": decision.selected_procedure,
                         "selected_template_id": decision.selected_template_id,
-                        "executor": "deterministic_builder",
+                        "executor": (
+                            "deterministic_single_agent_builder"
+                            if procedure_decision_selected == "single_agent_generation"
+                            else "deterministic_builder"
+                        ),
                         "allowed_fields": (
                             list(decision.parameterizable_fields)
                             if procedure_decision_selected == "parameterized_reuse"
@@ -1712,12 +1768,29 @@ async def run_design(
                     )
                     print(f"[TRACEFIX {_execution_marker_name(procedure_decision_selected)} START] template={selected_template_log}", flush=True)
                     try:
-                        reuse_result = (
-                            instantiate_exact_reuse(ws, execution_context)
-                            if procedure_decision_selected == "exact_reuse"
-                            else instantiate_parameterized_reuse(ws, execution_context)
-                        )
-                    except Exception:
+                        if procedure_decision_selected == "single_agent_generation":
+                            single_agent_generation_decision = build_single_agent_generation_input(
+                                task,
+                                task_spec_payload,
+                            )
+                            attribute_extraction_diagnostics.extend(
+                                _generate_and_verify_single_agent(
+                                    ws,
+                                    single_agent_generation_decision,
+                                    timing,
+                                )
+                            )
+                            artifact_paths = [
+                                ws / path for path in _execution_artifacts(ws)
+                            ]
+                        else:
+                            reuse_result = (
+                                instantiate_exact_reuse(ws, execution_context)
+                                if procedure_decision_selected == "exact_reuse"
+                                else instantiate_parameterized_reuse(ws, execution_context)
+                            )
+                            artifact_paths = list(reuse_result.artifact_paths)
+                    except Exception as exc:
                         procedure_execution_audit["ended_at"] = datetime.now(timezone.utc).isoformat()
                         write_audit_json(
                             _spec_dir(ws) / "procedure_execution.json",
@@ -1728,13 +1801,17 @@ async def run_design(
                             f"[TRACEFIX PROCEDURE EXECUTION END] mode={procedure_decision_selected} result=fail",
                             flush=True,
                         )
+                        if procedure_decision_selected == "single_agent_generation":
+                            raise ProcedureExecutionError(
+                                f"single-agent generation failed: {exc}"
+                            ) from exc
                         raise
                     procedure_execution_audit.update({
                         "ended_at": datetime.now(timezone.utc).isoformat(),
                         "success": True,
                         "artifacts_written": [
                             str(path.relative_to(ws)).replace("\\", "/")
-                            for path in reuse_result.artifact_paths
+                            for path in artifact_paths
                         ],
                     })
                     write_audit_json(
@@ -1746,7 +1823,10 @@ async def run_design(
                         f"[TRACEFIX PROCEDURE EXECUTION END] mode={procedure_decision_selected} result=pass",
                         flush=True,
                     )
-                    deterministic_reuse_instantiated = True
+                    if procedure_decision_selected == "single_agent_generation":
+                        single_agent_generation_used = True
+                    else:
+                        deterministic_reuse_instantiated = True
                 else:
                     procedure_execution_prompt = build_procedure_execution_prompt(
                         execution_context,
@@ -1804,6 +1884,7 @@ async def run_design(
     # -------------------------------------------------------------------------------
     if (
         fast_path_used
+        or single_agent_generation_used
         or deterministic_reuse_instantiated
         or procedure_execution_failed
         or template_ranking_failed
@@ -1907,8 +1988,8 @@ async def run_design(
         *fast_path_diagnostics,
         *attribute_extraction_diagnostics,
         (
-                "OpenCode initial design skipped: single-agent deterministic fast path verified"
-                if fast_path_used
+                "OpenCode initial design skipped: single-agent deterministic generation verified"
+                if (fast_path_used or single_agent_generation_used)
                 else (
                     "OpenCode initial design skipped: deterministic reuse instantiated template artifacts"
                     if deterministic_reuse_instantiated
@@ -1927,6 +2008,7 @@ async def run_design(
     run_diagnostics.extend(_workspace_stage_diagnostics(ws, "after initial design"))
     if not (
         fast_path_used
+        or single_agent_generation_used
         or deterministic_reuse_instantiated
         or procedure_execution_failed
         or template_ranking_failed
@@ -1951,11 +2033,16 @@ async def run_design(
         ir_sanitization=sanitization_report,
     )
     diagnostics = [*run_diagnostics, *diagnostics]
-    if procedure_execution_failed and not fast_path_used:
+    if procedure_execution_failed and not (fast_path_used or single_agent_generation_used):
         status = f"{procedure_decision_selected or 'procedure'}_execution_failed"
         ir_errors = [procedure_execution_error or "Fixed procedure execution failed."]
         diagnostics.append("Fixed procedure execution failed before valid artifacts were produced.")
-    elif procedure_decision_complete and not deterministic_reuse_instantiated and not fast_path_used:
+    elif (
+        procedure_decision_complete
+        and not deterministic_reuse_instantiated
+        and not single_agent_generation_used
+        and not fast_path_used
+    ):
         diagnostics.append(
             f"Deterministic {procedure_decision_selected} execution was run through OpenCode."
         )
@@ -1963,6 +2050,10 @@ async def run_design(
         diagnostics.append(
             f"{procedure_decision_selected} instantiated IR, Protocol.tla, and Protocol.cfg without an LLM call; "
             "normal validation and TLC continue."
+        )
+    elif single_agent_generation_used:
+        diagnostics.append(
+            "single_agent_generation produced and verified one-agent artifacts without OpenCode."
         )
     elif template_ranking_failed and not fast_path_used:
         status = "template_ranking_failed"
@@ -2170,7 +2261,11 @@ async def run_design(
     if _verified_protocol_ready(ws) and not timed_out:
         diagnostics.append("Prompt gate started")
         diagnostics.extend(_ensure_plan_before_prompts(ws))
-        if (fast_path_used or deterministic_reuse_instantiated) and not _runtime_prompts_current(ws):
+        if (
+            fast_path_used
+            or single_agent_generation_used
+            or deterministic_reuse_instantiated
+        ) and not _runtime_prompts_current(ws):
             deterministic_prompt_started_at = datetime.now(timezone.utc).isoformat()
             deterministic_prompt_started_ms = time.monotonic() * 1000.0
             try:
@@ -2178,8 +2273,12 @@ async def run_design(
                 plan = safe_read_json(plan_path, {})
                 prompt_dir = ws / "prompts" / "runtime_b"
                 prompt_dir.mkdir(parents=True, exist_ok=True)
-                if fast_path_used:
-                    prompt_decisions = [fast_path_decision]
+                if fast_path_used or single_agent_generation_used:
+                    prompt_decisions = [
+                        single_agent_generation_decision
+                        if single_agent_generation_used
+                        else fast_path_decision
+                    ]
                     prompt_paths = []
                     for prompt_decision in prompt_decisions:
                         prompt_text = render_verified_runtime_prompt(prompt_decision, plan)

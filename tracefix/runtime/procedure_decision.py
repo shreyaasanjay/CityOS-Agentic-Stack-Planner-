@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 ProcedureName = Literal[
+    "single_agent_generation",
     "exact_reuse",
     "parameterized_reuse",
     "partial_recomposition",
@@ -21,6 +22,11 @@ REUSE_PROCEDURES = frozenset({
     "exact_reuse",
     "parameterized_reuse",
     "partial_recomposition",
+})
+
+GENERATION_PROCEDURES = frozenset({
+    "single_agent_generation",
+    "full_generation",
 })
 
 
@@ -53,10 +59,10 @@ class DeterministicProcedureDecision(BaseModel):
             raise ValueError("selected procedure must be included in available_procedures")
         if self.selected_procedure in REUSE_PROCEDURES and not self.selected_template_id:
             raise ValueError("reuse procedures require selected_template_id")
-        if self.selected_procedure == "full_generation" and self.selected_template_id is not None:
-            raise ValueError("full_generation must not claim a selected template")
-        if self.selected_procedure == "full_generation" and self.selected_template_rank is not None:
-            raise ValueError("full_generation must not claim a selected template rank")
+        if self.selected_procedure in GENERATION_PROCEDURES and self.selected_template_id is not None:
+            raise ValueError("generation procedures must not claim a selected template")
+        if self.selected_procedure in GENERATION_PROCEDURES and self.selected_template_rank is not None:
+            raise ValueError("generation procedures must not claim a selected template rank")
         if self.selected_procedure in REUSE_PROCEDURES and self.fatal_mismatch_fields:
             raise ValueError("reuse procedures cannot contain fatal mismatches")
         mismatch_set = set(self.mismatched_fields)
@@ -83,4 +89,5 @@ __all__ = [
     "ProcedureDecision",
     "ProcedureName",
     "REUSE_PROCEDURES",
+    "GENERATION_PROCEDURES",
 ]

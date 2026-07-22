@@ -30,6 +30,56 @@ def _sample_extracted(**overrides):
     return ExtractedCoordinationData.from_payload(payload)
 
 
+def test_single_agent_request_bypasses_coordination_procedure_selection():
+    extracted = _sample_extracted(
+        coordination_patterns=[],
+        number_of_agents=1,
+        agent_roles=["occupancy_analyzer"],
+        communication_flow=[],
+        limitations=[],
+        number_of_resources=0,
+        number_of_channels=0,
+    )
+    engine = DeterministicTemplateEngine()
+
+    assert engine.is_single_agent_request(extracted, task_route="single_agent") is True
+    decision = engine.select_single_agent_procedure(
+        extracted,
+        task_route="single_agent",
+    )
+
+    assert decision.selected_procedure == "single_agent_generation"
+    assert decision.reason_codes == ["single_agent_request"]
+    assert decision.selected_template_id is None
+    assert "full_generation_fallback" not in decision.reason_codes
+
+
+def test_single_agent_workflow_pattern_labels_do_not_force_protocol_generation():
+    extracted = _sample_extracted(
+        coordination_patterns=["Request-Response", "Verification"],
+        number_of_agents=1,
+        agent_roles=["occupancy_context", "answer_synthesis"],
+        communication_flow=[],
+        limitations=[],
+        number_of_resources=1,
+        number_of_channels=0,
+    )
+
+    assert DeterministicTemplateEngine().is_single_agent_request(
+        extracted,
+        task_route="single_agent",
+    ) is True
+
+
+def test_single_agent_route_with_coordination_remains_in_multi_agent_pipeline():
+    extracted = _sample_extracted(number_of_agents=1)
+
+    assert DeterministicTemplateEngine().is_single_agent_request(
+        extracted,
+        task_route="single_agent",
+    ) is False
+
+
 def _priority_template(**overrides):
     data = {
         "template_id": "priority_shared_resource",

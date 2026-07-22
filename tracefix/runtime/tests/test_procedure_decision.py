@@ -49,6 +49,20 @@ def test_reuse_requires_template_and_full_generation_forbids_one():
         )
 
 
+def test_single_agent_generation_is_template_free_and_serializable():
+    decision = _decision(
+        selected_procedure="single_agent_generation",
+        selected_template_id=None,
+        selected_template_rank=None,
+        reason_codes=["single_agent_request"],
+        matched_fields=[],
+        available_procedures=["single_agent_generation"],
+    )
+
+    assert decision.to_dict()["selected_procedure"] == "single_agent_generation"
+    assert decision.reason_codes == ["single_agent_request"]
+
+
 def test_parameterized_and_partial_changes_are_bounded_by_metadata():
     with pytest.raises(ValidationError, match="parameterizable"):
         _decision(
