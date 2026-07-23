@@ -9,7 +9,7 @@
       "cost_usd": 0.0
     },
     "gpt-4.1-mini": {
-      "runs": 1,
+      "runs": 3,
       "tokens": 0,
       "cost_usd": 0.0
     },

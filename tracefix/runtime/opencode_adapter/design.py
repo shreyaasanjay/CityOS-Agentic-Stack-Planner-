@@ -1,4 +1,4 @@
-﻿"""``tracefix design`` — drive an UNMODIFIED headless opencode through the
+"""``tracefix design`` — drive an UNMODIFIED headless opencode through the
 /tla-verify-pluscal skill to turn a natural-language requirement into a
 verified workspace (spec/ + prompts/runtime_b/ + spec/cityos_module_plan.json).
 
@@ -570,6 +570,8 @@ def _opencode_provider_diagnostics(ws: Path, disposition: dict) -> list[str]:
         "model not found",
         "unsupported model",
         "model is not supported",
+        "no endpoints found that support tool use",
+        "does not support tool use",
     ]
     if any(marker in lowered for marker in auth_markers):
         return [

@@ -1271,6 +1271,16 @@ textarea:focus {
   background: #fbf6ec;
 }
 
+:root[data-theme="light"] .raw-data-status {
+  color: #66594b;
+  background: #fbf6ec;
+}
+
+:root[data-theme="light"] input[type="file"]::file-selector-button {
+  color: var(--ink);
+  background: #eee2cf;
+}
+
 :root[data-theme="light"] .run-panel {
   background: var(--bg);
 }
